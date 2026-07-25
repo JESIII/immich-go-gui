@@ -82,13 +82,23 @@ def launch_external_terminal(
                 f"set ERR=%ERRORLEVEL%\r\n"
                 f'del /f "%LOCK_FILE%" 2>nul\r\n'
                 f'del /f "%HB_FILE%" 2>nul\r\n'
-                f'del /f "{bat_path}" 2>nul\r\n'
+                # NOTE: do NOT delete the bat file here. Deleting a bat file
+                # from within itself while running under "cmd /k" causes
+                # Windows to print "The batch file cannot be found" when the
+                # script ends. release_lock() in process_tracker.py already
+                # cleans up the .bat sidecar when the lock is released.
                 f"echo.\r\n"
                 f"echo immich-go exited with code %ERR%\r\n"
             )
             bat_path.write_text(bat_content, encoding="utf-8")
 
             CREATE_NEW_CONSOLE = 0x00000010
+            # Use the list form so Python's subprocess.list2cmdline() correctly
+            # quotes any path tokens that contain spaces (e.g. user profile
+            # paths like C:\Users\John Doe\AppData\...). Do NOT use shell=True
+            # here: shell=True wraps the command inside `cmd.exe /c`, and when
+            # combined with CREATE_NEW_CONSOLE the resulting console window is
+            # not visible to the user.
             proc = subprocess.Popen(
                 ["cmd", "/k", str(bat_path)],
                 creationflags=CREATE_NEW_CONSOLE,
