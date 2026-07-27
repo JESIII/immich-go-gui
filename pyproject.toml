@@ -33,4 +33,3 @@ dev = [
 minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
-

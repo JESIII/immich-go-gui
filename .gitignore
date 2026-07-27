@@ -35,8 +35,6 @@ Refinement*
 .vscode/
 .agents/
 
-
-
 # MkDocs build output & Cache
 site/
 .cache/
