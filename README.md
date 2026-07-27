@@ -159,4 +159,4 @@ If Immich-Go GUI saves you time, you can support development:
 
 ## License
 
-
+This project is licensed under the [MIT License](LICENSE.txt).
