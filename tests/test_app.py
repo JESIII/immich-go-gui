@@ -363,6 +363,19 @@ def test_archive_immich_global_skip_ssl(gui):
     assert "--from-skip-verify-ssl" in opts
 
 
+def test_upload_immich_global_skip_ssl(gui):
+    gui.inputs["config"]["skip-ssl"].setChecked(True)
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(4)
+    gui.inputs["config"]["server"].setText("http://local:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-immich"]["from-server"].setText("http://old:2283")
+    gui.inputs["upload-immich"]["from-api-key"].setText("old-key")
+    opts = gui.build_command(dry_run=True)
+    assert "--from-skip-verify-ssl" in opts
+    assert "--skip-verify-ssl" in opts
+
+
 def test_global_skip_ssl_option(gui):
     gui.inputs["config"]["skip-ssl"].setChecked(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
@@ -1181,6 +1194,17 @@ def test_status_card_reflects_connection_test_failure(gui):
         assert "Connection Failed" in gui.status_card.txt_s.text()
 
 
+def test_serverless_tab_run_enabled_after_connection_failure(gui):
+    gui._last_conn_test_ok = False
+    gui.stacked_widget.setCurrentIndex(2)
+    gui.archive_tabs.setCurrentIndex(0)
+    gui.inputs["archive-folder"]["path"].setText("/src")
+    gui.inputs["archive-folder"]["write-to"].setText("/dst")
+    gui.update_status()
+    assert gui.btn_run.isEnabled() is True
+    assert gui.btn_dry_run.isEnabled() is True
+
+
 def test_command_builder_destructive_warnings():
     from core.command_builder import build_plan_from_state
 
@@ -1575,6 +1599,13 @@ def test_check_fixtures_compatibility():
     assert report.version == "0.32.0"
     assert report.is_fully_compatible() is True
     assert len(report.missing_flags_by_tab) == 0
+
+
+def test_compat_ignore_list_excludes_api_key_flags():
+    report = check_fixtures("0.32.0")
+    for flags in report.unknown_flags_by_tab.values():
+        assert "api-key" not in flags
+        assert "from-api-key" not in flags
 
 
 def test_show_cli_compatibility_dialog(gui):
@@ -3577,3 +3608,75 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
     gui.switch_profile("home")
     assert "saved" in actions
     assert "active:home" in actions
+
+
+def test_validate_state_light_does_not_call_glob(monkeypatch):
+    from core.command_builder import validate_state_light
+
+    called = {"n": 0}
+
+    def fake_glob(*_args, **_kwargs):
+        called["n"] += 1
+        return []
+
+    monkeypatch.setattr("core.command_builder.glob.glob", fake_glob)
+    res = validate_state_light(
+        "upload-folder",
+        {"server": "http://localhost:2283", "api_key": "key"},
+        {"path": "/tmp/*.jpg"},
+    )
+    assert res.is_valid
+    assert called["n"] == 0
+
+
+def test_binary_debounce_and_ban_file_lines_repeat(gui):
+    gui.toggle_advanced(True)
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(0)
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-folder"]["path"].setText("/photos")
+
+    fired = {"n": 0}
+    original = gui._on_manual_binary_changed
+
+    def counting_handler():
+        fired["n"] += 1
+        original()
+
+    gui._on_manual_binary_changed = counting_handler
+    gui.binary_debounce.timeout.emit()
+
+    ban_row = gui.adv_rows["upload-folder"]["ban-file"]
+    ban_row.enable.setChecked(True)
+    ban_row.value_widget.setPlainText("*.tmp\n*.bak")
+    gui._do_update_status()
+
+
+def test_inline_field_errors_shown_on_validation(gui):
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(0)
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-folder"]["path"].clear()
+    gui.update_status()
+    lbl = gui._field_error_labels[("upload-folder", "path")]
+    assert lbl.text()
+    assert "required" in lbl.text().lower()
+
+
+def test_exception_hook_installed(monkeypatch):
+    import app as app_module
+
+    logged = []
+
+    class FakeLogger:
+        def critical(self, msg, exc_info=None):
+            logged.append((msg, exc_info))
+
+    monkeypatch.setattr(app_module.QTimer, "singleShot", lambda *_a, **_k: None)
+    monkeypatch.setattr(app_module.sys, "excepthook", lambda *a, **k: None)
+    app_module._install_exception_hook(FakeLogger())
+    app_module.sys.excepthook(ValueError, ValueError("boom"), None)
+    assert logged
+    assert logged[0][0] == "Unhandled exception"
