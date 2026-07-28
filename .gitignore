@@ -36,7 +36,10 @@ Refinement*
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/launch.json
-.agents/
+
+# Generated LLM review bundles (regenerate on demand)
+immichgo_modules_bundle.txt
+immichgo_website_bundle.txt
 
 # MkDocs build output & Cache
 site/
