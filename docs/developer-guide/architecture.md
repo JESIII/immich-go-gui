@@ -14,9 +14,10 @@ flowchart TB
 
     User([User]):::userStyle
 
-    subgraph UI["UI Layer — app.py / theme.py"]
+    subgraph UI["UI Layer — app.py / gui/ / theme.py"]
         direction LR
-        AppPy[app.py<br/>Tabs · Widgets · Events]:::uiStyle
+        AppPy[app.py<br/>Entrypoint ≤80 LOC]:::uiStyle
+        GuiPkg[gui/<br/>MainWindow · Mixins · Tabs · Widgets]:::uiStyle
         ThemePy[theme.py<br/>Palette · Icons]:::uiStyle
     end
 
@@ -37,13 +38,14 @@ flowchart TB
         GitHub[(GitHub Releases)]:::extStyle
     end
 
-    User -->|interact| AppPy
-    AppPy --> ThemePy
-    AppPy --> Builder
+    User -->|interact| GuiPkg
+    AppPy --> GuiPkg
+    GuiPkg --> ThemePy
+    GuiPkg --> Builder
     Builder --> Validator
-    AppPy --> Config
-    AppPy --> BinMgr
-    AppPy --> Tracker
+    GuiPkg --> Config
+    GuiPkg --> BinMgr
+    GuiPkg --> Tracker
     Builder -->|argv + env| Terminal
     Tracker -->|lock gates launch| Terminal
     Terminal -->|launch subprocess| ImmichGo
@@ -56,8 +58,32 @@ flowchart TB
 
 ```text
 immich-go-gui/
-├── app.py                 # Qt UI: tabs, widgets, run/save/load orchestration
+├── app.py                 # Entry point (≤80 lines) + --self-test CLI handler
 ├── theme.py               # Theming: Fusion style, palettes, SVG icons
+├── gui/                   # PySide6 desktop GUI package
+│   ├── main_window.py     # ImmichGoGUI QMainWindow composition
+│   ├── widgets.py         # Custom Qt widgets (DroppablePlainTextEdit, etc.)
+│   ├── status_card.py    # Live status summary card widget
+│   ├── browse_dialogs.py  # File/directory chooser dialog helpers
+│   ├── mixins/            # Focused QMainWindow mixins (all ≤300 lines)
+│   │   ├── layout.py      # Main layout & tab assembly
+│   │   ├── form_helpers.py# Inline field errors & helper controls
+│   │   ├── form_state.py  # State collection & restoration
+│   │   ├── execution.py   # Command building & terminal execution
+│   │   ├── confirm_dialog.py # Run confirmation dialog
+│   │   ├── persistence.py # TOML config & secret store persistence
+│   │   ├── profiles_ui.py # Profile switcher menu & dialogs
+│   │   ├── status.py      # Debounced status updates & light validation
+│   │   ├── binary_ui.py   # Binary download & version management UI
+│   │   ├── connection.py  # Connection test preflight UI
+│   │   ├── diagnostics.py # System diagnostics & log export
+│   │   ├── menu.py        # Top bar & context menus
+│   │   └── theme_mixin.py # Dynamic theme switching
+│   └── tabs/              # Tab builder functions
+│       ├── config_tab.py  # Server & credentials configuration tab
+│       ├── upload_tab.py  # Upload subcommand tabs (folder, GP, etc.)
+│       ├── archive_tab.py # Archive subcommand tabs (folder, GP, etc.)
+│       └── stack_tab.py   # Photo stacking subcommand tab
 ├── core/                  # Qt-free business logic (testable without GUI)
 │   ├── flags.toml         # Single source of truth for tabs + flags
 │   ├── flag_registry.py   # Loads flags.toml → REGISTRY singleton
@@ -74,8 +100,8 @@ immich-go-gui/
 │   ├── validation.py
 │   ├── cli_help.py / cli_contract.py
 │   └── __init__.py        # Public re-exports
-├── tests/                 # pytest + pytest-qt + fixtures
-├── scripts/               # CLI help capture, review bundles
+├── tests/                 # Focused Pytest modules (18 modules, ~217 tests)
+├── scripts/               # CLI help capture, review bundles, icon generator
 ├── docs/                  # User + developer + reference docs
 ├── packaging/             # Linux nfpm + Windows Inno Setup
 └── assets/icons/          # Sidebar SVG icons
@@ -85,7 +111,8 @@ immich-go-gui/
 
 | Layer | Files | Responsibility |
 |-------|-------|----------------|
-| **UI** | `app.py`, `theme.py` | Widgets, layouts, user input, visual feedback |
+| **Entrypoint** | `app.py` | App startup, exception hook, CLI flags (`--self-test`) |
+| **UI** | `gui/`, `theme.py` | Window management, tab builders, mixins, widgets, visual feedback |
 | **Core** | `core/*.py` | CLI schema, command building, config, binary mgmt, process locks |
 | **External** | immich-go CLI, Immich API, GitHub Releases | Runtime dependencies |
 

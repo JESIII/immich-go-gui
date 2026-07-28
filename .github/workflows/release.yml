@@ -143,7 +143,8 @@ jobs:
             --include-data-files=immich-go-gui.png=immich-go-gui.png \
             --include-data-files=core/flags.toml=core/flags.toml \
             --include-data-dir=assets=assets \
-            --include-data-dir=core/fixtures=core/fixtures app.py
+            --include-data-dir=core/fixtures=core/fixtures \
+            --include-data-dir=gui=gui app.py
           npm install -g create-dmg@${{ env.CREATE_DMG_VERSION }}
           create-dmg app.app
           mv *.dmg "Immich-Go-GUI-${{ env.VERSION }}-${{ steps.macos-arch.outputs.suffix }}.dmg"
@@ -155,7 +156,8 @@ jobs:
             --include-data-files=immich-go-gui.png=immich-go-gui.png \
             --include-data-files=core/flags.toml=core/flags.toml \
             --include-data-dir=assets=assets \
-            --include-data-dir=core/fixtures=core/fixtures app.py
+            --include-data-dir=core/fixtures=core/fixtures \
+            --include-data-dir=gui=gui app.py
 
       - name: Create Linux Portable Archive
         if: matrix.name == 'linux'

@@ -31,27 +31,38 @@ uv run scripts/capture_cli_help.py
 
 ## bundle_codebase.py
 
-Bundles **all project source/config/test text files** into a single text file for LLM code review.
+Bundles project source, configuration, `gui/`, `core/`, scripts, and test files into a single text file for LLM code review.
 
 **Usage:**
 
 ```bash
-uv run scripts/bundle_codebase.py [output_path]
+uv run scripts/bundle_codebase.py [output_path]         # Lean codebase profile (default)
+uv run scripts/bundle_codebase.py --full [output_path]   # Full profile (includes docs/, icons)
 ```
 
 Default output: `immichgo_modules_bundle.txt`
 
-**Bundled (when present):**
+**Bundled in Lean profile (default):**
 
-- Root entrypoints: `app.py`, `theme.py`, `pyproject.toml`, README/CHANGELOG/CONTRIBUTING, `implementation.md`
+- Root entrypoints & configs: `app.py`, `theme.py`, `pyproject.toml`, `README.md`, `.gitignore`, `.pre-commit-config.yaml`
 - `core/` — all modules **including** `flags.toml`
-- `assets/` — `theme.qss`, SVG icons
+- `gui/` — all modules (`widgets/`, `tabs/`, `mixins/`, `main_window.py`, `browse_dialogs.py`)
+- `assets/` — `theme.qss`
 - `tests/` — suite, `conftest.py`, fixtures (`cli_help`, `command_states`)
-- `scripts/` — maintenance utilities (including this bundler)
-- `packaging/`, `.github/` workflows, `.vscode/` editor config, `docs/`
-- `.gitignore`, `.pre-commit-config.yaml`, `mkdocs.yml`
+- `scripts/` — maintenance utilities
+- `packaging/`, `.github/` workflows
 
-**Excluded:** `.venv`, build/site caches, binary assets (`.png`/`.ico`), generated `*_bundle.txt` files, personal/agent worktrees.
+**Excluded in Lean profile:** `.venv`, build/site caches, binary assets (`.png`/`.ico`), generated `*_bundle.txt` files, `docs/`, `.vscode/`, `assets/icons/*.svg`. Use `--full` to include docs and icons, or use `bundle_website_docs.py` for documentation review.
+
+## bundle_website_docs.py
+
+Bundles documentation and website files (`docs/`, `mkdocs.yml`, `overrides/`, root docs) into `immichgo_website_bundle.txt` for documentation review.
+
+**Usage:**
+
+```bash
+uv run scripts/bundle_website_docs.py [output_path]
+```
 
 ## generate_diff_bundle.py
 

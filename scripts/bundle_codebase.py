@@ -82,7 +82,6 @@ _SKIP_FILE_NAMES = {
     "immichgo_website_bundle.txt",
     "GitReadme.md",
     "TODO.md",
-    "apper.py",
     "uv.lock",
 }
 
@@ -280,6 +279,7 @@ def _build_header(
         "Coverage:",
         "  - Root app entrypoints (app.py, theme.py)",
         "  - core/ (including flags.toml, command_builder, binary_manager)",
+        "  - gui/ (widgets, tabs, mixins, main_window)",
         "  - tests/ (suite + fixtures)",
         "  - scripts/, packaging/, .github/workflows",
         "  - assets/theme.qss",
