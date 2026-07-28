@@ -1,5 +1,7 @@
 """Integration tests for the simplified emission model."""
 
+from tests.conftest import _norm_argv
+
 
 def test_simple_mode_no_optional_flags(gui):
     """Simple mode emits only connection + positional path."""
@@ -11,7 +13,7 @@ def test_simple_mode_no_optional_flags(gui):
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=False)
     assert "--server=http://local:2283" in opts
-    assert "/photos" in opts
+    assert "/photos" in _norm_argv(opts)
     assert not any("--client-timeout" in o for o in opts)
     assert not any("--log-level" in o for o in opts)
     assert not any("--on-errors" in o for o in opts)
