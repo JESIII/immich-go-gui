@@ -75,19 +75,32 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
     monkeypatch.setattr("gui.mixins.profiles_ui.active_profile_name", lambda: "default")
 
     actions.append(QMessageBox.StandardButton.Cancel)
+    gui._mark_configuration_clean()
+    gui.inputs["config"]["server"].setText("http://changed:2283")
     gui.switch_profile("work")
     assert "active:work" not in actions
 
     actions.clear()
-    actions.append(QMessageBox.StandardButton.Discard)
+    gui._mark_configuration_clean()
     gui.switch_profile("work")
     assert "saved" not in actions
     assert "active:work" in actions
     assert "loaded" in actions
 
     actions.clear()
-    actions.append(QMessageBox.StandardButton.Save)
+    actions.append(QMessageBox.StandardButton.Discard)
+    gui._mark_configuration_clean()
+    gui.inputs["config"]["server"].setText("http://changed:2283")
     gui.switch_profile("home")
-    assert "saved" in actions
+    assert "saved" not in actions
     assert "active:home" in actions
+    assert "loaded" in actions
+
+    actions.clear()
+    actions.append(QMessageBox.StandardButton.Save)
+    gui._mark_configuration_clean()
+    gui.inputs["config"]["server"].setText("http://save-me:2283")
+    gui.switch_profile("office")
+    assert "saved" in actions
+    assert "active:office" in actions
 

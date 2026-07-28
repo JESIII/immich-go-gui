@@ -57,6 +57,7 @@ def gui(qapp):
             g._conn_test_debounce.stop()
             g._conn_test_debounce.timeout.disconnect()
         g._auto_test_connection = lambda: None
+        g._mark_configuration_clean()
         yield g
         g._force_close = True
         g.close()
@@ -88,6 +89,9 @@ def _clear_profiles_cache():
 def _reset_shared_config(gui):
     cfg = gui.inputs["config"]
     cfg["skip-ssl"].setChecked(False)
+    if cfg.get("server"):
+        cfg["server"].clear()
+    gui._mark_configuration_clean()
     yield
     gui.toggle_advanced(False)
     if hasattr(gui, "reset_advanced_flags"):

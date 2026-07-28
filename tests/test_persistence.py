@@ -32,6 +32,21 @@ def test_secret_store_migration():
         )
         mock_settings.remove.assert_called_once_with("api_key")
 
+def test_has_unsaved_changes_detects_widget_edits(gui):
+    gui._mark_configuration_clean()
+    assert gui.has_unsaved_changes() is False
+    gui.inputs["config"]["server"].setText("http://edited:2283")
+    assert gui.has_unsaved_changes() is True
+
+
+def test_save_marks_configuration_clean(gui, monkeypatch):
+    gui._mark_configuration_clean()
+    gui.inputs["config"]["server"].setText("http://edited:2283")
+    assert gui.has_unsaved_changes() is True
+    gui.save_configuration(show_popup=False)
+    assert gui.has_unsaved_changes() is False
+
+
 def test_config_roundtrip(tmp_path, monkeypatch):
     cfg_file = tmp_path / "config.toml"
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(cfg_file))
