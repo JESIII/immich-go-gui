@@ -14,9 +14,10 @@ flowchart TB
 
     User([User]):::userStyle
 
-    subgraph UI["UI Layer — app.py / theme.py"]
+    subgraph UI["UI Layer — app.py / gui/ / theme.py"]
         direction LR
-        AppPy[app.py<br/>Tabs · Widgets · Events]:::uiStyle
+        AppPy[app.py<br/>Thin entrypoint ~130 LOC]:::uiStyle
+        GuiPkg[gui/<br/>MainWindow · Mixins · Tabs · Widgets]:::uiStyle
         ThemePy[theme.py<br/>Palette · Icons]:::uiStyle
     end
 
@@ -37,13 +38,14 @@ flowchart TB
         GitHub[(GitHub Releases)]:::extStyle
     end
 
-    User -->|interact| AppPy
-    AppPy --> ThemePy
-    AppPy --> Builder
+    User -->|interact| GuiPkg
+    AppPy --> GuiPkg
+    GuiPkg --> ThemePy
+    GuiPkg --> Builder
     Builder --> Validator
-    AppPy --> Config
-    AppPy --> BinMgr
-    AppPy --> Tracker
+    GuiPkg --> Config
+    GuiPkg --> BinMgr
+    GuiPkg --> Tracker
     Builder -->|argv + env| Terminal
     Tracker -->|lock gates launch| Terminal
     Terminal -->|launch subprocess| ImmichGo
@@ -56,12 +58,41 @@ flowchart TB
 
 ```text
 immich-go-gui/
-├── app.py                 # Qt UI: tabs, widgets, run/save/load orchestration
+├── app.py                 # Thin entry point (~130 lines) + --self-test CLI handler
 ├── theme.py               # Theming: Fusion style, palettes, SVG icons
+├── gui/                   # PySide6 desktop GUI package
+│   ├── main_window.py     # ImmichGoGUI QMainWindow composition
+│   ├── browse_dialogs.py  # File/directory chooser dialog helpers
+│   ├── widgets/           # Custom Qt widgets package
+│   │   ├── droppable.py   # DroppableLineEdit, DroppablePlainTextEdit
+│   │   ├── status_card.py # Live status summary card
+│   │   ├── navigation.py  # NavGroup, NavItem sidebar navigation
+│   │   └── ...            # cards, base_page, advanced_flag_row, etc.
+│   ├── mixins/            # Focused QMainWindow mixins (all ≤300 lines)
+│   │   ├── layout.py      # Main layout & tab assembly
+│   │   ├── form_helpers.py# Inline field errors & helper controls
+│   │   ├── form_state.py  # State collection & restoration
+│   │   ├── execution.py   # Command building & terminal execution
+│   │   ├── confirm_dialog.py # Run confirmation dialog
+│   │   ├── persistence.py # TOML config & secret store persistence
+│   │   ├── profiles_ui.py # Profile switcher menu & dialogs
+│   │   ├── status.py      # Debounced status updates & light validation
+│   │   ├── binary_ui.py   # Binary download & version management UI
+│   │   ├── connection.py  # Connection test preflight UI
+│   │   ├── diagnostics.py # System diagnostics & log export
+│   │   ├── menu.py        # Top bar & context menus
+│   │   └── theme_mixin.py # Dynamic theme switching
+│   └── tabs/              # Tab builder modules
+│       ├── config_tab.py  # Server & credentials configuration tab
+│       ├── stack_tab.py   # Photo stacking subcommand tab
+│       ├── upload/        # Upload subcommand tabs (folder, GP, icloud, picasa, immich)
+│       └── archive/       # Archive subcommand tabs (folder, GP, icloud, picasa, immich)
 ├── core/                  # Qt-free business logic (testable without GUI)
+│   ├── flags.toml         # Single source of truth for tabs + flags
+│   ├── flag_registry.py   # Loads flags.toml → REGISTRY singleton
 │   ├── models.py          # Dataclasses / enums
-│   ├── cli_schema.py      # Tab keys, allowlists, env maps
-│   ├── advanced_flags.py  # Advanced flag registry
+│   ├── cli_schema.py      # Thin shim: TAB_COMMANDS, TAB_ALLOWED_FLAGS, etc.
+│   ├── advanced_flags.py  # Thin shim over registry advanced defs
 │   ├── command_builder.py # state dict produces a CommandPlan
 │   ├── config_manager.py  # TOML + keyring secrets
 │   ├── profile_manager.py # Multi-profile index
@@ -72,8 +103,8 @@ immich-go-gui/
 │   ├── validation.py
 │   ├── cli_help.py / cli_contract.py
 │   └── __init__.py        # Public re-exports
-├── tests/                 # pytest + pytest-qt + fixtures
-├── scripts/               # CLI help capture, review bundles
+├── tests/                 # Focused Pytest modules (18 modules, ~217 tests)
+├── scripts/               # CLI help capture, review bundles, icon generator
 ├── docs/                  # User + developer + reference docs
 ├── packaging/             # Linux nfpm + Windows Inno Setup
 └── assets/icons/          # Sidebar SVG icons
@@ -83,7 +114,8 @@ immich-go-gui/
 
 | Layer | Files | Responsibility |
 |-------|-------|----------------|
-| **UI** | `app.py`, `theme.py` | Widgets, layouts, user input, visual feedback |
+| **Entrypoint** | `app.py` | App startup, exception hook, CLI flags (`--self-test`) |
+| **UI** | `gui/`, `theme.py` | Window management, tab builders, mixins, widgets, visual feedback |
 | **Core** | `core/*.py` | CLI schema, command building, config, binary mgmt, process locks |
 | **External** | immich-go CLI, Immich API, GitHub Releases | Runtime dependencies |
 
@@ -146,7 +178,7 @@ The GUI maintains **11/11 parity** with immich-go subcommands:
 - 5 archive tabs
 - 1 stack tab
 
-Each tab maps to a fixed command token list in `core/cli_schema.py` (`TAB_COMMANDS`). Allowed flags per tab are defined in `TAB_ALLOWED_FLAGS` and validated at build time.
+Each tab maps to a fixed command token list in `core/cli_schema.py` (`TAB_COMMANDS`). Allowed flags per tab are defined in `core/flags.toml` and loaded via `core/flag_registry.py` (`TAB_ALLOWED_FLAGS` is a shim export). Validated at build time.
 
 ### Serverless Tab Rule
 

@@ -13,15 +13,26 @@ Pure dataclasses and enums. No I/O.
 | Type | Purpose |
 |------|---------|
 | `AppConfig` | User configuration model (server, theme, form_state, etc.) |
-| `CommandPlan` | Resolved argv, env, display_argv, warnings, errors |
+| `CommandPlan` | Resolved argv, env, display_argv, warnings, errors, `emission_log` |
 | `ValidationResult` | Form validation errors and warnings |
 | `BinaryStatus` | immich-go binary health display data |
 | `UpdateDecision` | Binary update allow/block decision |
 | `VersionSupport` | Enum: tested, untested, unsupported, unknown |
 
+### `core/flag_registry.py`
+
+Loads `core/flags.toml` once at import time. **Single source of truth** for tabs, allowlists, advanced flag defs, and secret env routing.
+
+| Export | Purpose |
+|--------|---------|
+| `REGISTRY` | Module singleton `Registry` |
+| `FlagDef` / `TabDef` | Flag and tab dataclasses (`FlagDef.mode`: `simple` \| `advanced`) |
+| `Registry.allowed_flags` | Per-tab CLI allowlist (frozenset) |
+| `Registry.advanced_defs` / `advanced_keys` | Advanced-card defs and advanced-only keys |
+
 ### `core/cli_schema.py`
 
-Stable metadata constants and compatibility matrices.
+Thin delegation shim over `flag_registry`. Keeps historical export names for callers. Do not hand-maintain flag data here.
 
 | Export | Purpose |
 |--------|---------|
@@ -31,13 +42,13 @@ Stable metadata constants and compatibility matrices.
 | `SERVER_REQUIRED_TABS`, `SERVERLESS_TABS` | Server credential requirements |
 | `ENV_KEY_MAP` | Tab key to env var names for secrets |
 | `SECRET_FLAGS` | Flags masked in previews |
-| `TAB_ALLOWED_FLAGS` | Per-tab flag allowlist (from CLI help fixtures) |
+| `TAB_ALLOWED_FLAGS` | Per-tab flag allowlist (from `flags.toml`) |
 | `COMPATIBILITY_MATRIX` | Version-specific flag change notes |
 | `flag_allowed_for_tab()` | Runtime allowlist check |
 
 ### `core/advanced_flags.py`
 
-Advanced flag definitions (`ADVANCED_FLAGS`) and validation logic (~1,500 lines). Defines flag kinds (bool, str, int, enum, date_range, path, etc.) and generates the advanced-mode form rows.
+Delegation shim: `ADVANCED_FLAGS` is built from `REGISTRY.advanced_defs()`. Contains validation and argv-formatting helpers — flag definitions live in `flags.toml`.
 
 ### `core/command_builder.py`
 
@@ -46,12 +57,21 @@ Builds `CommandPlan` from GUI form state.
 | Function | Purpose |
 |----------|---------|
 | `build_plan_from_state()` | Main entry: state dict produces a CommandPlan |
+| `_emit_simple_flag()` | Emit simple-mode flags when value ≠ default |
+| `_emit_positional_owned_flags()` | Emit write-to, from-server, from-date-range, from-albums |
+| `FlagEmitter` | Per-tab allowlist guard with `emission_log` instrumentation |
 | `build_environment()` | Construct env dict with secrets |
 | `validate_state()` | Validate form before run |
 | `mask_command_for_display()` | Redact secrets for preview |
 | `normalize_server_url()` | URL normalization |
 | `validate_date_range()` | Date range validation |
 | `collect_paths()` | Gather filesystem paths from state |
+
+`CommandPlan.emission_log` records why each flag was emitted (`source`: `always`, `simple`, `advanced`, `button`, or `safety`). Shown in the run confirmation dialog.
+
+### `core/logging_config.py`
+
+Rotating file logger writing to `{config_dir}/logs/immich-go-gui.log`.
 
 ### `core/config_manager.py`
 
@@ -94,7 +114,7 @@ immich-go binary lifecycle.
 | `TESTED_IMMICH_GO_VERSIONS` | Frozenset of tested versions |
 | `BinaryManager` | Download, verify, update binary |
 | `get_version_support()` | Classify version compatibility |
-| `BINARY_BASE_DIR` | `~/.immich-go-gui/bin/` |
+| `BINARY_BASE_DIR` | `~/.immich-go-gui/bin/` (versioned subdirs: `bin/{version}/immich-go`) |
 
 Downloads from GitHub Releases with SHA256 verification.
 
@@ -133,7 +153,7 @@ Platform-specific: gnome-terminal/konsole/xterm on Linux, Terminal.app on macOS,
 
 ### `core/cli_help.py` / `core/cli_contract.py`
 
-CLI help parsing and compatibility checking against versioned fixtures in `tests/fixtures/cli_help/`.
+CLI help parsing and compatibility checking against versioned fixtures in `core/fixtures/cli_help/`.
 
 | Function | Purpose |
 |----------|---------|

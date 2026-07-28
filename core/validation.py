@@ -3,11 +3,11 @@
 Pure Python module, Qt-free.
 """
 
-from datetime import datetime
 import glob
 import os
-from pathlib import Path
 import re
+from datetime import datetime
+from pathlib import Path
 
 
 def validate_server_url(url: str) -> tuple[bool, str | None]:
@@ -63,7 +63,10 @@ def _parse_partial_date(date_str: str) -> tuple[datetime | None, str | None]:
         except ValueError as e:
             return None, str(e)
     else:
-        return None, f"Invalid date format: '{s}'. Expected YYYY, YYYY-MM, or YYYY-MM-DD"
+        return (
+            None,
+            f"Invalid date format: '{s}'. Expected YYYY, YYYY-MM, or YYYY-MM-DD",
+        )
 
 
 def validate_date_range(text: str) -> tuple[bool, str | None]:
@@ -87,7 +90,10 @@ def validate_date_range(text: str) -> tuple[bool, str | None]:
 
     parts = cleaned.split(",")
     if len(parts) > 2:
-        return False, "Date range can have at most one start and one end date separated by comma"
+        return (
+            False,
+            "Date range can have at most one start and one end date separated by comma",
+        )
 
     if len(parts) == 1:
         dt, err = _parse_partial_date(parts[0])
@@ -188,7 +194,9 @@ def expand_source_paths(raw_text: str) -> tuple[list[str], list[str]]:
         if has_glob_pattern(item):
             matches = glob.glob(item, recursive=True)
             if not matches:
-                warnings.append(f"Glob pattern '{line}' matched no files or directories.")
+                warnings.append(
+                    f"Glob pattern '{line}' matched no files or directories."
+                )
             else:
                 expanded_paths.extend(sorted(matches))
         else:
@@ -219,7 +227,9 @@ def validate_destination_folder(
         if not dest_path.is_dir():
             warnings.append(f"Destination '{write_to}' exists but is not a directory.")
         elif not os.access(dest_path, os.W_OK):
-            warnings.append(f"Destination folder '{write_to}' exists but is not writable.")
+            warnings.append(
+                f"Destination folder '{write_to}' exists but is not writable."
+            )
 
     for src in source_paths:
         if not src:

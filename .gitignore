@@ -32,8 +32,14 @@ Refinement*
 
 # Editor & IDE states
 .kilo/
-.vscode/
-.agents/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# Generated LLM review bundles (regenerate on demand)
+immichgo_modules_bundle.txt
+immichgo_website_bundle.txt
 
 # MkDocs build output & Cache
 site/

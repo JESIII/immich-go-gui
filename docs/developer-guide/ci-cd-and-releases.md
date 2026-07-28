@@ -67,13 +67,20 @@ Examples:
 
 ### Build Rules
 
-- **App icon:** `immich-go-gui.ico` is committed in repo root. Do not add PIL conversion scripts.
+- **App icon:** `immich-go-gui.ico` in the repo root must embed standard sizes (16, 24, 32, 48, 64, 128, 256 px). Regenerate from `immich-go-gui.png` with `uv run python scripts/generate_windows_icon.py` (requires Pillow; dev-only, not a runtime dependency).
 - **Inno Setup output:** `OutputDir=..\..\` — release workflow moves `.exe` files back to workspace root before artifact upload.
 - **AppImageTool:** Uses continuous release from AppImageKit with `--appimage-extract-and-run`.
 
 ## Local Nuitka Builds
 
 See [CONTRIBUTING](../CONTRIBUTING.md) for per-OS Nuitka commands.
+
+### Python version pin
+
+`requires-python = ">=3.13.0, <3.14"` is intentional. Release builds
+use Nuitka, which must be validated against each new CPython minor
+version before the pin can be widened. Do not widen this range without
+a full Nuitka smoke-build pass on all three platforms.
 
 ## Tooling Conventions
 

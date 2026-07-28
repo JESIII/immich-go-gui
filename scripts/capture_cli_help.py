@@ -5,19 +5,22 @@ Pure Python, Qt-free script.
 """
 
 import argparse
-from datetime import datetime, timezone
 import json
-from pathlib import Path
 import subprocess
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.binary_manager import get_binary_path, load_binary_metadata, TESTED_IMMICH_GO_VERSION
-
+from core.binary_manager import (  # noqa: E402
+    TESTED_IMMICH_GO_VERSION,
+    get_binary_path,
+    load_binary_metadata,
+)
 
 TARGET_COMMANDS = {
     "root": [],
@@ -55,7 +58,7 @@ def capture_help_for_version(binary_path: Path, version: str, out_dir: Path) -> 
 
     manifest = {
         "version": version,
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "binary_path": str(binary_path),
         "commands": manifest_commands,
     }
@@ -69,7 +72,12 @@ def capture_help_for_version(binary_path: Path, version: str, out_dir: Path) -> 
 def main():
     parser = argparse.ArgumentParser(description="Capture immich-go CLI help outputs.")
     parser.add_argument("--binary-path", type=str, help="Path to immich-go executable.")
-    parser.add_argument("--version", type=str, default=TESTED_IMMICH_GO_VERSION, help="Target version tag.")
+    parser.add_argument(
+        "--version",
+        type=str,
+        default=TESTED_IMMICH_GO_VERSION,
+        help="Target version tag.",
+    )
     args = parser.parse_args()
 
     if args.binary_path:
@@ -78,7 +86,7 @@ def main():
         meta = load_binary_metadata()
         bin_path = Path(get_binary_path(meta)).resolve()
 
-    fixtures_dir = PROJECT_ROOT / "tests" / "fixtures" / "cli_help" / args.version
+    fixtures_dir = PROJECT_ROOT / "core" / "fixtures" / "cli_help" / args.version
     print(f"Capturing CLI help using binary: {bin_path} -> {fixtures_dir}")
 
     manifest = capture_help_for_version(bin_path, args.version, fixtures_dir)

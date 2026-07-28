@@ -49,7 +49,7 @@ Common issues and how to resolve them. For short Q&A, see the [FAQ](faq.md). For
 - **Linux:** Ensure a terminal emulator is installed (`gnome-terminal`, `konsole`, `xterm`, etc.). Set preferred terminal in Config if Auto detection fails.
 - **macOS:** Terminal.app or iTerm should be available on PATH.
 - **Windows:** cmd.exe is used by default; verify it is accessible.
-- Check file permissions on the immich-go binary in `~/.immich-go-gui/bin/`.
+- Check file permissions on the immich-go binary in `~/.immich-go-gui/bin/{version}/` (or legacy flat path under `~/.immich-go-gui/bin/`).
 
 ## Server Connection Failed
 
@@ -74,7 +74,7 @@ Common issues and how to resolve them. For short Q&A, see the [FAQ](faq.md). For
 **Solutions:**
 
 1. Add an **Admin API Key** on the Config tab, or
-2. Disable job pausing (advanced / config advanced settings), or
+2. On each upload/Stack tab, open **Advanced Flags** and leave the `pause-immich-jobs` row disabled (or disable it if already enabled), or
 3. Upgrade to GUI **≥ 1.1.2**, which auto-disables pausing when no admin key is present and warns instead of failing hard
 
 See [Configuration — Admin API Key and Job Pausing](configuration.md#admin-api-key-and-job-pausing).

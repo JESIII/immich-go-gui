@@ -50,6 +50,15 @@ Server URLs and API keys for server-required tabs are injected as `IMMICH_GO_*` 
 
 **Never** put real keys into issues, screenshots of unmasked previews, or shared logs.
 
+### POSIX environment inheritance
+
+On Linux and macOS, the terminal launcher passes the GUI's full parent
+environment (`os.environ`) merged with the `IMMICH_GO_*` secret variables
+to the child process. This is standard Unix behaviour. If your shell
+profile exports unrelated sensitive variables, they will be visible to
+the immich-go process. The Windows launcher passes only the explicit
+`env` dict to `cmd.exe`.
+
 ## What Still Appears on the Command Line
 
 Non-secret flags and paths appear in argv (and therefore in the preview), for example:
@@ -69,7 +78,7 @@ Paths can still be sensitive (home directory layout, album names). Share preview
 
 !!! danger "SSL Verification Warning"
     When **Skip SSL verification** is enabled:
-    
+
     - The Config tab shows a prominent warning banner.
     - Command plans add a warning indicator before execution.
     - Traffic can be inspected by any device on the network path — only use this in trusted local lab environments.

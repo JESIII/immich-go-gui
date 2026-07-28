@@ -6,19 +6,19 @@ Thank you for helping improve Immich-Go GUI. Clear PRs and docs keep the project
 
 If you've noticed a bug or have a feature request, check for an existing [issue](https://github.com/shitan198u/immich-go-gui/issues) first. If none exists, open one with the provided templates.
 
-Documentation-only fixes are very welcome — start from the [docs hub](README.md).
+Documentation-only fixes are very welcome — start from the [docs hub](docs/README.md).
 
 ## Documentation map
 
 | Audience | Read first |
 |----------|------------|
-| Architecture | [Architecture](developer-guide/architecture.md) |
-| Core package | [Core Modules](developer-guide/core-modules.md) |
-| Tests | [Testing](developer-guide/testing.md) |
-| Releases / CI | [CI/CD and Releases](developer-guide/ci-cd-and-releases.md) |
-| Extending CLI parity | [Adding Tabs and Flags](developer-guide/adding-tabs-and-flags.md) |
-| CLI / config lookup | [Reference](reference/cli-command-mapping.md) |
-| Security model | [Security & Privacy](user-guide/security-and-privacy.md) |
+| Architecture | [Architecture](docs/developer-guide/architecture.md) |
+| Core package | [Core Modules](docs/developer-guide/core-modules.md) |
+| Tests | [Testing](docs/developer-guide/testing.md) |
+| Releases / CI | [CI/CD and Releases](docs/developer-guide/ci-cd-and-releases.md) |
+| Extending CLI parity | [Adding Tabs and Flags](docs/developer-guide/adding-tabs-and-flags.md) |
+| CLI / config lookup | [Reference](docs/reference/cli-command-mapping.md) |
+| Security model | [Security & Privacy](docs/user-guide/security-and-privacy.md) |
 
 Agent-oriented project notes also live in [`AGENTS.md`](https://github.com/shitan198u/immich-go-gui/blob/master/.agents/AGENTS.md); keep them aligned when you change architecture or CI conventions.
 
@@ -75,7 +75,7 @@ When adding behavior:
 - Update golden fixtures under `tests/fixtures/` when command output changes
 - After upgrading immich-go, run `uv run scripts/capture_cli_help.py`
 
-Details: [Testing guide](developer-guide/testing.md).
+Details: [Testing guide](docs/developer-guide/testing.md).
 
 ## Making a pull request
 
@@ -119,7 +119,7 @@ Do not open routine feature PRs directly against `master`.
 - **`core/` is Qt-free.** Business logic stays testable without a display server.
 - **Secrets never go in argv.** Use env delivery via `build_environment()`.
 - **Serverless archive tabs** must never emit `--server`, `--api-key`, or `--client-timeout`.
-- **Flag allowlists** in `TAB_ALLOWED_FLAGS` are the source of truth for what each tab may emit.
+- **Flag definitions** in `core/flags.toml` are the source of truth for what each tab may emit (`flag_registry.py` loads them; `cli_schema` / `advanced_flags` are shims). Each flag has `mode = "simple"` (emit when widget value ≠ default) or `mode = "advanced"` (emit when the advanced row is enabled). Optional flags are opt-in only.
 - Prefer small PRs with tests over large unscoped rewrites.
 
 ## Building executables (optional)
@@ -129,22 +129,22 @@ Local Nuitka smoke builds:
 **Windows:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --onefile --windows-console-mode=disable --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png app.py
+uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures --include-data-dir=gui=gui --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico app.py
 ```
 
 **macOS:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --macos-create-app-bundle --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png app.py
+uv run python -m nuitka --assume-yes-for-downloads --macos-create-app-bundle --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures --include-data-dir=gui=gui app.py
 ```
 
 **Linux:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png app.py
+uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures --include-data-dir=gui=gui app.py
 ```
 
-Official multi-format packages are produced by `.github/workflows/release.yml`. See [CI/CD and Releases](developer-guide/ci-cd-and-releases.md).
+Official multi-format packages are produced by `.github/workflows/release.yml`. See [CI/CD and Releases](docs/developer-guide/ci-cd-and-releases.md).
 
 ## Documentation contributions
 
@@ -158,6 +158,6 @@ When you change user-visible behavior, update the matching page under `docs/`:
 | Install artifact names | `platform-notes.md` + README + getting-started |
 | CI / branching | `ci-cd-and-releases.md` + CONTRIBUTING |
 
-Keep the [docs hub](README.md) table of contents in sync when adding new pages.
+Keep the [docs hub](docs/README.md) table of contents in sync when adding new pages.
 
 Thank you for contributing!

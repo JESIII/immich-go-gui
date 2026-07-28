@@ -5,6 +5,75 @@ All notable changes to the Immich-Go GUI project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - Unreleased
+
+### Changed
+- **Flag system simplification:** removed `emission` field from `flags.toml`; each flag is either `mode = "simple"` (emit when value ≠ default) or `mode = "advanced"` (emit when row enabled)
+- Moved `client-timeout`, `concurrent-tasks`, `device-uuid`, `on-errors`, and `pause-immich-jobs` from Config tab to per-tab Advanced Flags rows
+- `on-errors` advanced row is now free text: `stop`, `continue`, or a numeric max-error count
+- Eliminated `mode = "both"`; Picasa album flags are simple-mode only
+- `command_builder` uses a generic simple-flag loop plus positional-owned flag handler (no dedup, no config-tab emission path)
+
+### Removed
+- Config tab widgets: Client Timeout, Concurrent Tasks, Device UUID, On Errors, Pause Jobs
+- `AppConfig` persisted fields for the above (legacy keys ignored on load)
+- `ON_ERRORS_CUSTOM_LABEL` / tolerance spinbox UI
+
+### Added
+- `on-errors` validation in `validate_advanced_state()`
+- Per-value `warn_values` on `manage-burst` / `manage-raw-jpeg` in `flags.toml`
+
+### Note
+- Upgrading from older configs: global `on_errors` / `pause_immich_jobs` preferences are **not** auto-migrated to per-tab advanced rows. Re-enable them on each tab if needed.
+
+---
+
+## [1.3.0] - Unreleased
+
+### Changed
+- Replaced `config_emitted` boolean with four-value `emission` field in `flags.toml` (`always`, `config`, `advanced`, `config+advanced`)
+- Unified `config+advanced` resolution via `_resolve_config_advanced()` for `log-level`, `on-errors`, and `pause-jobs`
+- Simple vs advanced mode distinguished by `advanced_state=None` vs `dict`
+- Config-tab preferences now flow through in Simple mode
+
+### Added
+- `CommandPlan.emission_log` with per-flag source tracking
+- Flag Sources panel in run confirmation dialog
+- `tests/test_emission_model.py` integration tests
+
+### Fixed
+- `REPEAT_FLAGS` no longer includes boolean `takeout-tag` / `people-tag`
+- Archive registry key aligned: `target-folder` → `write-to`
+- Removed dead `upload-icloud` album-flag emission; added `upload-folder` `--into-album` emission
+- Pause-jobs admin-key safety pass when no flag otherwise emitted
+
+---
+
+## [1.2.0] - Unreleased
+
+### Changed
+- Unified CLI flag registry: `core/flags.toml` is now the single source of truth (via `flag_registry.py`); `cli_schema` / `advanced_flags` are delegation shims
+- About dialog reads the package version dynamically from metadata
+- Stylesheet extracted to `assets/theme.qss`
+- `check_binary_help` covers all 11 tabs
+
+### Fixed
+- Picasa simple-mode album flags no longer stripped (`mode=both`)
+- Duplicate config/advanced flag emission guarded (`config_emitted` + FlagEmitter dedup)
+- `upload-folder` `log-level` correctly marked `config_emitted`
+
+### Added
+- Keyring availability probe and Config-tab secret storage status indicator
+- Rotating GUI log at `{config_dir}/logs/immich-go-gui.log` (argv masked)
+- Debounced silent connection test and coalesced status updates
+- Close confirmation with Save / Discard / Cancel
+- Periodic stale temp-dir cleanup timer
+
+### Docs
+- Developer guides updated for `flags.toml`; POSIX env inheritance and Python pin rationale documented
+
+---
+
 ## [1.1.2](https://github.com/shitan198u/immich-go-gui/compare/v1.1.0...v1.1.2) - 2026-07-25
 
 ### 🐛 Bug Fixes (Windows Runtime)

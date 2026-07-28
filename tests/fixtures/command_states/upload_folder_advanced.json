@@ -4,17 +4,17 @@
     "server": "http://localhost:2283",
     "api_key": "secret_key_123",
     "admin_api_key": "admin_key",
-    "skip-ssl": false,
-    "client_timeout": 30,
-    "concurrent": 4
+    "skip-ssl": false
   },
   "tab_state": {
     "path": "/data/photos",
-    "folder-album": "RELATIVE",
+    "folder-album": "PATH",
     "manage-burst": "Stack"
   },
   "advanced_state": {
-    "include-type": { "enabled": true, "value": "image" },
+    "client-timeout": { "enabled": true, "value": 30 },
+    "concurrent-tasks": { "enabled": true, "value": 4 },
+    "include-type": { "enabled": true, "value": "IMAGE" },
     "overwrite": { "enabled": true, "value": true },
     "date-range": { "enabled": true, "value": "2023-01-01,2023-12-31" },
     "include-ext": { "enabled": true, "value": ".jpg,.png" },
@@ -27,10 +27,10 @@
     "upload",
     "from-folder",
     "--server=http://localhost:2283",
+    "--folder-as-album=PATH",
+    "--manage-burst=Stack",
     "--client-timeout=30m",
     "--concurrent-tasks=4",
-    "--folder-as-album=RELATIVE",
-    "--manage-burst=Stack",
     "--ignore-sidecar-files",
     "--date-range=2023-01-01,2023-12-31",
     "--include-extensions=.jpg,.png",
@@ -39,7 +39,7 @@
     "--tag=2023",
     "--session-tag",
     "--overwrite",
-    "--include-type=image",
+    "--include-type=IMAGE",
     "/data/photos"
   ]
 }

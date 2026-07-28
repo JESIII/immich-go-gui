@@ -1,6 +1,6 @@
 # Testing
 
-The test suite lives in `tests/test_app.py` (~100 tests) using pytest and pytest-qt.
+The test suite lives in `tests/test_app.py` (205 tests) using pytest and pytest-qt.
 
 ## Running Tests
 
@@ -79,27 +79,27 @@ This prevents CI failures when no terminal emulator is installed.
 - `TAB_ALLOWED_FLAGS` against captured CLI help fixtures
 - Live binary `--help` output (when binary present)
 
-Fixtures are stored in `tests/fixtures/cli_help/{version}/`.
+Fixtures are stored in `core/fixtures/cli_help/{version}/` (bundled at runtime; also used by tests).
 
 ## Fixtures
 
 | Directory | Contents |
 |-----------|----------|
-| `tests/fixtures/cli_help/` | Captured `--help` text per immich-go version |
+| `core/fixtures/cli_help/` | Captured `--help` text per immich-go version (runtime + tests) |
 | `tests/fixtures/command_states/` | Golden JSON form states per tab |
 
 ## Regenerating CLI Help Fixtures
 
 When immich-go releases a new version:
 
-1. Install or download the new binary to `~/.immich-go-gui/bin/`
+1. Install or download the new binary to `~/.immich-go-gui/bin/{version}/`
 2. Run the capture script:
 
 ```bash
 uv run scripts/capture_cli_help.py
 ```
 
-3. Update `TAB_ALLOWED_FLAGS` in `core/cli_schema.py` if flags changed
+3. Update `core/flags.toml` if flags changed
 4. Run tests and fix any golden fixture drift
 
 See [Scripts](scripts.md) for script details.

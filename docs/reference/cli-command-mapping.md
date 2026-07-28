@@ -78,7 +78,7 @@ API key via `IMMICH_GO_STACK_API_KEY`.
 
 ## Allowed Flags Per Tab
 
-Each tab has an allowlist in `TAB_ALLOWED_FLAGS`. The command builder rejects flags not in the set for the active tab.
+Each tab has an allowlist derived from `core/flags.toml` (exposed as `TAB_ALLOWED_FLAGS` via `flag_registry`). The command builder rejects flags not in the set for the active tab.
 
 Flag counts against the **0.32.0** fixture set (exact; regenerate after CLI upgrades):
 
@@ -104,11 +104,13 @@ The `config` tab key is used internally for the settings page. It does not map t
 
 ## Source Reference
 
-Authoritative definitions: `core/cli_schema.py`
+Authoritative definitions: `core/flags.toml` (loaded by `core/flag_registry.py`)
+
+Historical re-exports in `core/cli_schema.py`:
 
 - `TAB_KEYS` — all tab identifiers
 - `TAB_COMMANDS` — command token mapping
-- `TAB_ALLOWED_FLAGS` — per-tab flag allowlists
+- `TAB_ALLOWED_FLAGS` — per-tab flag allowlists (generated from `flags.toml`)
 - `ENV_KEY_MAP` — secret environment variable mapping
 
 ## Related

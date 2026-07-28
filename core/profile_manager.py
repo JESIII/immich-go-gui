@@ -3,13 +3,12 @@
 Pure Python module, Qt-free.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import os
-from pathlib import Path
 import re
 import shutil
-import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 try:
     import tomllib
@@ -63,7 +62,9 @@ def sanitize_profile_name(name: str) -> str:
     return name.strip()
 
 
-def validate_profile_name(name: str, existing_names: list[str] | None = None) -> tuple[bool, str | None]:
+def validate_profile_name(
+    name: str, existing_names: list[str] | None = None
+) -> tuple[bool, str | None]:
     """Validate profile name format and uniqueness.
 
     Returns (is_valid, error_message).
@@ -89,21 +90,55 @@ def validate_profile_name(name: str, existing_names: list[str] | None = None) ->
     return True, None
 
 
-def _load_profiles_index() -> dict:
-    idx_path = global_profiles_path()
-    if not idx_path.exists():
-        return {}
+_profiles_cache: dict | None = None
+_profiles_cache_path: Path | None = None
 
+
+def _load_profiles_index() -> dict:
+    global _profiles_cache, _profiles_cache_path
+    idx_path = global_profiles_path()
+    if _profiles_cache is not None and _profiles_cache_path == idx_path:
+        return _profiles_cache
+    if not idx_path.exists():
+        _profiles_cache = {}
+        _profiles_cache_path = idx_path
+        return _profiles_cache
     try:
         content = idx_path.read_text(encoding="utf-8")
-        return tomllib.loads(content)
-    except Exception:
-        return {}
+        _profiles_cache = tomllib.loads(content)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Failed to parse profiles index %s: %s",
+            idx_path,
+            exc,
+        )
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        try:
+            corrupt_path = idx_path.with_suffix(idx_path.suffix + f".corrupt-{stamp}")
+            idx_path.rename(corrupt_path)
+        except OSError:
+            pass
+        _profiles_cache = {}
+    _profiles_cache_path = idx_path
+    return _profiles_cache
 
 
 def _save_profiles_index(data: dict) -> None:
+    global _profiles_cache, _profiles_cache_path
     text = tomli_w.dumps(data)
-    _atomic_write_text(global_profiles_path(), text, mode=0o644)
+    idx_path = global_profiles_path()
+    _atomic_write_text(idx_path, text, mode=0o644)
+    _profiles_cache = data
+    _profiles_cache_path = idx_path
+
+
+def clear_profiles_cache() -> None:
+    """Test helper / forced reload."""
+    global _profiles_cache, _profiles_cache_path
+    _profiles_cache = None
+    _profiles_cache_path = None
 
 
 def migrate_single_config_to_default() -> None:
@@ -115,41 +150,47 @@ def migrate_single_config_to_default() -> None:
     base_dir = default_config_dir()
     old_config = base_dir / "config.toml"
     old_secrets = base_dir / "secrets.toml"
-    p_root = profiles_root()
+    default_p_dir = profiles_root() / "default"
+    default_cfg = default_p_dir / "config.toml"
+    default_sec = default_p_dir / "secrets.toml"
 
-    if old_config.exists() and not p_root.exists():
-        default_p_dir = p_root / "default"
-        default_p_dir.mkdir(parents=True, exist_ok=True)
+    # Migrate when legacy root files exist but the default profile copy is missing.
+    # profiles/ may already exist from ensure_default_profile() without a prior copy.
+    if not old_config.exists() and not old_secrets.exists():
+        return
+    if default_cfg.exists() and (not old_secrets.exists() or default_sec.exists()):
+        return
 
-        # Copy/Move config.toml
-        shutil.copy2(old_config, default_p_dir / "config.toml")
+    default_p_dir.mkdir(parents=True, exist_ok=True)
+
+    if old_config.exists() and not default_cfg.exists():
+        shutil.copy2(old_config, default_cfg)
         try:
             bak = base_dir / "config.toml.pre-profile.bak"
             old_config.rename(bak)
         except Exception:
             pass
 
-        # Copy/Move secrets.toml if present
-        if old_secrets.exists():
-            shutil.copy2(old_secrets, default_p_dir / "secrets.toml")
-            try:
-                sbak = base_dir / "secrets.toml.pre-profile.bak"
-                old_secrets.rename(sbak)
-            except Exception:
-                pass
+    if old_secrets.exists() and not default_sec.exists():
+        shutil.copy2(old_secrets, default_sec)
+        try:
+            sbak = base_dir / "secrets.toml.pre-profile.bak"
+            old_secrets.rename(sbak)
+        except Exception:
+            pass
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        index_data = {
-            "schema_version": 1,
-            "active_profile": "default",
-            "profiles": [
-                {
-                    "name": "default",
-                    "created_at": now_iso,
-                }
-            ],
-        }
-        _save_profiles_index(index_data)
+    if default_cfg.exists() or default_sec.exists():
+        now_iso = datetime.now(UTC).isoformat()
+        idx_data = _load_profiles_index()
+        p_list = idx_data.get("profiles", [])
+        if not any(p.get("name") == "default" for p in p_list if isinstance(p, dict)):
+            p_list.append({"name": "default", "created_at": now_iso})
+            idx_data["profiles"] = p_list
+        if not idx_data.get("active_profile"):
+            idx_data["active_profile"] = "default"
+        if "schema_version" not in idx_data:
+            idx_data["schema_version"] = 1
+        _save_profiles_index(idx_data)
 
 
 def ensure_default_profile() -> None:
@@ -161,7 +202,7 @@ def ensure_default_profile() -> None:
 
     has_default = any(p.get("name") == "default" for p in p_list if isinstance(p, dict))
     if not has_default:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         p_list.append({"name": "default", "created_at": now_iso})
         idx_data["profiles"] = p_list
 
@@ -245,7 +286,7 @@ def create_profile(name: str, copy_from: str | None = None) -> ProfileInfo:
                 shutil.copy2(src_sec, profile_secrets_path(clean_name))
             SecretStore.copy_secrets(copy_from, clean_name)
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     idx_data = _load_profiles_index()
     p_list = idx_data.get("profiles", [])
     p_list.append({"name": clean_name, "created_at": now_iso})
@@ -288,27 +329,57 @@ def rename_profile(old_name: str, new_name: str) -> None:
 
     old_p_dir = profile_dir(clean_old)
     new_p_dir = profile_dir(clean_new)
+    renamed_dir = False
+    secrets_copied = False
+    index_updated = False
 
-    if old_p_dir.exists():
-        old_p_dir.rename(new_p_dir)
+    try:
+        if not SecretStore.copy_secrets(clean_old, clean_new):
+            raise RuntimeError("Failed to copy secrets to renamed profile.")
+        secrets_copied = True
 
-    # Migrate keyring secrets
-    if not SecretStore.copy_secrets(clean_old, clean_new):
-        raise RuntimeError("Failed to copy secrets to renamed profile.")
-    SecretStore.clear_secret(clean_old, "api_key")
-    SecretStore.clear_secret(clean_old, "admin_api_key")
+        if old_p_dir.exists():
+            if new_p_dir.exists():
+                raise RuntimeError(f"Profile directory '{clean_new}' already exists.")
+            old_p_dir.rename(new_p_dir)
+            renamed_dir = True
 
-    idx_data = _load_profiles_index()
-    if idx_data.get("active_profile") == clean_old:
-        idx_data["active_profile"] = clean_new
+        idx_data = _load_profiles_index()
+        if idx_data.get("active_profile") == clean_old:
+            idx_data["active_profile"] = clean_new
 
-    p_list = idx_data.get("profiles", [])
-    for item in p_list:
-        if isinstance(item, dict) and item.get("name") == clean_old:
-            item["name"] = clean_new
+        p_list = idx_data.get("profiles", [])
+        for item in p_list:
+            if isinstance(item, dict) and item.get("name") == clean_old:
+                item["name"] = clean_new
 
-    idx_data["profiles"] = p_list
-    _save_profiles_index(idx_data)
+        idx_data["profiles"] = p_list
+        _save_profiles_index(idx_data)
+        index_updated = True
+
+        SecretStore.clear_secret(clean_old, "api_key")
+        SecretStore.clear_secret(clean_old, "admin_api_key")
+    except Exception:
+        if index_updated:
+            try:
+                idx_data = _load_profiles_index()
+                for item in idx_data.get("profiles", []):
+                    if isinstance(item, dict) and item.get("name") == clean_new:
+                        item["name"] = clean_old
+                if idx_data.get("active_profile") == clean_new:
+                    idx_data["active_profile"] = clean_old
+                _save_profiles_index(idx_data)
+            except Exception:
+                pass
+        if renamed_dir and new_p_dir.exists() and not old_p_dir.exists():
+            try:
+                new_p_dir.rename(old_p_dir)
+            except OSError:
+                pass
+        if secrets_copied:
+            SecretStore.clear_secret(clean_new, "api_key")
+            SecretStore.clear_secret(clean_new, "admin_api_key")
+        raise
 
 
 def delete_profile(name: str) -> None:
@@ -336,5 +407,7 @@ def delete_profile(name: str) -> None:
 
     idx_data = _load_profiles_index()
     p_list = idx_data.get("profiles", [])
-    idx_data["profiles"] = [p for p in p_list if isinstance(p, dict) and p.get("name") != clean_name]
+    idx_data["profiles"] = [
+        p for p in p_list if isinstance(p, dict) and p.get("name") != clean_name
+    ]
     _save_profiles_index(idx_data)

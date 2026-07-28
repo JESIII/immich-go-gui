@@ -2,149 +2,73 @@
 
 This guide covers extending the GUI when immich-go adds new subcommands or flags.
 
+**Source of truth:** `core/flags.toml`, loaded by `core/flag_registry.py`.
+`core/cli_schema.py` and `core/advanced_flags.py` are thin delegation shims — do not hand-maintain flag lists there.
+
 ## Adding a New Tab
 
-Adding a tab requires changes across schema, UI, tests, and fixtures. Follow this checklist:
+### 1. Add tab metadata and flags in `core/flags.toml`
 
-### 1. Define the tab key in `core/cli_schema.py`
+```toml
+[tabs.upload-newsource]
+command = ["upload", "from-newsource"]
+section = "upload"            # "upload" | "archive" | "stack"
+server_required = true
+serverless = false
 
-```python
-TAB_KEYS.append("upload-newsource")  # Add to TAB_KEYS list
+[secrets.upload-newsource]
+server = "IMMICH_GO_UPLOAD_SERVER"
+api_key = "IMMICH_GO_UPLOAD_API_KEY"
+admin_api_key = "IMMICH_GO_UPLOAD_ADMIN_API_KEY"
 
-TAB_COMMANDS["upload-newsource"] = ["upload", "from-newsource"]
+[[flags.upload-newsource]]
+key = "path"
+flag = ""
+label = "Source path"
+kind = "path"
+mode = "simple"
 
-UPLOAD_TABS.add("upload-newsource")  # Or ARCHIVE_TABS
-
-# If server credentials required:
-SERVER_REQUIRED_TABS.add("upload-newsource")
-# If serverless archive:
-SERVERLESS_TABS.add("upload-newsource")
+[[flags.upload-newsource]]
+key = "recursive"
+flag = "recursive"
+label = "Scan recursively"
+kind = "bool"
+default = true
+mode = "advanced"
 ```
 
-### 2. Add allowed flags
+Rules:
 
-Capture CLI help for the new subcommand (see [Scripts](scripts.md)), then add the flag set:
+- `mode = "simple"` → always-visible widget; emitted when value ≠ TOML default
+- `mode = "advanced"` → advanced card row; emitted only when the enable checkbox is checked
 
-```python
-TAB_ALLOWED_FLAGS["upload-newsource"] = frozenset({
-    "server", "dry-run", "log-level",
-    # ... all flags from immich-go --help
-})
-```
+**Opt-in principle:** a flag reaches the CLI if and only if the user explicitly asked for it — simple widget ≠ default, or advanced row enabled. immich-go applies its own defaults for anything not passed.
 
-### 3. Add environment variable mapping (if secrets involved)
+For every simple-mode bool, the TOML `default` must match the CLI default and the widget default.
 
-```python
-ENV_KEY_MAP["upload-newsource"] = {
-    "server": "IMMICH_GO_UPLOAD_SERVER",
-    "api_key": "IMMICH_GO_UPLOAD_API_KEY",
-}
-```
+### 2. Build the UI tab in `app.py`
 
-### 4. Define advanced flags in `core/advanced_flags.py`
+- Add sidebar entry / stacked page / sub-tab as needed
+- Create simple-mode widgets for `mode = "simple"` flags
+- Advanced rows are generated from the registry automatically
+- Wire save/load through `form_state`
 
-Add entries to `ADVANCED_FLAGS` for the new tab with correct `FlagDef` kinds and scopes.
+### 3. Add tests and fixtures
 
-### 5. Build the UI tab in `app.py`
-
-- Add sidebar entry and stacked page
-- Create form widgets for simple-mode fields
-- Wire save/load to `form_state` under the tab key
-- Connect Run button to `run_command()` with the tab key
-
-### 6. Add tests and fixtures
-
-In `tests/test_app.py`:
-
-- Add golden JSON state fixture in `tests/fixtures/command_states/`
-- Add test asserting `build_plan_from_state()` produces expected argv
-- Use `_norm_argv()` for cross-platform path comparisons
-
-### 7. Capture CLI help fixture
-
-```bash
-uv run scripts/capture_cli_help.py
-```
-
-Run `check_fixtures()` tests to verify allowlist parity.
+- Golden JSON state fixture in `tests/fixtures/command_states/`
+- Assert `build_plan_from_state()` argv with `_norm_argv()`
+- Capture CLI help: `uv run scripts/capture_cli_help.py`
+- Run registry / fixture compatibility tests
 
 ## Adding a Flag to an Existing Tab
 
-### 1. Verify the flag exists in immich-go
+1. Confirm the flag exists in immich-go `--help` for that subcommand
+2. Add a `[[flags.<tab>]]` entry in `core/flags.toml` with correct `kind` and `mode`
+3. If the flag needs a simple-mode control, add the widget in `app.py`
+4. Update / add tests and refresh help fixtures if the CLI changed
 
-Run the binary's `--help` for the relevant subcommand.
+## Related
 
-### 2. Add to `TAB_ALLOWED_FLAGS`
-
-```python
-TAB_ALLOWED_FLAGS["upload-folder"] = frozenset({
-    # existing flags...
-    "new-flag-name",
-})
-```
-
-### 3. Add to `ADVANCED_FLAGS` in `core/advanced_flags.py`
-
-```python
-FlagDef(
-    name="new-flag-name",
-    kind="bool",  # or str, int, enum, etc.
-    scope="subcommand",
-    default=False,
-)
-```
-
-Associate the flag with the correct tab in the `ADVANCED_FLAGS` registry structure.
-
-### 4. Add UI widget (if simple mode)
-
-For high-frequency flags, add a control in simple mode section of the tab builder in `app.py`. Advanced-only flags are auto-generated from `ADVANCED_FLAGS`.
-
-### 5. Update tests
-
-- Extend golden fixture JSON if the flag affects command output
-- Add validation test if the flag has constraints
-
-## Serverless Tab Rule
-
-For tabs in `SERVERLESS_TABS`, the command builder must never emit:
-
-- `--server`
-- `--api-key`
-- `--client-timeout`
-
-Add a test asserting these flags are absent from the built plan.
-
-## Secret Flag Handling
-
-If a new flag carries a secret value:
-
-1. Mark `secret=True` in `FlagDef`
-2. Add to `SECRET_FLAGS` if it appears in argv (prefer env delivery instead)
-3. Map to an env var in `ENV_KEY_MAP`
-4. Verify `mask_command_for_display()` redacts it
-
-**Never** pass secrets via argv. Use `build_environment()` to inject env vars.
-
-## Version Compatibility
-
-When immich-go releases a new version:
-
-1. Capture new CLI help fixtures
-2. Update `TAB_ALLOWED_FLAGS` for any flag changes
-3. Update `COMPATIBILITY_MATRIX` and `VERSION_NOTES` in `cli_schema.py` / `binary_manager.py`
-4. Update `TESTED_IMMICH_GO_VERSIONS` after full test pass
-5. Document changes in `CHANGELOG.md`
-
-See [immich-go Compatibility](../reference/immich-go-compatibility.md).
-
-## Validation Checklist
-
-Before opening a PR:
-
-- [ ] Tab appears in sidebar and saves form state
-- [ ] Command preview shows correct masked output
-- [ ] Run launches immich-go with expected argv/env
-- [ ] Serverless tabs omit server flags
-- [ ] Tests pass: `uv run pytest`
-- [ ] CLI fixtures updated if immich-go version changed
+- [Core Modules](core-modules.md)
+- [CLI Command Mapping](../reference/cli-command-mapping.md)
+- [Testing](testing.md)

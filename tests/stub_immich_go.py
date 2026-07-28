@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Stub immich-go CLI executable for testing environment variable and argv delivery."""
+
 import json
 import os
 import sys

@@ -51,8 +51,7 @@ Each profile's `config.toml` includes:
 
 - Server URL and SSL settings
 - Theme and advanced mode preference
-- Global advanced defaults (timeout, concurrent tasks, etc.)
-- **form_state** — Saved field values for every workflow tab (paths, checkboxes, advanced flags)
+- **form_state** — Per-tab field values and advanced-row enablement (timeout, concurrent tasks, on-errors, etc. are per-tab, not global)
 
 API keys are stored separately in the keyring (or `secrets.toml` as fallback), scoped by profile name.
 

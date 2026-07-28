@@ -38,16 +38,23 @@ From `VERSION_NOTES` and `COMPATIBILITY_MATRIX`:
 
 | Path | Purpose |
 |------|---------|
-| `~/.immich-go-gui/bin/` | Downloaded binary |
-| `~/.immich-go-gui/bin/metadata.json` | Version, download date, SHA256 |
+| `~/.immich-go-gui/bin/` | Base directory for all installed versions |
+| `~/.immich-go-gui/bin/{version}/immich-go` | Versioned binary (`.exe` on Windows) |
+| `~/.immich-go-gui/bin/metadata.json` | `selected_version`, per-version records, optional `manual_path` |
+
+Legacy flat installs (`~/.immich-go-gui/bin/immich-go` without a version subdirectory) are still resolved as a fallback.
 
 ### Download Process
 
+Triggered from the Config tab (or a pre-run download prompt), not on every launch:
+
 1. GUI queries [GitHub Releases](https://github.com/simulot/immich-go/releases) for the target version
-2. Downloads platform-appropriate archive (`.tar.gz` or `.zip`)
-3. Verifies SHA256 checksum
-4. Extracts binary to `~/.immich-go-gui/bin/`
-5. Updates `metadata.json`
+2. Downloads platform-appropriate archive (`.tar.gz` or `.zip`) to a temp file inside `bin/{version}/`
+3. Fetches `checksums.txt` from the same release — **install aborts if missing** (fail-closed)
+4. Verifies archive SHA256 against the entry for the downloaded archive name
+5. Extracts binary to `~/.immich-go-gui/bin/{version}/immich-go`
+6. Runs post-extract verification (`immich-go version`) — install aborts if the binary is unusable
+7. Updates `metadata.json` and sets `selected_version`
 
 ### Version Detection
 
@@ -61,16 +68,16 @@ From the Config tab:
 2. Click download/update if a newer recommended version is available
 3. Review compatibility warnings before proceeding
 
-For manual updates, place the binary in `~/.immich-go-gui/bin/` and update `metadata.json`.
+For manual updates, place the binary in `~/.immich-go-gui/bin/{version}/` and update `metadata.json` (or set `manual_path`).
 
 ## CLI Fixture Workflow
 
 When immich-go releases a new version, maintainers should:
 
-1. Download the new binary
+1. Download the new binary (or use Config tab download)
 2. Run `uv run scripts/capture_cli_help.py`
-3. Update `TAB_ALLOWED_FLAGS` for any flag changes
-4. Update version constants in `binary_manager.py` and `cli_schema.py`
+3. Edit `core/flags.toml` for any flag changes
+4. Update version constants in `binary_manager.py` only
 5. Run full test suite: `uv run pytest`
 6. Update `CHANGELOG.md` and this document
 

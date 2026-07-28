@@ -6,10 +6,24 @@ Immich-Go GUI exposes immich-go CLI flags through form controls. The visibility 
 
 | Mode | Behavior |
 |------|----------|
-| **Simple** | Shows high-frequency inputs only: paths, date filters, dry run, and common options |
-| **Advanced** | Dynamically generates additional flag rows from the allowed flag registry for the active tab |
+| **Simple** | Shows high-frequency inputs only: paths, date filters, dry run, and common options. Emits a flag when its widget value differs from the CLI default. |
+| **Advanced** | Shows additional per-tab flag rows. A flag is emitted **only when its row enable checkbox is checked** (even if the value equals the default). |
 
 Advanced mode is saved per profile in `config.toml` under `general.advanced_mode`.
+
+## Emission model
+
+A flag reaches the CLI **if and only if** the user explicitly asked for it:
+
+| Source | Rule |
+|--------|------|
+| **Structural** | Always emitted: `server`, `skip-verify-ssl`, `dry-run` (and `from-dry-run` on Immich tabs) |
+| **Simple widget** | Emitted when value ≠ TOML default |
+| **Advanced row** | Emitted when the row is enabled |
+| **Safety** | `pause-immich-jobs=false` auto-emitted on upload/stack when no Admin API key is configured |
+| **immich-go default** | Used when nothing above applies |
+
+The run confirmation dialog shows a **Flag Sources** table explaining why each flag was included.
 
 ## How Flags Are Built
 
@@ -34,25 +48,18 @@ These flags are never shown with real values in the preview:
 
 They appear as `***` in the command preview.
 
-## Global Flags (Most Server Tabs)
+## Per-Tab Advanced Flags
 
-Available on upload tabs, Stack, and server-connected archive tabs:
+Global options like `client-timeout`, `concurrent-tasks`, `device-uuid`, `on-errors`, `pause-immich-jobs`, and `log-level` are configured per tab via Advanced Flags rows (not the Config tab).
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `server` | URL | Immich server (via env var on most tabs) |
-| `skip-verify-ssl` | bool | Disable TLS verification |
-| `client-timeout` | duration | HTTP timeout |
-| `dry-run` | bool | Simulate without changes |
-| `concurrent-tasks` | int | Parallelism (0 = auto) |
-| `overwrite` | bool | Overwrite existing assets |
+| `client-timeout` | duration | HTTP timeout (minutes) |
+| `concurrent-tasks` | int | Parallelism |
+| `device-uuid` | text | Device identifier |
+| `on-errors` | text | `stop`, `continue`, or a max error count (e.g. `10`) |
 | `pause-immich-jobs` | bool | Pause Immich background jobs (**needs Admin API key**; auto-disabled otherwise) |
-| `on-errors` | enum | `stop`, `continue`, or custom tolerance |
-| `session-tag` / `tag` | string | Add tags to processed assets |
-| `device-uuid` | string | Device identifier |
 | `log-level` | enum | Logging verbosity |
-| `api-trace` | bool | Trace API calls |
-| `time-zone` | string | Timezone for date operations |
 
 ## Serverless Archive Flags
 
@@ -96,11 +103,13 @@ No `server`, `api-key`, or `client-timeout` flags are available on these tabs.
 
 ## On Errors Behavior
 
+The `on-errors` advanced row accepts free text:
+
 | Value | Description |
 |-------|-------------|
-| `stop` | Halt on first error |
+| `stop` | Halt on first error (default) |
 | `continue` | Keep processing despite errors |
-| `custom` | Continue until error count exceeds tolerance (Config tab sets tolerance) |
+| `<number>` | Abort after N errors (e.g. `10`) |
 
 ## Compatibility Notes
 
