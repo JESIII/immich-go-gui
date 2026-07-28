@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from app import ImmichGoGUI
+from gui import ImmichGoGUI
 
 
 def _norm_argv(argv):
@@ -89,3 +89,11 @@ def _reset_shared_config(gui):
     cfg = gui.inputs["config"]
     cfg["skip-ssl"].setChecked(False)
     yield
+    gui.toggle_advanced(False)
+    if hasattr(gui, "reset_advanced_flags"):
+        gui.reset_advanced_flags()
+    picasa = gui.inputs.get("upload-picasa", {})
+    if "folder-album" in picasa:
+        picasa["folder-album"].setCurrentIndex(0)
+    if "into-album" in picasa:
+        picasa["into-album"].clear()
