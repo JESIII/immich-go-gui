@@ -119,7 +119,7 @@ Do not open routine feature PRs directly against `master`.
 - **`core/` is Qt-free.** Business logic stays testable without a display server.
 - **Secrets never go in argv.** Use env delivery via `build_environment()`.
 - **Serverless archive tabs** must never emit `--server`, `--api-key`, or `--client-timeout`.
-- **Flag allowlists** in `TAB_ALLOWED_FLAGS` are the source of truth for what each tab may emit.
+- **Flag definitions** in `core/flags.toml` are the source of truth for what each tab may emit (`flag_registry.py` loads them; `cli_schema` / `advanced_flags` are shims). Each flag has `mode = "simple"` (emit when widget value ≠ default) or `mode = "advanced"` (emit when the advanced row is enabled). Optional flags are opt-in only.
 - Prefer small PRs with tests over large unscoped rewrites.
 
 ## Building executables (optional)

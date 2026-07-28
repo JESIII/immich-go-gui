@@ -58,17 +58,9 @@ API keys are handled securely:
 
 Secrets are passed to immich-go through **environment variables**, not command-line arguments. The command preview masks all secret values.
 
-## Advanced Settings (Config Tab)
+### Admin API Key and Job Pausing
 
-These defaults apply globally and can be overridden per tab in advanced mode:
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Client timeout | 20 minutes | HTTP timeout for Immich API calls |
-| Concurrent tasks | 0 (auto) | Parallel upload/task count |
-| Device UUID | empty | Device identifier sent to Immich |
-| On errors | stop | Behavior when errors occur (`stop`, `continue`, or custom tolerance) |
-| Pause Immich jobs | enabled | Pause background Immich jobs during upload |
+Immich can pause background jobs while immich-go runs (`pause-immich-jobs`). That API call needs an **admin** key. Enable the **Pause Immich jobs** advanced row on upload/stack tabs when you want pausing; without an admin key the GUI auto-emits `--pause-immich-jobs=false` to avoid a `403 Forbidden` abort.
 
 ## immich-go Binary Management
 

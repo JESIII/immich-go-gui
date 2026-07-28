@@ -10,6 +10,7 @@
     "manage-raw-jpeg": "StackCoverRaw",
     "manage-heic-jpeg": "StackCoverJPG"
   },
+  "advanced_state": {},
   "expected_argv": [
     "stack",
     "--server=http://localhost:2283",

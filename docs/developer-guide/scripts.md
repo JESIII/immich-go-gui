@@ -31,7 +31,7 @@ uv run scripts/capture_cli_help.py
 
 ## bundle_codebase.py
 
-Bundles Python source files into a single text file for LLM code review.
+Bundles **all project source/config/test text files** into a single text file for LLM code review.
 
 **Usage:**
 
@@ -41,11 +41,17 @@ uv run scripts/bundle_codebase.py [output_path]
 
 Default output: `immichgo_modules_bundle.txt`
 
-**Bundled files:**
+**Bundled (when present):**
 
-- All `core/*.py` modules
-- `tests/test_app.py`
-- Other `scripts/*.py` (excluding itself)
+- Root entrypoints: `app.py`, `theme.py`, `pyproject.toml`, README/CHANGELOG/CONTRIBUTING, `implementation.md`
+- `core/` — all modules **including** `flags.toml`
+- `assets/` — `theme.qss`, SVG icons
+- `tests/` — suite, `conftest.py`, fixtures (`cli_help`, `command_states`)
+- `scripts/` — maintenance utilities (including this bundler)
+- `packaging/`, `.github/` workflows, `.vscode/` editor config, `docs/`
+- `.gitignore`, `.pre-commit-config.yaml`, `mkdocs.yml`
+
+**Excluded:** `.venv`, build/site caches, binary assets (`.png`/`.ico`), generated `*_bundle.txt` files, personal/agent worktrees.
 
 ## generate_diff_bundle.py
 

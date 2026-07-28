@@ -42,6 +42,7 @@ class CommandPlan:
     display_argv: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    emission_log: list[dict] = field(default_factory=list)
     tab_key: str = ""
     dry_run: bool = False
     binary_path: str = ""
@@ -83,12 +84,5 @@ class AppConfig:
     skip_ssl: bool = False
 
     secrets_provider: str = "keyring"
-
-    client_timeout_minutes: int = 20
-    concurrent_tasks: int = 0
-    device_uuid: str = ""
-    on_errors: str = "stop"
-    on_errors_tolerance: int = 10
-    pause_immich_jobs: bool = True
 
     form_state: dict = field(default_factory=dict)

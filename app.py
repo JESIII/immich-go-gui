@@ -20,22 +20,11 @@
 
 import sys
 import os
-import re
-import io
 import subprocess
 import shlex
-import platform
 import webbrowser
 from pathlib import Path
-import zipfile
-import tarfile
-import glob
-import json
-import keyring
-import tempfile
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -52,15 +41,13 @@ from PySide6.QtCore import (
     Qt, QEvent, QTimer, QSettings, QThread, Signal, QSize
 )
 
-import requests
-
 SP = QStyle.StandardPixmap
 
 from theme import (
     THEME_SYSTEM, THEME_LIGHT, THEME_DARK,
     normalize_theme_mode, set_fusion_style,
     apply_application_theme, connect_system_theme_changes,
-    load_themed_icon
+    load_themed_icon, clear_icon_cache
 )
 from core.network import test_immich_connection, check_preflight_server_connection, ConnectionTestResult
 from core.validation import (
@@ -77,17 +64,15 @@ from core.process_tracker import (
     scan_locks, cleanup_stale_locks, reset_all_locks
 )
 from core.terminal_launcher import launch_external_terminal, LaunchResult
-
-
+from core.flag_registry import REGISTRY
 from core.advanced_flags import ADVANCED_FLAGS
+from core.logging_config import setup_logging
 from core import (
     AppConfig,
     BINARY_BASE_DIR,
     METADATA_PATH,
     TESTED_IMMICH_GO_VERSION,
     ENV_KEY_MAP,
-    ON_ERRORS_CUSTOM_LABEL,
-    ON_ERRORS_CUSTOM_VALUE,
     SECRET_FLAGS,
     SERVER_REQUIRED_TABS,
     SERVERLESS_TABS,
@@ -121,8 +106,14 @@ from core import (
     set_api_key,
     validate_date_range,
     validate_state,
-    SecretStore,
 )
+
+
+def _gui_version() -> str:
+    try:
+        return _pkg_version("immich-go-gui")
+    except PackageNotFoundError:
+        return "dev"
 
 
 # ==========================================================
@@ -130,8 +121,6 @@ from core import (
 # ==========================================================
 
 class DroppableLineEdit(QLineEdit):
-    filesDropped = Signal(list)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
@@ -148,13 +137,10 @@ class DroppableLineEdit(QLineEdit):
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if paths:
             self.setText(paths[0])
-            self.filesDropped.emit(paths)
         event.acceptProposedAction()
 
 
 class DroppablePlainTextEdit(QPlainTextEdit):
-    filesDropped = Signal(list)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
@@ -171,7 +157,6 @@ class DroppablePlainTextEdit(QPlainTextEdit):
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if paths:
             self.setPlainText("\n".join(paths))
-            self.filesDropped.emit(paths)
         event.acceptProposedAction()
 
 class SwitchButton(QWidget):
@@ -560,6 +545,9 @@ class ImmichGoGUI(QMainWindow):
         self.resize(1250, 750)
         self.setMinimumSize(900, 600)
 
+        self.log = setup_logging()
+        self.log.info("GUI started, profile=%s", active_profile_name())
+
         self.binary_manager = BinaryManager()
         self.app_config = load_config()
         self.settings = QSettings("Shitan198u", "ImmichGoGUI")
@@ -569,6 +557,16 @@ class ImmichGoGUI(QMainWindow):
 
         from core.terminal_launcher import cleanup_stale_temp_dirs
         cleanup_stale_temp_dirs()
+        self._cleanup_timer = QTimer(self)
+        self._cleanup_timer.timeout.connect(
+            lambda: cleanup_stale_temp_dirs(max_age_hours=24)
+        )
+        self._cleanup_timer.start(6 * 3600 * 1000)  # 6 hours
+
+        self._status_debounce = QTimer(self)
+        self._status_debounce.setSingleShot(True)
+        self._status_debounce.setInterval(150)
+        self._status_debounce.timeout.connect(self._do_update_status)
 
         self.theme_mode = normalize_theme_mode(
             self.settings.value("theme_mode", THEME_SYSTEM)
@@ -610,6 +608,16 @@ class ImmichGoGUI(QMainWindow):
         self.apply_theme(self.theme_mode)
         connect_system_theme_changes(self.on_system_theme_changed)
 
+        if not self._probe_keyring() and self.app_config.secrets_provider == "keyring":
+            QMessageBox.warning(
+                self,
+                "Keyring Unavailable",
+                "The OS keyring is not available on this system.\n\n"
+                "API keys will be stored in plaintext in secrets.toml.\n"
+                "Consider installing a Secret Service provider "
+                "(GNOME Keyring, KWallet) for secure storage.",
+            )
+
         cleanup_stale_locks()
         active_locks = scan_locks()
         self.active_lock_path = active_locks[0].lock_path if active_locks else None
@@ -622,15 +630,15 @@ class ImmichGoGUI(QMainWindow):
         for tab_dict in self.inputs.values():
             for widget in tab_dict.values():
                 if isinstance(widget, QLineEdit):
-                    widget.textChanged.connect(lambda _, w=widget: self.update_status())
+                    widget.textChanged.connect(lambda _, w=widget: self._schedule_status_update())
                 elif isinstance(widget, QCheckBox):
-                    widget.toggled.connect(lambda _, w=widget: self.update_status())
+                    widget.toggled.connect(lambda _, w=widget: self._schedule_status_update())
                 elif isinstance(widget, QComboBox):
-                    widget.currentIndexChanged.connect(lambda _, w=widget: self.update_status())
+                    widget.currentIndexChanged.connect(lambda _, w=widget: self._schedule_status_update())
                 elif isinstance(widget, QSpinBox):
-                    widget.valueChanged.connect(lambda _, w=widget: self.update_status())
+                    widget.valueChanged.connect(lambda _, w=widget: self._schedule_status_update())
                 elif isinstance(widget, QPlainTextEdit):
-                    widget.textChanged.connect(lambda w=widget: self.update_status())
+                    widget.textChanged.connect(lambda w=widget: self._schedule_status_update())
 
         self.update_status()
 
@@ -686,13 +694,13 @@ class ImmichGoGUI(QMainWindow):
 
         for def_ in ADVANCED_FLAGS.get(tab_key, ()):
             row = AdvancedFlagRow(def_)
-            row.enable.toggled.connect(lambda _, r=row: self.update_status())
+            row.enable.toggled.connect(lambda _, r=row: self._schedule_status_update())
             if hasattr(row.value_widget, "textChanged"):
-                row.value_widget.textChanged.connect(lambda _, r=row: self.update_status())
+                row.value_widget.textChanged.connect(lambda _, r=row: self._schedule_status_update())
             elif hasattr(row.value_widget, "currentIndexChanged"):
-                row.value_widget.currentIndexChanged.connect(lambda _, r=row: self.update_status())
+                row.value_widget.currentIndexChanged.connect(lambda _, r=row: self._schedule_status_update())
             elif hasattr(row.value_widget, "valueChanged"):
-                row.value_widget.valueChanged.connect(lambda _, r=row: self.update_status())
+                row.value_widget.valueChanged.connect(lambda _, r=row: self._schedule_status_update())
             self.adv_rows[tab_key][def_.key] = row
             form.addRow("", row)
 
@@ -717,6 +725,7 @@ class ImmichGoGUI(QMainWindow):
             self.theme_mode_combo.setCurrentText(mode)
             self.theme_mode_combo.blockSignals(False)
         resolved = apply_application_theme(mode)
+        clear_icon_cache()
         for widget in self.findChildren(QWidget):
             try:
                 widget.update()
@@ -988,20 +997,27 @@ class ImmichGoGUI(QMainWindow):
 
         self.server_url_edit = QLineEdit()
         self.server_url_edit.setPlaceholderText("http://localhost:2283")
-        self.server_url_edit.textChanged.connect(self._reset_conn_test_state)
         self.inputs["config"]["server"] = self.server_url_edit
         form.add_row("Server URL", self.server_url_edit)
 
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key_edit.setPlaceholderText("Paste your Immich API key")
-        self.api_key_edit.textChanged.connect(self._reset_conn_test_state)
         self.inputs["config"]["api_key"] = self.api_key_edit
         form.add_row(
             "API Key",
             self.api_key_edit,
             "You can generate an API key in Immich under Account Settings -> API Keys."
         )
+
+        self._conn_test_debounce = QTimer(self)
+        self._conn_test_debounce.setSingleShot(True)
+        self._conn_test_debounce.setInterval(1200)
+        self._conn_test_debounce.timeout.connect(self._auto_test_connection)
+        self.server_url_edit.textChanged.connect(self._reset_conn_test_state)
+        self.api_key_edit.textChanged.connect(self._reset_conn_test_state)
+        self.server_url_edit.textChanged.connect(lambda: self._conn_test_debounce.start())
+        self.api_key_edit.textChanged.connect(lambda: self._conn_test_debounce.start())
 
         self._add_ssl_skip_row(form, self.inputs["config"])
 
@@ -1024,6 +1040,10 @@ class ImmichGoGUI(QMainWindow):
             self.cmb_secret_provider,
             "OS Keyring uses system credential store (Keychain/KWallet/Credential Manager)."
         )
+
+        self.lbl_secret_status = QLabel("")
+        self.lbl_secret_status.setObjectName("Hint")
+        sec_form.add_row("", self.lbl_secret_status)
 
         self.admin_api_key_edit = QLineEdit()
         self.admin_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -1100,42 +1120,6 @@ class ImmichGoGUI(QMainWindow):
         adv_card = Card("Advanced Configuration")
         adv_form = FormSection()
 
-        self.client_timeout_spin = QSpinBox()
-        self.client_timeout_spin.setRange(1, 1440)
-        self.client_timeout_spin.setValue(20)
-        self.client_timeout_spin.setSuffix(" minutes")
-        self.inputs["config"]["client_timeout"] = self.client_timeout_spin
-        adv_form.add_row("Client Timeout", self.client_timeout_spin)
-
-        cpu_count = os.cpu_count() or 2
-        self.concurrent_tasks_spin = QSpinBox()
-        self.concurrent_tasks_spin.setRange(1, 20)
-        self.concurrent_tasks_spin.setValue(min(max(cpu_count, 1), 20))
-        self.inputs["config"]["concurrent"] = self.concurrent_tasks_spin
-        adv_form.add_row("Concurrent Tasks", self.concurrent_tasks_spin)
-
-        self.device_uuid_edit = QLineEdit()
-        self.inputs["config"]["device_uuid"] = self.device_uuid_edit
-        adv_form.add_row("Device UUID", self.device_uuid_edit)
-
-        self.on_errors_combo = QComboBox()
-        self.on_errors_combo.addItems(["stop", "continue", ON_ERRORS_CUSTOM_LABEL])
-        self.on_errors_combo.currentTextChanged.connect(self._on_errors_changed)
-        self.inputs["config"]["on_errors"] = self.on_errors_combo
-        adv_form.add_row("On Errors", self.on_errors_combo)
-
-        self.on_errors_spin = QSpinBox()
-        self.on_errors_spin.setRange(1, 9999)
-        self.on_errors_spin.setValue(10)
-        self.on_errors_spin.setVisible(False)
-        self.inputs["config"]["on_errors_tolerance"] = self.on_errors_spin
-        adv_form.add_row("Error Tolerance", self.on_errors_spin)
-
-        self.pause_immich_jobs_check = QCheckBox("Pause Immich Jobs")
-        self.pause_immich_jobs_check.setChecked(True)
-        self.inputs["config"]["pause_jobs"] = self.pause_immich_jobs_check
-        adv_form.addRow("", self.pause_immich_jobs_check)
-
         self.allow_untested_check = QCheckBox("Allow untested immich-go versions")
         self.allow_untested_check.setChecked(False)
         self.inputs["config"]["allow_untested_updates"] = self.allow_untested_check
@@ -1160,9 +1144,6 @@ class ImmichGoGUI(QMainWindow):
         save_binary_metadata(meta)
         self.binary_path = get_binary_path(meta)
         self.check_binary_version()
-
-    def _on_errors_changed(self, text):
-        self.on_errors_spin.setVisible(text == ON_ERRORS_CUSTOM_LABEL)
 
     def _build_upload_folder_tab(self):
         page = QWidget()
@@ -2436,46 +2417,18 @@ class ImmichGoGUI(QMainWindow):
     def browse_local_folder(self):
         self.browse_folder_upload()
 
-    ADVANCED_KEYS = {
-        tab: {def_.key for def_ in defs}
-        for tab, defs in ADVANCED_FLAGS.items()
-    }
-
-
     def _collect_config_state(self) -> dict:
-        cpu_default = min(max(os.cpu_count() or 2, 1), 20)
         c = self.inputs.get("config", {})
-        state = {
+        return {
             "server": c.get("server").text() if c.get("server") else "",
             "api_key": c.get("api_key").text().strip() if c.get("api_key") else "",
             "admin_api_key": c.get("admin_api_key").text().strip() if c.get("admin_api_key") else "",
             "secrets_provider": c.get("secret_provider").currentData() if c.get("secret_provider") else "keyring",
             "skip-ssl": c.get("skip-ssl").isChecked() if c.get("skip-ssl") else False,
-            "client_timeout": c.get("client_timeout").value() if c.get("client_timeout") else 20,
-            "concurrent": c.get("concurrent").value() if c.get("concurrent") else cpu_default,
-            "concurrent_default": cpu_default,
-            "device_uuid": c.get("device_uuid").text().strip() if c.get("device_uuid") else "",
-            "on_errors": c.get("on_errors").currentText() if c.get("on_errors") else "stop",
-            "on_errors_tolerance": c.get("on_errors_tolerance").value() if c.get("on_errors_tolerance") else 10,
-            "pause_jobs": c.get("pause_jobs").isChecked() if c.get("pause_jobs") else True,
         }
 
-        if not getattr(self, "is_advanced", False):
-            state["client_timeout"] = 20
-            state["concurrent"] = cpu_default
-            state["device_uuid"] = ""
-            state["on_errors"] = "stop"
-            state["on_errors_tolerance"] = 10
-            state["pause_jobs"] = True
-
-        return state
-
     def _collect_tab_state(self, tab_key: str) -> dict:
-        state = self._raw_tab_state(tab_key)
-        if not getattr(self, "is_advanced", False):
-            for key in self.ADVANCED_KEYS.get(tab_key, set()):
-                state.pop(key, None)
-        return state
+        return self._raw_tab_state(tab_key)
 
     def _raw_tab_state(self, tab_key: str) -> dict:
         if tab_key not in self.inputs:
@@ -2520,6 +2473,7 @@ class ImmichGoGUI(QMainWindow):
             return {
                 "path": get_text("path"),
                 "folder-album": get_combo("folder-album", "NONE"),
+                "into-album": get_text("into-album"),
                 "manage-burst": get_combo("manage-burst", "NoStack"),
                 "manage-raw-jpeg": get_combo("manage-raw-jpeg", "NoStack"),
                 "manage-heic-jpeg": get_combo("manage-heic-jpeg", "NoStack"),
@@ -2604,9 +2558,9 @@ class ImmichGoGUI(QMainWindow):
 
         return {}
 
-    def _collect_advanced_state(self, tab_key: str | None = None) -> dict:
+    def _collect_advanced_state(self, tab_key: str | None = None) -> dict | None:
         if not getattr(self, "is_advanced", False):
-            return {}
+            return None
         if tab_key is not None:
             rows = getattr(self, "adv_rows", {}).get(tab_key, {})
             return {key: row.state() for key, row in rows.items()}
@@ -2639,6 +2593,19 @@ class ImmichGoGUI(QMainWindow):
 
     def _reset_conn_test_state(self):
         self._last_conn_test_ok = None
+        self._schedule_status_update()
+
+    def _auto_test_connection(self):
+        """Silent background test — updates status card only, no popup."""
+        srv = self.server_url_edit.text().strip()
+        key = self.api_key_edit.text().strip()
+        if not srv or not key:
+            self._last_conn_test_ok = None
+            self.update_status()
+            return
+        skip_ssl = self.inputs["config"].get("skip-ssl", QCheckBox()).isChecked()
+        res = test_immich_connection(srv, key, skip_ssl=skip_ssl, timeout=4.0)
+        self._last_conn_test_ok = res.ok
         self.update_status()
 
     def on_test_connection_clicked(self):
@@ -2666,7 +2633,14 @@ class ImmichGoGUI(QMainWindow):
             QMessageBox.warning(self, "Test Connection Failed", res.message)
         self.update_status()
 
+    def _schedule_status_update(self):
+        self._status_debounce.start()
+
     def update_status(self):
+        """Immediate status refresh for programmatic calls (tab switches, run state)."""
+        self._do_update_status()
+
+    def _do_update_status(self):
         active_lock = getattr(self, "active_lock_path", None)
         is_running = (active_lock is not None and is_lock_active(active_lock)) or (getattr(self, "running_process", False) is True)
         validation = self.validate_inputs()
@@ -2884,6 +2858,20 @@ class ImmichGoGUI(QMainWindow):
             env_block.setReadOnly(True)
             env_block.setMaximumHeight(75)
             layout.addWidget(env_block)
+
+        if plan.emission_log:
+            lbl_src = QLabel("Flag Sources")
+            lbl_src.setObjectName("Subhead")
+            layout.addWidget(lbl_src)
+            src_lines = []
+            for entry in plan.emission_log:
+                src_lines.append(f"{entry['flag']}  ←  {entry['source']}")
+            src_block = QPlainTextEdit()
+            src_block.setObjectName("CmdBlock")
+            src_block.setPlainText("\n".join(src_lines))
+            src_block.setReadOnly(True)
+            src_block.setMaximumHeight(90)
+            layout.addWidget(src_block)
 
         if plan.warnings:
             lbl_warn = QLabel("Warnings")
@@ -3115,8 +3103,6 @@ class ImmichGoGUI(QMainWindow):
 
         return success
 
-        return download_success
-
     def build_environment(self, tab_key: str = None) -> dict:
         if tab_key is None:
             tab_key = self._get_active_tab_key()
@@ -3158,6 +3144,13 @@ class ImmichGoGUI(QMainWindow):
         self._check_lock_file()
 
     def closeEvent(self, event):
+        # Tests set this to tear down without modal Save/Discard prompts.
+        if getattr(self, "_force_close", False):
+            if hasattr(self, "log"):
+                self.log.info("GUI closed")
+            event.accept()
+            return
+
         active_locks = scan_locks()
         active_path = getattr(self, "active_lock_path", None)
         if active_locks or (active_path and is_lock_active(active_path)):
@@ -3172,18 +3165,26 @@ class ImmichGoGUI(QMainWindow):
                 event.ignore()
                 return
 
+        reply = QMessageBox.question(
+            self,
+            "Save Configuration",
+            "Save current configuration before closing?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if reply == QMessageBox.StandardButton.Cancel:
+            event.ignore()
+            return
+        if reply == QMessageBox.StandardButton.Save:
+            self.save_configuration(show_popup=False)
+
+        if hasattr(self, "log"):
+            self.log.info("GUI closed")
         event.accept()
 
-    def run_command(self, plan_or_parts=None):
-        if isinstance(plan_or_parts, CommandPlan):
-            plan = plan_or_parts
-        else:
-            tab_key = self._get_active_tab_key()
-            config_state = self._collect_config_state()
-            tab_state = self._collect_tab_state(tab_key)
-            binary_path = getattr(self, "binary_path", "./immich-go")
-            plan = build_plan_from_state(tab_key, config_state, tab_state, binary_path, False)
-
+    def run_command(self, plan: CommandPlan):
         if plan.errors:
             QMessageBox.critical(
                 self, "Command Build Errors",
@@ -3199,6 +3200,14 @@ class ImmichGoGUI(QMainWindow):
                     "Immich-Go binary is missing or not executable."
                 )
                 return
+
+        if hasattr(self, "log"):
+            self.log.info(
+                "Launching: tab=%s argv=%s env_keys=%s",
+                plan.tab_key,
+                plan.display_argv,
+                sorted(plan.env.keys()),
+            )
 
         summary = f"{plan.tab_key}"
         if plan.argv:
@@ -3297,39 +3306,6 @@ class ImmichGoGUI(QMainWindow):
                 self.app_config.preferred_terminal
             )
 
-        if "client_timeout" in self.inputs["config"]:
-            self.inputs["config"]["client_timeout"].setValue(
-                self.app_config.client_timeout_minutes
-            )
-
-        if "concurrent" in self.inputs["config"] and self.app_config.concurrent_tasks > 0:
-            self.inputs["config"]["concurrent"].setValue(
-                self.app_config.concurrent_tasks
-            )
-
-        if "device_uuid" in self.inputs["config"]:
-            self.inputs["config"]["device_uuid"].setText(
-                self.app_config.device_uuid
-            )
-
-        if "on_errors" in self.inputs["config"]:
-            if self.app_config.on_errors == ON_ERRORS_CUSTOM_VALUE:
-                self.inputs["config"]["on_errors"].setCurrentText(ON_ERRORS_CUSTOM_LABEL)
-            else:
-                self.inputs["config"]["on_errors"].setCurrentText(
-                    self.app_config.on_errors
-                )
-
-        if "on_errors_tolerance" in self.inputs["config"]:
-            self.inputs["config"]["on_errors_tolerance"].setValue(
-                self.app_config.on_errors_tolerance
-            )
-
-        if "pause_jobs" in self.inputs["config"]:
-            self.inputs["config"]["pause_jobs"].setChecked(
-                self.app_config.pause_immich_jobs
-            )
-
         self.apply_form_state(self.app_config.form_state)
 
         self.theme_mode = normalize_theme_mode(self.app_config.theme_mode)
@@ -3342,6 +3318,7 @@ class ImmichGoGUI(QMainWindow):
         self.apply_theme(self.theme_mode)
         self.toggle_advanced(self.app_config.advanced_mode)
         self.update_window_title()
+        self._update_secret_status()
 
     def save_configuration(self, show_popup: bool = True):
         self.app_config.server_url = self.inputs["config"]["server"].text()
@@ -3360,38 +3337,6 @@ class ImmichGoGUI(QMainWindow):
         if "preferred_terminal" in self.inputs["config"]:
             self.app_config.preferred_terminal = (
                 self.inputs["config"]["preferred_terminal"].currentText()
-            )
-
-        if "client_timeout" in self.inputs["config"]:
-            self.app_config.client_timeout_minutes = (
-                self.inputs["config"]["client_timeout"].value()
-            )
-
-        if "concurrent" in self.inputs["config"]:
-            self.app_config.concurrent_tasks = (
-                self.inputs["config"]["concurrent"].value()
-            )
-
-        if "device_uuid" in self.inputs["config"]:
-            self.app_config.device_uuid = (
-                self.inputs["config"]["device_uuid"].text().strip()
-            )
-
-        if "on_errors" in self.inputs["config"]:
-            on_errors_text = self.inputs["config"]["on_errors"].currentText()
-            if on_errors_text == ON_ERRORS_CUSTOM_LABEL:
-                self.app_config.on_errors = ON_ERRORS_CUSTOM_VALUE
-            else:
-                self.app_config.on_errors = on_errors_text
-
-        if "on_errors_tolerance" in self.inputs["config"]:
-            self.app_config.on_errors_tolerance = (
-                self.inputs["config"]["on_errors_tolerance"].value()
-            )
-
-        if "pause_jobs" in self.inputs["config"]:
-            self.app_config.pause_immich_jobs = (
-                self.inputs["config"]["pause_jobs"].isChecked()
             )
 
         if hasattr(self, "theme_mode_combo"):
@@ -3429,6 +3374,38 @@ class ImmichGoGUI(QMainWindow):
                 "Saved",
                 msg,
             )
+        self._update_secret_status()
+
+    def _probe_keyring(self) -> bool:
+        """One-time check: can we actually talk to the keyring?"""
+        try:
+            import keyring
+            keyring.get_password("immich-go-gui-probe", "probe")
+            return True
+        except Exception:
+            return False
+
+    def _secrets_file_has_key(self) -> bool:
+        from core.config_manager import load_secrets
+        return bool(load_secrets().get("api_key"))
+
+    def _update_secret_status(self):
+        """Shows whether secrets are in keyring or file fallback."""
+        if not hasattr(self, "lbl_secret_status"):
+            return
+        prof = getattr(self.app_config, "profile_name", "default")
+        provider = self.app_config.secrets_provider
+        api_val = SecretStore.get_secret(prof, "api_key")
+        if provider == "keyring" and api_val:
+            self.lbl_secret_status.setText("Secrets stored in OS keyring")
+            self.lbl_secret_status.setStyleSheet("color: #22C55E;")
+        elif provider == "config" or (not api_val and self._secrets_file_has_key()):
+            self.lbl_secret_status.setText(
+                "Secrets stored in plaintext secrets.toml — prefer OS keyring"
+            )
+            self.lbl_secret_status.setStyleSheet("color: #E5C07B;")
+        else:
+            self.lbl_secret_status.setText("")
 
     def open_immich_go_cli_link(self):
         webbrowser.open("https://github.com/simulot/immich-go")
@@ -3442,7 +3419,7 @@ class ImmichGoGUI(QMainWindow):
             "About Immich-Go GUI",
             "<h3>Immich-Go GUI</h3>"
             "<p>A modern PySide6 desktop interface for <b>immich-go</b>.</p>"
-            "<p><b>Version:</b> 1.0.1 (CLI Target: v0.32.0)</p>"
+            f"<p><b>Version:</b> {_gui_version()} (CLI Target: v0.32.0)</p>"
             "<hr/>"
             "<p><b>Immich-Go GUI Repository:</b><br/>"
             "<a href='https://github.com/shitan198u/immich-go-gui'>https://github.com/shitan198u/immich-go-gui</a></p>"

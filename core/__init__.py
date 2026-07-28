@@ -13,6 +13,11 @@ from .models import (
     ValidationResult,
     VersionSupport,
 )
+from .flag_registry import (
+    REGISTRY,
+    FlagDef,
+    Registry,
+)
 from .cli_schema import (
     ARCHIVE_TABS,
     COMPATIBILITY_MATRIX,
@@ -23,10 +28,7 @@ from .cli_schema import (
     TAB_COMMANDS,
     TAB_KEYS,
     UPLOAD_TABS,
-    FlagDef,
     TAB_ALLOWED_FLAGS,
-    ON_ERRORS_CUSTOM_LABEL,
-    ON_ERRORS_CUSTOM_VALUE,
     flag_allowed_for_tab,
     assert_flag_allowed,
 )
@@ -105,6 +107,10 @@ from .process_tracker import (
 from .terminal_launcher import LaunchResult, launch_external_terminal
 
 __all__ = [
+    # flag_registry
+    "REGISTRY",
+    "Registry",
+    "FlagDef",
     # models
     "AppConfig",
     "BinaryStatus",

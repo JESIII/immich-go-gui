@@ -75,6 +75,13 @@ Examples:
 
 See [CONTRIBUTING](../CONTRIBUTING.md) for per-OS Nuitka commands.
 
+### Python version pin
+
+`requires-python = ">=3.13.0, <3.14"` is intentional. Release builds
+use Nuitka, which must be validated against each new CPython minor
+version before the pin can be widened. Do not widen this range without
+a full Nuitka smoke-build pass on all three platforms.
+
 ## Tooling Conventions
 
 - **Package manager:** Always use `uv` (`uv sync`, `uv run pytest`, `uv run app.py`)

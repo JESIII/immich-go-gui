@@ -214,16 +214,6 @@ def load_config(path: Path | None = None, profile_name: str | None = None) -> Ap
     sec = data.get("secrets", {})
     cfg.secrets_provider = sec.get("provider", "keyring")
 
-    adv = data.get("advanced", {})
-    cfg.client_timeout_minutes = adv.get("client_timeout_minutes", 20)
-    cfg.concurrent_tasks = adv.get("concurrent_tasks", 0)
-    cfg.device_uuid = adv.get("device_uuid", "")
-
-    oe = adv.get("on_errors", "stop")
-    cfg.on_errors = "custom" if oe in ("custom", "custom…") else oe
-    cfg.on_errors_tolerance = adv.get("on_errors_tolerance", 10)
-    cfg.pause_immich_jobs = adv.get("pause_immich_jobs", True)
-
     cfg.form_state = data.get("form_state", {})
 
     return cfg
@@ -234,8 +224,6 @@ def save_config(config: AppConfig, path: Path | None = None, profile_name: str |
     target_prof = profile_name or config.profile_name
     if path is None:
         path = default_config_path(target_prof)
-
-    on_errors_val = "custom" if config.on_errors in ("custom", "custom…") else config.on_errors
 
     data = {
         "schema_version": 2,
@@ -251,14 +239,6 @@ def save_config(config: AppConfig, path: Path | None = None, profile_name: str |
         },
         "secrets": {
             "provider": config.secrets_provider,
-        },
-        "advanced": {
-            "client_timeout_minutes": config.client_timeout_minutes,
-            "concurrent_tasks": config.concurrent_tasks,
-            "device_uuid": config.device_uuid,
-            "on_errors": on_errors_val,
-            "on_errors_tolerance": config.on_errors_tolerance,
-            "pause_immich_jobs": config.pause_immich_jobs,
         },
         "form_state": config.form_state or {},
     }

@@ -89,21 +89,42 @@ def validate_profile_name(name: str, existing_names: list[str] | None = None) ->
     return True, None
 
 
-def _load_profiles_index() -> dict:
-    idx_path = global_profiles_path()
-    if not idx_path.exists():
-        return {}
+_profiles_cache: dict | None = None
+_profiles_cache_path: Path | None = None
 
+
+def _load_profiles_index() -> dict:
+    global _profiles_cache, _profiles_cache_path
+    idx_path = global_profiles_path()
+    if _profiles_cache is not None and _profiles_cache_path == idx_path:
+        return _profiles_cache
+    if not idx_path.exists():
+        _profiles_cache = {}
+        _profiles_cache_path = idx_path
+        return _profiles_cache
     try:
         content = idx_path.read_text(encoding="utf-8")
-        return tomllib.loads(content)
+        _profiles_cache = tomllib.loads(content)
     except Exception:
-        return {}
+        _profiles_cache = {}
+    _profiles_cache_path = idx_path
+    return _profiles_cache
 
 
 def _save_profiles_index(data: dict) -> None:
+    global _profiles_cache, _profiles_cache_path
     text = tomli_w.dumps(data)
-    _atomic_write_text(global_profiles_path(), text, mode=0o644)
+    idx_path = global_profiles_path()
+    _atomic_write_text(idx_path, text, mode=0o644)
+    _profiles_cache = data
+    _profiles_cache_path = idx_path
+
+
+def clear_profiles_cache() -> None:
+    """Test helper / forced reload."""
+    global _profiles_cache, _profiles_cache_path
+    _profiles_cache = None
+    _profiles_cache_path = None
 
 
 def migrate_single_config_to_default() -> None:

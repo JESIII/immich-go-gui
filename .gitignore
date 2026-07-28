@@ -32,7 +32,10 @@ Refinement*
 
 # Editor & IDE states
 .kilo/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .agents/
 
 # MkDocs build output & Cache

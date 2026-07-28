@@ -8,6 +8,7 @@ Immich-Go GUI stores configuration in TOML files. API keys are stored in the OS 
 {config_dir}/
 ├── profiles.toml              # Profile index
 ├── locks/                     # Run lock files (runtime)
+├── logs/                      # Rotating GUI log (immich-go-gui.log)
 └── profiles/
     └── {profile_name}/
         ├── config.toml        # Settings and form state
@@ -62,14 +63,6 @@ skip_ssl = false
 [secrets]
 provider = "keyring"                # "keyring" | "file"
 
-[advanced]
-client_timeout_minutes = 20
-concurrent_tasks = 0                # 0 = auto
-device_uuid = ""
-on_errors = "stop"                  # "stop" | "continue" | "custom"
-on_errors_tolerance = 10
-pause_immich_jobs = true
-
 [form_state]
 # Tab-keyed form field values (dynamic keys)
 "upload-folder" = { path = "/photos", dry_run = false }
@@ -87,13 +80,7 @@ pause_immich_jobs = true
 | `server` | `url` | string | `""` | Immich server base URL |
 | `server` | `skip_ssl` | bool | `false` | Skip TLS verification |
 | `secrets` | `provider` | string | `"keyring"` | Secret storage backend |
-| `advanced` | `client_timeout_minutes` | int | `20` | HTTP timeout |
-| `advanced` | `concurrent_tasks` | int | `0` | Parallel task count |
-| `advanced` | `device_uuid` | string | `""` | Device identifier |
-| `advanced` | `on_errors` | string | `"stop"` | Error handling mode |
-| `advanced` | `on_errors_tolerance` | int | `10` | Custom error tolerance |
-| `advanced` | `pause_immich_jobs` | bool | `true` | Pause Immich jobs during runs |
-| `form_state` | *(tab keys)* | dict | `{}` | Per-tab saved field values |
+| `form_state` | *(tab keys)* | dict | `{}` | Per-tab saved field values (includes `advanced` sub-keys for enabled rows) |
 
 ## secrets.toml (Fallback)
 

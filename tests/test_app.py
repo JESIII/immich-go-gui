@@ -183,45 +183,6 @@ def test_build_environment_upload_immich(gui):
 # 2. GUI SMOKE TESTS (Using qtbot, decoupled from internal dict structure)
 # ==============================================================================
 
-@pytest.fixture(scope="session")
-def qapp():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
-
-
-@pytest.fixture(scope="session")
-def gui(qapp):
-    with patch.object(ImmichGoGUI, "check_binary_version"), \
-         patch.object(ImmichGoGUI, "load_configuration"):
-        g = ImmichGoGUI()
-        g.binary_path = "./immich-go"
-        yield g
-        g.close()
-
-
-@pytest.fixture(autouse=True)
-def suppress_qt_dialogs(monkeypatch):
-    """Globally suppress modal QMessageBox dialogs during test execution."""
-    from PySide6.QtWidgets import QMessageBox
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.information", MagicMock())
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", MagicMock())
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.critical", MagicMock())
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", MagicMock(return_value=QMessageBox.StandardButton.Yes))
-
-
-@pytest.fixture(autouse=True)
-def _reset_shared_config(gui):
-    cfg = gui.inputs["config"]
-    cfg["skip-ssl"].setChecked(False)
-    cfg["client_timeout"].setValue(20)
-    cfg["device_uuid"].setText("")
-    cfg["on_errors"].setCurrentText("stop")
-    cfg["concurrent"].setValue(min(max(os.cpu_count() or 2, 1), 20))
-    yield
-
-
 def test_tab_switching_updates_crumb(gui):
     gui.stacked_widget.setCurrentIndex(1)  # Upload page
     gui.upload_tabs.setCurrentIndex(1)    # Google Takeout sub-tab
@@ -293,7 +254,7 @@ def test_on_errors_emitted_when_configured(gui):
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["archive-immich"]["write-to"].setText("/dst")
-    gui.inputs["config"]["on_errors"].setCurrentText("continue")
+    gui.adv_rows["archive-immich"]["on-errors"].set_state({"enabled": True, "value": "continue"})
     opts = gui.build_command(dry_run=False)
     assert "--on-errors=continue" in opts
 
@@ -304,7 +265,7 @@ def test_client_timeout_emitted(gui):
     gui.upload_tabs.setCurrentIndex(0)     # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
-    gui.inputs["config"]["client_timeout"].setValue(60)
+    gui.adv_rows["upload-folder"]["client-timeout"].set_state({"enabled": True, "value": 60})
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=False)
     assert "--client-timeout=60m" in opts
@@ -316,7 +277,9 @@ def test_device_uuid_emitted(gui):
     gui.upload_tabs.setCurrentIndex(0)     # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
-    gui.inputs["config"]["device_uuid"].setText("my-device-123")
+    gui.adv_rows["upload-folder"]["device-uuid"].set_state(
+        {"enabled": True, "value": "my-device-123"}
+    )
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=False)
     assert "--device-uuid=my-device-123" in opts
@@ -810,39 +773,17 @@ def test_build_plan_from_state_upload_folder_golden():
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "test-key",
-        "admin_api_key": "admin-key",  # prevent auto-disable of pause-immich-jobs
+        "admin_api_key": "admin-key",
         "skip-ssl": False,
-        "client_timeout": 20,
-        "concurrent": 8,
-        "concurrent_default": 8,
-        "device_uuid": "",
-        "on_errors": "stop",
-        "on_errors_tolerance": 10,
-        "pause_jobs": True,
     }
 
     tab_state = {
         "path": "/photos",
-        "include-type": "all",
         "folder-album": "NONE",
         "into-album": "",
         "manage-burst": "Stack",
         "manage-raw-jpeg": "NoStack",
         "manage-heic-jpeg": "NoStack",
-        "date-range": "",
-        "include-ext": "",
-        "exclude-ext": "",
-        "ban-file": "",
-        "ignore-sidecar": False,
-        "date-from-name": True,
-        "tag": "",
-        "session-tag": False,
-        "folder-tags": False,
-        "on-errors": "stop",
-        "overwrite": False,
-        "pause-jobs": True,
-        "log-level": "INFO",
-        "api-trace": False,
     }
 
     plan = build_plan_from_state(
@@ -927,14 +868,14 @@ def test_config_roundtrip(tmp_path, monkeypatch):
     cfg = AppConfig()
     cfg.server_url = "http://localhost:2283"
     cfg.skip_ssl = True
-    cfg.client_timeout_minutes = 60
+    cfg.allow_untested_updates = True
 
     save_config(cfg)
     loaded = load_config()
 
     assert loaded.server_url == "http://localhost:2283"
     assert loaded.skip_ssl is True
-    assert loaded.client_timeout_minutes == 60
+    assert loaded.allow_untested_updates is True
 
 
 # ==============================================================================
@@ -1652,21 +1593,10 @@ def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
         )
         assert mock_popen.called
         call_args = mock_popen.call_args
-        if call_args:
-            args, kwargs = call_args
-            env_used = kwargs.get("env", {})
-            if env_used and "IMMICH_GO_CUSTOM_VAR" in env_used:
-                assert env_used.get("IMMICH_GO_CUSTOM_VAR") == "custom_val"
-                assert env_used.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER") == "http://srv:2283"
-            elif args and args[0]:
-                cmd_list = args[0]
-                for item in cmd_list:
-                    if isinstance(item, str) and item.endswith(".sh") and os.path.exists(item):
-                        env_sh = Path(item).parent / "env.sh"
-                        if env_sh.exists():
-                            content = env_sh.read_text(encoding="utf-8")
-                            assert "IMMICH_GO_CUSTOM_VAR" in content
-                            assert "IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER" in content
+        args, kwargs = call_args
+        env_used = kwargs.get("env", {})
+        assert env_used.get("IMMICH_GO_CUSTOM_VAR") == "custom_val"
+        assert env_used.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER") == "http://srv:2283"
 
 
 def test_archive_ui_options_removed(gui):
@@ -1687,7 +1617,11 @@ def test_config_tab_completeness(gui):
 
 def test_default_true_boolean_emission():
     from core.command_builder import build_plan_from_state
-    config_state = {"server": "http://localhost:2283", "api_key": "test_key"}
+    config_state = {
+        "server": "http://localhost:2283",
+        "api_key": "test_key",
+        "admin_api_key": "admin_key",
+    }
 
     # upload-folder boolean flags explicitly enabled and set to False
     tab_state_folder = {"path": "/photos"}
@@ -1700,6 +1634,8 @@ def test_default_true_boolean_emission():
     assert "--recursive=false" in plan_folder.argv
     assert "--date-from-name=false" in plan_folder.argv
     assert "--pause-immich-jobs=false" in plan_folder.argv
+    pause_sources = [e for e in plan_folder.emission_log if e["key"] == "pause-immich-jobs"]
+    assert pause_sources and pause_sources[0]["source"] == "advanced"
 
     # upload-gp boolean flags explicitly set to False in tab_state & advanced_state
     tab_state_gp = {
@@ -1750,13 +1686,19 @@ def test_from_dry_run_emitted_for_immich_tabs():
 def test_stack_pause_jobs_and_archive_folder_on_errors():
     from core.command_builder import build_plan_from_state
     config_state = {"server": "http://localhost:2283", "api_key": "test"}
-    plan_stack = build_plan_from_state("stack", config_state, {"pause-jobs": False})
+    plan_stack = build_plan_from_state(
+        "stack",
+        config_state,
+        {},
+        advanced_state={"pause-jobs": {"enabled": True, "value": False}},
+    )
     assert "--pause-immich-jobs=false" in plan_stack.argv
 
     plan_archive = build_plan_from_state(
         "archive-folder",
         config_state,
-        {"path": "/src", "write-to": "/dst", "on-errors": "continue"},
+        {"path": "/src", "write-to": "/dst"},
+        advanced_state={"on-errors": {"enabled": True, "value": "continue"}},
     )
     assert "--on-errors=continue" in plan_archive.argv
 
@@ -2040,21 +1982,18 @@ def test_cleanup_stale_temp_dirs(tmp_path, monkeypatch):
     assert not dummy_dir.exists()
 
 
-def test_advanced_keys_derived_from_advanced_flags():
-    from app import ImmichGoGUI
+def test_advanced_keys_match_registry():
     from core.advanced_flags import ADVANCED_FLAGS
+    from core.flag_registry import REGISTRY
 
-    expected = {
-        tab: {def_.key for def_ in defs}
-        for tab, defs in ADVANCED_FLAGS.items()
-    }
-    assert ImmichGoGUI.ADVANCED_KEYS == expected
+    for tab, defs in ADVANCED_FLAGS.items():
+        expected = {def_.key for def_ in defs}
+        assert REGISTRY.advanced_keys(tab) == expected
 
 
-def test_upload_gp_does_not_include_into_album_advanced_key():
-    from app import ImmichGoGUI
-
-    assert "into-album" not in ImmichGoGUI.ADVANCED_KEYS.get("upload-gp", set())
+def test_upload_gp_has_no_into_album_advanced_key():
+    from core.flag_registry import REGISTRY
+    assert "into-album" not in REGISTRY.advanced_keys("upload-gp")
 
 
 def test_from_admin_api_key_advanced_secret_env(gui):
@@ -2751,7 +2690,7 @@ class TestPauseJobsAutoDisable:
         """Default pause=True + no admin key: auto-emit --pause-immich-jobs=false + warning."""
         plan = _build_plan(
             tab_key="upload-folder",
-            config_state={**self._BASE_CONFIG, "admin_api_key": "", "pause_jobs": True},
+            config_state={**self._BASE_CONFIG, "admin_api_key": ""},
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
@@ -2766,7 +2705,7 @@ class TestPauseJobsAutoDisable:
         """When admin key is set, do not auto-disable pausing."""
         plan = _build_plan(
             tab_key="upload-folder",
-            config_state={**self._BASE_CONFIG, "admin_api_key": "admin-secret", "pause_jobs": True},
+            config_state={**self._BASE_CONFIG, "admin_api_key": "admin-secret"},
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
@@ -2776,11 +2715,12 @@ class TestPauseJobsAutoDisable:
         assert not any("Admin API Key" in w for w in plan.warnings)
 
     def test_explicit_pause_false_no_admin_key(self):
-        """Explicit pause=False + no admin key: flag appears exactly once, no warning."""
+        """Explicit pause=False via advanced row + no admin key: flag appears once, no warning."""
         plan = _build_plan(
             tab_key="upload-folder",
-            config_state={**self._BASE_CONFIG, "admin_api_key": "", "pause_jobs": False},
+            config_state={**self._BASE_CONFIG, "admin_api_key": ""},
             tab_state={"path": "/photos"},
+            advanced_state={"pause-jobs": {"enabled": True, "value": False}},
             binary_path="./immich-go",
         )
         pause_flags = [a for a in plan.argv if "pause-immich-jobs" in a]
@@ -2826,12 +2766,334 @@ class TestPauseJobsAutoDisable:
             )
 
     def test_no_double_pause_flag_injection(self):
-        """When admin key is absent AND pause=False, only one flag is emitted."""
+        """When admin key is absent AND pause=False via advanced row, only one flag is emitted."""
         plan = _build_plan(
             tab_key="upload-gp",
-            config_state={**self._BASE_CONFIG, "admin_api_key": "", "pause_jobs": False},
+            config_state={**self._BASE_CONFIG, "admin_api_key": ""},
             tab_state={"path": "/takeout.zip"},
+            advanced_state={"pause-jobs": {"enabled": True, "value": False}},
             binary_path="./immich-go",
         )
         pause_flags = [a for a in plan.argv if "pause-immich-jobs" in a]
         assert len(pause_flags) == 1, f"Expected exactly one pause flag; got: {pause_flags}"
+
+# ==============================================================================
+# Phase 2–6 hardening coverage
+# ==============================================================================
+
+def test_flag_emitter_allows_repeat_options():
+    from core.command_builder import FlagEmitter
+    emitter = FlagEmitter("upload-folder", strict=False)
+    assert emitter.add_option("tag", "a") is True
+    assert emitter.add_option("tag", "b") is True
+    assert emitter.opts == ["--tag=a", "--tag=b"]
+
+
+def test_emission_log_populated():
+    from core.command_builder import build_plan_from_state
+    config_state = {
+        "server": "http://localhost:2283",
+        "api_key": "key",
+    }
+    plan = build_plan_from_state(
+        "upload-folder",
+        config_state,
+        {"path": "/photos"},
+        advanced_state={"on-errors": {"enabled": True, "value": "continue"}},
+    )
+    assert plan.emission_log
+    sources = {e["source"] for e in plan.emission_log}
+    assert "always" in sources
+    assert "advanced" in sources
+    assert any(e["flag"] == "--on-errors=continue" for e in plan.emission_log)
+
+
+def test_overwrite_warn_values(gui):
+    gui.toggle_advanced(True)
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(0)
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-folder"]["path"].setText("/photos")
+    gui.adv_rows["upload-folder"]["overwrite"].set_state(
+        {"enabled": True, "value": True}
+    )
+    plan = gui.build_plan(dry_run=False)
+    assert "--overwrite" in plan.argv
+    assert any("Overwrite mode" in w for w in plan.warnings)
+
+
+def test_from_dry_run_advanced_row_no_duplicate(gui):
+    """Advanced from-dry-run row + dry_run=True → only one --from-dry-run."""
+    gui.toggle_advanced(True)
+    gui.stacked_widget.setCurrentIndex(2)
+    gui.archive_tabs.setCurrentIndex(4)
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["archive-immich"]["write-to"].setText("/backup")
+    gui.adv_rows["archive-immich"]["from-dry-run"].set_state(
+        {"enabled": True, "value": True}
+    )
+    plan = gui.build_plan(dry_run=True)
+    count = sum(1 for a in plan.argv if a == "--from-dry-run")
+    assert count == 1
+
+
+def test_secret_status_label_keyring(gui, monkeypatch):
+    gui.app_config.secrets_provider = "keyring"
+    monkeypatch.setattr(SecretStore, "get_secret", staticmethod(lambda *_: "secret-key"))
+    monkeypatch.setattr(gui, "_secrets_file_has_key", lambda: False)
+    gui._update_secret_status()
+    assert "keyring" in gui.lbl_secret_status.text().lower()
+
+
+def test_secret_status_label_file_fallback(gui, monkeypatch):
+    gui.app_config.secrets_provider = "config"
+    monkeypatch.setattr(SecretStore, "get_secret", staticmethod(lambda *_: ""))
+    monkeypatch.setattr(gui, "_secrets_file_has_key", lambda: True)
+    gui._update_secret_status()
+    assert "secrets.toml" in gui.lbl_secret_status.text()
+
+
+def test_keyring_probe_warning(monkeypatch):
+    """Probe failure during init should surface a warning when keyring is selected."""
+    from PySide6.QtWidgets import QMessageBox
+
+    warn = MagicMock()
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", warn)
+    monkeypatch.setattr(ImmichGoGUI, "check_binary_version", lambda self: None)
+    monkeypatch.setattr(ImmichGoGUI, "load_configuration", lambda self: None)
+    monkeypatch.setattr(ImmichGoGUI, "_probe_keyring", lambda self: False)
+
+    ImmichGoGUI()
+    assert warn.called
+    assert "keyring" in warn.call_args[0][2].lower()
+
+
+def test_about_dialog_version_dynamic(gui, monkeypatch):
+    captured = {}
+
+    def fake_about(parent, title, text):
+        captured["text"] = text
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.about", fake_about)
+    monkeypatch.setattr("app._gui_version", lambda: "9.9.9-test")
+    gui.show_about_dialog()
+    assert "9.9.9-test" in captured["text"]
+    assert "1.0.1" not in captured["text"]
+
+
+def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
+    from core.cli_contract import check_binary_help
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "Flags:\n      --dry-run\n      --server string\n"
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr("core.cli_contract.subprocess.run", fake_run)
+    check_binary_help(tmp_path / "immich-go")
+    assert len(calls) == 11
+
+
+def test_profile_index_cached(tmp_path, monkeypatch):
+    from core import profile_manager as pm
+    monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
+    pm.clear_profiles_cache()
+    (tmp_path / "profiles.toml").write_text(
+        'schema_version = 1\nactive_profile = "default"\n[[profiles]]\nname = "default"\n',
+        encoding="utf-8",
+    )
+    # Point profiles path
+    monkeypatch.setattr(pm, "global_profiles_path", lambda: tmp_path / "profiles.toml")
+    pm.clear_profiles_cache()
+    first = pm._load_profiles_index()
+    (tmp_path / "profiles.toml").write_text(
+        'schema_version = 1\nactive_profile = "other"\n[[profiles]]\nname = "other"\n',
+        encoding="utf-8",
+    )
+    second = pm._load_profiles_index()
+    assert first is second
+    assert second.get("active_profile") == "default"
+    pm.clear_profiles_cache()
+    third = pm._load_profiles_index()
+    assert third.get("active_profile") == "other"
+
+
+def test_close_event_save_prompt(gui, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+
+    calls = {"save": 0}
+
+    def fake_question(*args, **kwargs):
+        return QMessageBox.StandardButton.Save
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", fake_question)
+    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1))
+    monkeypatch.setattr("app.scan_locks", lambda: [])
+    event = QCloseEvent()
+    gui.closeEvent(event)
+    assert calls["save"] == 1
+    assert event.isAccepted()
+
+
+def test_close_event_cancel_ignores(gui, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+
+    monkeypatch.setattr(
+        "PySide6.QtWidgets.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.Cancel,
+    )
+    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: (_ for _ in ()).throw(AssertionError("save")))
+    monkeypatch.setattr("app.scan_locks", lambda: [])
+    event = QCloseEvent()
+    gui.closeEvent(event)
+    assert not event.isAccepted()
+
+
+def test_close_event_discard_no_save(gui, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtGui import QCloseEvent
+
+    calls = {"save": 0}
+
+    monkeypatch.setattr(
+        "PySide6.QtWidgets.QMessageBox.question",
+        lambda *a, **k: QMessageBox.StandardButton.Discard,
+    )
+    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1))
+    monkeypatch.setattr("app.scan_locks", lambda: [])
+    event = QCloseEvent()
+    gui.closeEvent(event)
+    assert calls["save"] == 0
+    assert event.isAccepted()
+
+
+def test_icon_cache_cleared_on_theme_switch(gui, monkeypatch):
+    cleared = {"n": 0}
+
+    def fake_clear():
+        cleared["n"] += 1
+
+    monkeypatch.setattr("app.clear_icon_cache", fake_clear)
+    monkeypatch.setattr("app.apply_application_theme", lambda mode: "dark")
+    monkeypatch.setattr(gui, "findChildren", lambda *a, **k: [])
+    monkeypatch.setattr(gui, "refresh_sidebar_icons", lambda *_: None)
+    gui.apply_theme("Dark")
+    assert cleared["n"] == 1
+
+
+def test_log_file_created_and_masked(tmp_path, monkeypatch):
+    from core.logging_config import setup_logging
+    from core.models import CommandPlan
+    import logging
+
+    monkeypatch.setattr(
+        "core.logging_config.default_config_dir",
+        lambda: tmp_path,
+    )
+    # Reset logger handlers between runs
+    logger = logging.getLogger("immich_go_gui")
+    logger.handlers.clear()
+    log = setup_logging()
+    plan = CommandPlan(
+        tab_key="upload-folder",
+        argv=["upload", "from-folder", "--server=http://x"],
+        env={"IMMICH_GO_UPLOAD_API_KEY": "super-secret"},
+        display_argv=["immich-go", "upload", "from-folder", "--server=http://x"],
+    )
+    log.info("Launching: tab=%s argv=%s env_keys=%s", plan.tab_key, plan.display_argv, sorted(plan.env.keys()))
+    for h in log.handlers:
+        h.flush()
+    text = (tmp_path / "logs" / "immich-go-gui.log").read_text(encoding="utf-8")
+    assert "upload-folder" in text
+    assert "super-secret" not in text
+    assert "IMMICH_GO_UPLOAD_API_KEY" in text
+
+
+def test_upload_icloud_advanced_flag_emission(gui):
+    gui.toggle_advanced(True)
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(2)  # upload-icloud
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-icloud"]["path"].setText("/icloud")
+    gui.adv_rows["upload-icloud"]["recursive"].set_state({"enabled": True, "value": False})
+    gui.adv_rows["upload-icloud"]["api-trace"].set_state({"enabled": True, "value": True})
+    plan = gui.build_plan(dry_run=False)
+    assert "--recursive=false" in plan.argv
+    assert "--api-trace" in plan.argv
+
+
+def test_upload_picasa_advanced_flag_emission(gui):
+    gui.toggle_advanced(True)
+    gui.stacked_widget.setCurrentIndex(1)
+    gui.upload_tabs.setCurrentIndex(3)  # upload-picasa
+    gui.inputs["config"]["server"].setText("http://localhost:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-picasa"]["path"].setText("/picasa")
+    gui.adv_rows["upload-picasa"]["recursive"].set_state({"enabled": True, "value": False})
+    gui.adv_rows["upload-picasa"]["album-picasa"].set_state({"enabled": True, "value": True})
+    plan = gui.build_plan(dry_run=False)
+    assert "--recursive=false" in plan.argv
+    assert "--album-picasa" in plan.argv
+
+
+def test_theme_switch_light_dark_system(gui, monkeypatch):
+    # Avoid full QSS re-apply / widget walk — this test only checks mode state.
+    monkeypatch.setattr("app.apply_application_theme", lambda mode: "dark")
+    monkeypatch.setattr(gui, "findChildren", lambda *a, **k: [])
+    monkeypatch.setattr(gui, "refresh_sidebar_icons", lambda *_: None)
+    gui.apply_theme("Light")
+    assert gui.theme_mode == "Light"
+    gui.apply_theme("Dark")
+    assert gui.theme_mode == "Dark"
+    gui.apply_theme("System")
+    assert gui.theme_mode == "System"
+
+
+def test_upload_folder_log_level_is_advanced_mode():
+    from core.flag_registry import REGISTRY
+    defs = {d.key: d for d in REGISTRY.flags["upload-folder"]}
+    assert defs["log-level"].mode == "advanced"
+
+
+def test_profile_switch_save_discard_cancel(gui, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    actions = []
+
+    def fake_question(*args, **kwargs):
+        return actions[-1]
+
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", fake_question)
+    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: actions.append("saved"))
+    monkeypatch.setattr("app.set_active_profile_name", lambda name: actions.append(f"active:{name}"))
+    monkeypatch.setattr(gui, "load_configuration", lambda: actions.append("loaded"))
+    monkeypatch.setattr(gui, "update_profiles_menu", lambda: None)
+    monkeypatch.setattr(gui, "update_window_title", lambda: None)
+    monkeypatch.setattr("app.active_profile_name", lambda: "default")
+
+    actions.append(QMessageBox.StandardButton.Cancel)
+    gui.switch_profile("work")
+    assert "active:work" not in actions
+
+    actions.clear()
+    actions.append(QMessageBox.StandardButton.Discard)
+    gui.switch_profile("work")
+    assert "saved" not in actions
+    assert "active:work" in actions
+    assert "loaded" in actions
+
+    actions.clear()
+    actions.append(QMessageBox.StandardButton.Save)
+    gui.switch_profile("home")
+    assert "saved" in actions
+    assert "active:home" in actions

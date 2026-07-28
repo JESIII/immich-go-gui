@@ -67,8 +67,13 @@ def check_binary_help(binary_path: Path, version: str = TESTED_IMMICH_GO_VERSION
     subcommands = {
         "upload-folder": ["upload", "from-folder"],
         "upload-gp": ["upload", "from-google-photos"],
+        "upload-icloud": ["upload", "from-icloud"],
+        "upload-picasa": ["upload", "from-picasa"],
         "upload-immich": ["upload", "from-immich"],
         "archive-folder": ["archive", "from-folder"],
+        "archive-gp": ["archive", "from-google-photos"],
+        "archive-icloud": ["archive", "from-icloud"],
+        "archive-picasa": ["archive", "from-picasa"],
         "archive-immich": ["archive", "from-immich"],
         "stack": ["stack"],
     }
