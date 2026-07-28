@@ -49,6 +49,7 @@ class AdvancedFlagRow(QWidget):
 
         if kind == "int":
             w = QSpinBox()
+            # min/max from flags.toml (e.g. concurrent-tasks 1-20); wide fallback if omitted.
             w.setRange(
                 self.def_.min_val if self.def_.min_val is not None else 0,
                 self.def_.max_val if self.def_.max_val is not None else 999999,
