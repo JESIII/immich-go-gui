@@ -59,9 +59,11 @@ immich-go-gui/
 ├── app.py                 # Qt UI: tabs, widgets, run/save/load orchestration
 ├── theme.py               # Theming: Fusion style, palettes, SVG icons
 ├── core/                  # Qt-free business logic (testable without GUI)
+│   ├── flags.toml         # Single source of truth for tabs + flags
+│   ├── flag_registry.py   # Loads flags.toml → REGISTRY singleton
 │   ├── models.py          # Dataclasses / enums
-│   ├── cli_schema.py      # Tab keys, allowlists, env maps
-│   ├── advanced_flags.py  # Advanced flag registry
+│   ├── cli_schema.py      # Thin shim: TAB_COMMANDS, TAB_ALLOWED_FLAGS, etc.
+│   ├── advanced_flags.py  # Thin shim over registry advanced defs
 │   ├── command_builder.py # state dict produces a CommandPlan
 │   ├── config_manager.py  # TOML + keyring secrets
 │   ├── profile_manager.py # Multi-profile index
@@ -146,7 +148,7 @@ The GUI maintains **11/11 parity** with immich-go subcommands:
 - 5 archive tabs
 - 1 stack tab
 
-Each tab maps to a fixed command token list in `core/cli_schema.py` (`TAB_COMMANDS`). Allowed flags per tab are defined in `TAB_ALLOWED_FLAGS` and validated at build time.
+Each tab maps to a fixed command token list in `core/cli_schema.py` (`TAB_COMMANDS`). Allowed flags per tab are defined in `core/flags.toml` and loaded via `core/flag_registry.py` (`TAB_ALLOWED_FLAGS` is a shim export). Validated at build time.
 
 ### Serverless Tab Rule
 

@@ -114,7 +114,7 @@ immich-go binary lifecycle.
 | `TESTED_IMMICH_GO_VERSIONS` | Frozenset of tested versions |
 | `BinaryManager` | Download, verify, update binary |
 | `get_version_support()` | Classify version compatibility |
-| `BINARY_BASE_DIR` | `~/.immich-go-gui/bin/` |
+| `BINARY_BASE_DIR` | `~/.immich-go-gui/bin/` (versioned subdirs: `bin/{version}/immich-go`) |
 
 Downloads from GitHub Releases with SHA256 verification.
 

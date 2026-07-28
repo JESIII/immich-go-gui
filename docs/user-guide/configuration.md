@@ -9,7 +9,7 @@ The **Config** tab holds global settings shared across workflow tabs: Immich ser
 | **Server URL** | Base URL of your Immich instance (e.g. `https://immich.local`). Used by upload tabs, Stack, and Archive from Immich. |
 | **Skip SSL verification** | Bypass TLS certificate validation. Shows an inline warning when enabled. Use only for local/self-signed setups. |
 | **API Key** | Your Immich user API key. Stored in the OS keychain by default — never written to plain TOML. |
-| **Admin API Key** | Optional elevated key. Required only if you want Immich background jobs paused during upload/stack. Also stored in the keychain. |
+| **Admin API Key** | Optional elevated key. Required only if you want Immich background jobs paused during upload/stack. Also stored in the keyring. |
 
 ### Connection Testing
 
@@ -19,15 +19,17 @@ Server-required tabs: all Upload tabs, Archive from Immich, and Stack. See [CLI 
 
 ### Admin API Key and Job Pausing
 
-Immich can pause background jobs while immich-go runs (`pause-immich-jobs`, enabled by default for upload/stack). That API call needs an **admin** key.
+Immich can pause background jobs while immich-go runs (`pause-immich-jobs`, enabled by default upstream for upload/stack). That API call needs an **admin** key.
 
-| Admin key set? | Pause jobs preference | What the GUI does |
+**Where to control pausing:** `pause-immich-jobs` is a **per-tab Advanced Flags row** on upload and Stack tabs — not a Config-tab toggle. In simple mode, the flag is not emitted unless you enable it on the tab's Advanced card.
+
+| Admin key set? | Advanced row enabled? | What the GUI does |
 |----------------|----------------------|-------------------|
-| Yes | On (default) | Jobs can be paused during the run |
-| No | On (default) | **Auto-disables** pausing and adds a warning — avoids a hard `403 Forbidden` abort |
-| Any | Off | Emits pause disabled; no admin key needed |
+| Yes | Yes (user checked) | Emits `--pause-immich-jobs` (or the value you set) |
+| No | Yes | **Auto-disables** pausing via safety pass: emits `--pause-immich-jobs=false` and adds a warning — avoids a hard `403 Forbidden` abort |
+| Any | No (default) | Flag not emitted; immich-go applies its own default |
 
-**Recommendation:** create an admin API key in Immich if you upload large libraries and want Immich to stop thumbnail/metadata jobs from competing for I/O. Otherwise leave the admin field empty and accept that pausing stays off.
+**Recommendation:** create an admin API key in Immich if you upload large libraries and want Immich to stop thumbnail/metadata jobs from competing for I/O. Otherwise leave the admin field empty; the safety pass prevents 403 errors when pausing would otherwise be requested.
 
 ## Configuration Lifecycle
 
@@ -58,10 +60,6 @@ API keys are handled securely:
 
 Secrets are passed to immich-go through **environment variables**, not command-line arguments. The command preview masks all secret values.
 
-### Admin API Key and Job Pausing
-
-Immich can pause background jobs while immich-go runs (`pause-immich-jobs`). That API call needs an **admin** key. Enable the **Pause Immich jobs** advanced row on upload/stack tabs when you want pausing; without an admin key the GUI auto-emits `--pause-immich-jobs=false` to avoid a `403 Forbidden` abort.
-
 ## immich-go Binary Management
 
 ```mermaid
@@ -72,29 +70,41 @@ flowchart TD
     classDef run fill:#8b5cf6,stroke:#6d28d9,color:#fff,stroke-width:2px
     classDef done fill:#10b981,stroke:#047857,color:#fff,stroke-width:2px
 
-    Start([Launch requested]):::startEnd
+    Start([Download / update requested<br/>from Config tab]):::startEnd
     Check{"Binary installed?"}:::check
-    Download[Download from<br/>GitHub Releases]:::download
-    Verify[Verify SHA256 checksum]:::download
+    Download[Download archive from<br/>GitHub Releases]:::download
+    Checksums{"checksums.txt<br/>present?"}:::check
+    Verify[Verify archive SHA256]:::download
+    Extract[Extract to version subdir]:::download
+    PostCheck[Run immich-go version<br/>post-extract check]:::download
     Launch[Prepare argv + env secrets]:::run
     Execute[Open terminal + run immich-go]:::run
     Done([Process running]):::done
 
     Start --> Check
-    Check -->|Yes| Launch
-    Check -->|No| Download
-    Download --> Verify
-    Verify -->|checksum OK| Launch
+    Check -->|No or update| Download
+    Check -->|Yes, run only| Launch
+    Download --> Checksums
+    Checksums -->|missing| Abort([Install aborted<br/>fail-closed]):::startEnd
+    Checksums -->|found| Verify
+    Verify -->|fail| Abort
+    Verify -->|OK| Extract
+    Extract --> PostCheck
+    PostCheck -->|fail| Abort
+    PostCheck -->|OK| Launch
     Launch --> Execute
     Execute --> Done
 ```
 
-The GUI bundles no immich-go binary inside the app. On first use it can download one from [GitHub Releases](https://github.com/simulot/immich-go/releases).
+The GUI bundles no immich-go binary inside the app. Downloads are triggered from the **Config tab** (or when you confirm a download prompt before run) — not on every application launch.
 
 | Location | Path |
 |----------|------|
-| Binary directory | `~/.immich-go-gui/bin/` |
+| Binary base directory | `~/.immich-go-gui/bin/` |
+| Versioned binary | `~/.immich-go-gui/bin/{version}/immich-go` (or `immich-go.exe` on Windows) |
 | Metadata file | `~/.immich-go-gui/bin/metadata.json` |
+
+`metadata.json` records `selected_version`, per-version paths, and download metadata. Legacy installs may still have a flat `~/.immich-go-gui/bin/immich-go`; the resolver checks version subdirectories first.
 
 The Config tab shows:
 

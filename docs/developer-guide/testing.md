@@ -1,6 +1,6 @@
 # Testing
 
-The test suite lives in `tests/test_app.py` (~100 tests) using pytest and pytest-qt.
+The test suite lives in `tests/test_app.py` (205 tests) using pytest and pytest-qt.
 
 ## Running Tests
 
@@ -92,14 +92,14 @@ Fixtures are stored in `tests/fixtures/cli_help/{version}/`.
 
 When immich-go releases a new version:
 
-1. Install or download the new binary to `~/.immich-go-gui/bin/`
+1. Install or download the new binary to `~/.immich-go-gui/bin/{version}/`
 2. Run the capture script:
 
 ```bash
 uv run scripts/capture_cli_help.py
 ```
 
-3. Update `TAB_ALLOWED_FLAGS` in `core/cli_schema.py` if flags changed
+3. Update `core/flags.toml` if flags changed
 4. Run tests and fix any golden fixture drift
 
 See [Scripts](scripts.md) for script details.

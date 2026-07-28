@@ -26,7 +26,7 @@ Terms used throughout Immich-Go GUI documentation and the immich-go ecosystem.
 | **iCloud export** | Local export of an iCloud Photos library used as an import source. |
 | **Picasa** | Legacy Google Photos / Picasa Web Albums export layout. |
 | **TAB key** | Stable internal id such as `upload-folder` or `archive-gp` (not the keyboard key). |
-| **Allowlist** | Per-tab set of CLI flags the GUI is allowed to emit (`TAB_ALLOWED_FLAGS`). |
+| **Allowlist** | Per-tab set of CLI flags the GUI may emit (`TAB_ALLOWED_FLAGS` shim; authoritative source is `core/flags.toml` via `flag_registry`) |
 | **Golden fixture** | Checked-in expected command state used by tests. |
 | **Process lock** | File under `{config_dir}/locks/` preventing concurrent GUI-launched jobs. |
 | **Nuitka** | Python compiler used to produce standalone release binaries. |

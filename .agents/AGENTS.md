@@ -20,7 +20,7 @@
   - **Archive**: `archive-folder`, `archive-gp`, `archive-icloud`, `archive-picasa`, `archive-immich`
   - **Stack**: `stack`
 - **Serverless Tab Rule**: `archive-folder`, `archive-gp`, `archive-icloud`, and `archive-picasa` are strictly classified as `SERVERLESS_TABS`. They must NEVER emit `--server`, `--api-key`, or `--client-timeout` flags.
-- **Simple vs. Advanced Control Policy**: Simple mode shows high-frequency inputs only. Advanced mode dynamically generates flag rows from `ADVANCED_FLAGS` in `core/advanced_flags.py`.
+- **Simple vs. Advanced Control Policy**: Simple mode shows high-frequency inputs only. Advanced mode dynamically generates flag rows from `core/flags.toml` via `core/flag_registry.py` (`mode = "simple"` or `mode = "advanced"`).
 
 ## 4. Security & Secret Isolation
 - **In-Memory Secret Delivery**: Sensitive API keys (`IMMICH_GO_UPLOAD_API_KEY`, `IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY`, etc.) are passed strictly through process memory environment dictionaries (`posix_env` / `win_env`) in `subprocess.Popen`. NEVER write secret environment variables or credentials to disk shell scripts (such as `env.sh`).
@@ -45,3 +45,83 @@
 - **Release Please Config Location**: Configuration files belong in `.github/release-please-config.json` and `.github/.release-please-manifest.json`.
 - **Release Please Manifest Sync**: `.github/.release-please-manifest.json` must be explicitly updated whenever performing manual version bumps or hotfix releases so Release Please tracks the correct baseline version.
 
+
+
+# Immich-Go GUI — Project Context Brief
+
+## What It Is
+
+A **PySide6 desktop GUI** wrapping the [immich-go](https://github.com/simulot/immich-go) CLI (v0.32.0). Users configure upload/archive/stack jobs via forms, preview the exact CLI command, and launch it in an external terminal. **11 workflow tabs** cover every immich-go subcommand.
+
+## Architecture (Non-Negotiable Rules)
+
+- **`core/` is Qt-free.** All business logic, testable headlessly.
+- **Secrets never go in argv.** API keys travel via environment variables (`IMMICH_GO_*`), stored in OS keyring.
+- **Serverless archive tabs** (`archive-folder`, `archive-gp`, `archive-icloud`, `archive-picasa`) must **never** emit `--server`, `--api-key`, or `--client-timeout`.
+- **`core/flags.toml`** is the single source of truth for all flag definitions, loaded by `core/flag_registry.py`. `cli_schema.py` and `advanced_flags.py` are thin delegation shims.
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `app.py` (~3575 lines) | Qt UI: tabs, widgets, events, run/save/load |
+| `theme.py` | Theming, palettes, SVG icons |
+| `core/flags.toml` (~2809 lines) | **Single source of truth** for all tabs + flags |
+| `core/flag_registry.py` | Loads flags.toml → `REGISTRY` singleton |
+| `core/command_builder.py` | `build_plan_from_state()` → `CommandPlan` (argv + env) |
+| `core/advanced_flags.py` | `advanced_flag_args()`, `apply_advanced_flags_to_plan()` |
+| `core/cli_schema.py` | Re-exports from registry (TAB_COMMANDS, TAB_ALLOWED_FLAGS, etc.) |
+| `core/config_manager.py` | TOML config + keyring secrets |
+| `core/binary_manager.py` | immich-go download/verify/version |
+| `core/terminal_launcher.py` | Cross-platform external terminal launch |
+| `core/process_tracker.py` | Run lock files |
+| `tests/test_app.py` (~3151 lines) | Main test suite |
+| `tests/test_flag_registry.py` | Registry validation tests |
+| `tests/test_emission_model.py` | Emission model tests |
+
+## Current Flag Model (1.4.0 emission model)
+
+Implemented in 1.4.0. The `emission` field was removed from `flags.toml`.
+
+### The One Rule
+> **A flag reaches the CLI if and only if the user explicitly asked for it.** immich-go applies its own defaults for anything not passed.
+
+### Model
+- **`mode` is the only behavioral field:** `simple` | `advanced`
+- **Simple mode:** Only `mode=simple` widgets visible. Emit if value ≠ TOML/CLI default.
+- **Advanced mode:** Advanced rows shown, **all disabled by default**. Emit **only** if user checks the enable box. Row value pre-populated from saved config (takes precedence) or CLI default.
+- **Config tab:** server URL, API key, admin key, skip-SSL, secret provider, theme, binary mgmt, allow-untested, preferred-terminal. No per-flag widgets for `client-timeout`, `concurrent-tasks`, `device-uuid`, `on-errors`, or `pause-immich-jobs` — those are per-tab advanced rows.
+- **pause-jobs safety:** Post-check after all flags emitted — if upload/stack tab + no admin key + no explicit pause flag in argv → emit `--pause-immich-jobs=false` + warning (`source="safety"` in emission log).
+
+### Config Persistence for Advanced Rows
+- **Values persist** in `form_state.advanced.{tab}.{key}.value`
+- **Enabled state persists** in `form_state.advanced.{tab}.{key}.enabled`
+- On fresh install / "Reset Advanced Flags": all disabled, values = CLI defaults
+- Saved config value takes precedence over flags.toml default for **display only**. Emission still requires the checkbox.
+
+### Emission Logic
+1. Structural flags (server, skip-ssl, dry-run) — always when applicable
+2. Simple widgets — emit if value ≠ default
+3. Advanced rows — emit ONLY if enabled
+4. Positional args (paths)
+5. Safety post-check (pause-jobs)
+
+## Tech Stack
+
+- Python 3.13 (`>=3.13.0, <3.14`), PySide6, `uv` package manager
+- TOML config (`tomllib`/`tomli` + `tomli_w`), `keyring`, `requests`, `packaging`
+- pytest + pytest-qt, Nuitka for release builds
+- MkDocs Material for docs site
+
+## Branching & Releases
+
+- PRs target **`staging`**, never `master` directly.
+- Release Please with Conventional Commits.
+- Multi-platform builds: Windows (exe/zip), macOS (dmg), Linux (AppImage/deb/rpm/tar).
+
+## Testing Conventions
+
+- `_norm_argv()` for all path comparisons in argv assertions.
+- Golden JSON fixtures in `tests/fixtures/command_states/`.
+- CLI help fixtures in `tests/fixtures/cli_help/0.32.0/`.
+- Run: `uv run pytest` (Linux headless: `QT_QPA_PLATFORM=offscreen xvfb-run uv run pytest`).
