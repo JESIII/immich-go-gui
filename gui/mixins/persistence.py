@@ -99,6 +99,50 @@ class PersistenceMixin:
 
         self.update_window_title()
         self._update_secret_status()
+        self._mark_configuration_clean()
+
+    def _collect_persisted_state(self) -> dict:
+        """Snapshot of widget state that save_configuration would persist."""
+        config_inputs = self.inputs.get("config", {})
+        state = {
+            "server_url": config_inputs.get("server").text()
+            if config_inputs.get("server")
+            else "",
+            "skip_ssl": config_inputs["skip-ssl"].isChecked()
+            if config_inputs.get("skip-ssl")
+            else False,
+            "secrets_provider": config_inputs["secret_provider"].currentData()
+            if config_inputs.get("secret_provider")
+            else "keyring",
+            "allow_untested_updates": config_inputs["allow_untested_updates"].isChecked()
+            if config_inputs.get("allow_untested_updates")
+            else False,
+            "preferred_terminal": config_inputs["preferred_terminal"].currentText()
+            if config_inputs.get("preferred_terminal")
+            else "auto",
+            "theme_mode": self.theme_mode_combo.currentText()
+            if hasattr(self, "theme_mode_combo")
+            else normalize_theme_mode(self.theme_mode),
+            "advanced_mode": bool(getattr(self, "is_advanced", False)),
+            "api_key": config_inputs.get("api_key").text().strip()
+            if config_inputs.get("api_key")
+            else "",
+            "admin_api_key": config_inputs.get("admin_api_key").text().strip()
+            if config_inputs.get("admin_api_key")
+            else "",
+            "form_state": self.collect_form_state(),
+        }
+        if state["secrets_provider"] is None:
+            state["secrets_provider"] = "keyring"
+        return state
+
+    def _mark_configuration_clean(self) -> None:
+        self._config_clean_snapshot = self._collect_persisted_state()
+
+    def has_unsaved_changes(self) -> bool:
+        if not hasattr(self, "_config_clean_snapshot"):
+            return False
+        return self._collect_persisted_state() != self._config_clean_snapshot
 
     def save_configuration(self, show_popup: bool = True):
         self.app_config.server_url = self.inputs["config"]["server"].text()
@@ -172,6 +216,7 @@ class PersistenceMixin:
                 msg,
             )
         self._update_secret_status()
+        self._mark_configuration_clean()
 
     def _probe_keyring(self) -> bool:
         """One-time check: can we actually talk to the keyring?"""

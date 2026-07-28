@@ -261,6 +261,12 @@ class ImmichGoGUI(
                 event.ignore()
                 return
 
+        if not self.has_unsaved_changes():
+            if hasattr(self, "log"):
+                self.log.info("GUI closed")
+            event.accept()
+            return
+
         reply = QMessageBox.question(
             self,
             "Save Configuration",

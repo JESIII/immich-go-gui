@@ -22,21 +22,22 @@ class ProfilesUIMixin:
         if target_name == active:
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Switch Profile",
-            f"Save changes to current profile '{active}' before switching?",
-            QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Save,
-        )
+        if self.has_unsaved_changes():
+            reply = QMessageBox.question(
+                self,
+                "Switch Profile",
+                f"Save changes to current profile '{active}' before switching?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save,
+            )
 
-        if reply == QMessageBox.StandardButton.Cancel:
-            self.update_profiles_menu()
-            return
-        elif reply == QMessageBox.StandardButton.Save:
-            self.save_configuration()
+            if reply == QMessageBox.StandardButton.Cancel:
+                self.update_profiles_menu()
+                return
+            if reply == QMessageBox.StandardButton.Save:
+                self.save_configuration()
 
         try:
             set_active_profile_name(target_name)
