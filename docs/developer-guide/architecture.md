@@ -16,7 +16,7 @@ flowchart TB
 
     subgraph UI["UI Layer — app.py / gui/ / theme.py"]
         direction LR
-        AppPy[app.py<br/>Entrypoint ≤80 LOC]:::uiStyle
+        AppPy[app.py<br/>Thin entrypoint ~130 LOC]:::uiStyle
         GuiPkg[gui/<br/>MainWindow · Mixins · Tabs · Widgets]:::uiStyle
         ThemePy[theme.py<br/>Palette · Icons]:::uiStyle
     end
@@ -58,13 +58,16 @@ flowchart TB
 
 ```text
 immich-go-gui/
-├── app.py                 # Entry point (≤80 lines) + --self-test CLI handler
+├── app.py                 # Thin entry point (~130 lines) + --self-test CLI handler
 ├── theme.py               # Theming: Fusion style, palettes, SVG icons
 ├── gui/                   # PySide6 desktop GUI package
 │   ├── main_window.py     # ImmichGoGUI QMainWindow composition
-│   ├── widgets.py         # Custom Qt widgets (DroppablePlainTextEdit, etc.)
-│   ├── status_card.py    # Live status summary card widget
 │   ├── browse_dialogs.py  # File/directory chooser dialog helpers
+│   ├── widgets/           # Custom Qt widgets package
+│   │   ├── droppable.py   # DroppableLineEdit, DroppablePlainTextEdit
+│   │   ├── status_card.py # Live status summary card
+│   │   ├── navigation.py  # NavGroup, NavItem sidebar navigation
+│   │   └── ...            # cards, base_page, advanced_flag_row, etc.
 │   ├── mixins/            # Focused QMainWindow mixins (all ≤300 lines)
 │   │   ├── layout.py      # Main layout & tab assembly
 │   │   ├── form_helpers.py# Inline field errors & helper controls
@@ -79,11 +82,11 @@ immich-go-gui/
 │   │   ├── diagnostics.py # System diagnostics & log export
 │   │   ├── menu.py        # Top bar & context menus
 │   │   └── theme_mixin.py # Dynamic theme switching
-│   └── tabs/              # Tab builder functions
+│   └── tabs/              # Tab builder modules
 │       ├── config_tab.py  # Server & credentials configuration tab
-│       ├── upload_tab.py  # Upload subcommand tabs (folder, GP, etc.)
-│       ├── archive_tab.py # Archive subcommand tabs (folder, GP, etc.)
-│       └── stack_tab.py   # Photo stacking subcommand tab
+│       ├── stack_tab.py   # Photo stacking subcommand tab
+│       ├── upload/        # Upload subcommand tabs (folder, GP, icloud, picasa, immich)
+│       └── archive/       # Archive subcommand tabs (folder, GP, icloud, picasa, immich)
 ├── core/                  # Qt-free business logic (testable without GUI)
 │   ├── flags.toml         # Single source of truth for tabs + flags
 │   ├── flag_registry.py   # Loads flags.toml → REGISTRY singleton

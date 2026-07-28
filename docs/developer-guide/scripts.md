@@ -76,18 +76,6 @@ uv run scripts/generate_diff_bundle.py
 
 Useful for sharing changes with reviewers or AI assistants without exposing the full repository.
 
-## convert_markdown.py
-
-Converts Markdown files to interactive HTML.
-
-**Usage:**
-
-```bash
-uv run scripts/convert_markdown.py <input.md> [output.html]
-```
-
-Utility for rendering documentation or changelogs as standalone HTML pages.
-
 ## Related Documentation
 
 - [Testing](testing.md) — Fixture regeneration workflow
