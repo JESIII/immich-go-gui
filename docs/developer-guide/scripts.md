@@ -22,7 +22,7 @@ uv run scripts/capture_cli_help.py
 
 1. Locates the immich-go binary via `core/binary_manager.get_binary_path()`
 2. Runs `--help` for each target subcommand (upload, archive, stack variants)
-3. Writes text files to `tests/fixtures/cli_help/{version}/`
+3. Writes text files to `core/fixtures/cli_help/{version}/`
 4. Generates a manifest JSON with capture metadata
 
 **Target commands** include root, all upload/archive subcommands, and stack — matching the 11 GUI tabs.

@@ -79,13 +79,13 @@ This prevents CI failures when no terminal emulator is installed.
 - `TAB_ALLOWED_FLAGS` against captured CLI help fixtures
 - Live binary `--help` output (when binary present)
 
-Fixtures are stored in `tests/fixtures/cli_help/{version}/`.
+Fixtures are stored in `core/fixtures/cli_help/{version}/` (bundled at runtime; also used by tests).
 
 ## Fixtures
 
 | Directory | Contents |
 |-----------|----------|
-| `tests/fixtures/cli_help/` | Captured `--help` text per immich-go version |
+| `core/fixtures/cli_help/` | Captured `--help` text per immich-go version (runtime + tests) |
 | `tests/fixtures/command_states/` | Golden JSON form states per tab |
 
 ## Regenerating CLI Help Fixtures

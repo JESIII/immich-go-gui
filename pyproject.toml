@@ -7,7 +7,6 @@ requires-python = ">=3.13.0, <3.14"
 dependencies = [
     "keyring>=25.0.0",
     "packaging>=24.0.0",
-    "psutil>=6.1.1",
     "pyside6>=6.8.2",
     "requests>=2.32.3",
     "tomli-w>=1.2.0",
@@ -25,8 +24,11 @@ dev = [
     "pre-commit>=4.6.0",
     "pyfakefs>=5.5.0",
     "pymdown-extensions>=10.14",
+    "pyright>=1.1.390",
     "pytest>=9.1.1",
+    "pytest-cov>=6.0.0",
     "pytest-qt>=4.5.0",
+    "ruff>=0.9.0",
 ]
 
 [tool.pytest.ini_options]
@@ -38,3 +40,6 @@ pythonpath = ["."]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
+include = ["core"]
+reportMissingImports = "warning"
+reportAttributeAccessIssue = "warning"

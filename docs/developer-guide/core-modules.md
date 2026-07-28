@@ -153,7 +153,7 @@ Platform-specific: gnome-terminal/konsole/xterm on Linux, Terminal.app on macOS,
 
 ### `core/cli_help.py` / `core/cli_contract.py`
 
-CLI help parsing and compatibility checking against versioned fixtures in `tests/fixtures/cli_help/`.
+CLI help parsing and compatibility checking against versioned fixtures in `core/fixtures/cli_help/`.
 
 | Function | Purpose |
 |----------|---------|

@@ -32,7 +32,7 @@ def parse_help_bool_defaults(help_text: str) -> dict[str, bool]:
     """Extract bool flag defaults from immich-go CLI --help text.
 
     Parses lines like ``--recursive  Scan subdirectories (default true)``.
-  """
+    """
     defaults: dict[str, bool] = {}
     for line in help_text.splitlines():
         match = _BOOL_DEFAULT_PATTERN.search(line)
@@ -59,14 +59,18 @@ def help_name_for_tab(tab_key: str) -> str:
     return mapping.get(tab_key, tab_key.replace("-", "_"))
 
 
-def load_help_fixture(version: str = "0.32.0", help_name: str = "root", raise_on_missing: bool = False) -> set[str]:
+def load_help_fixture(
+    version: str = "0.32.0", help_name: str = "root", raise_on_missing: bool = False
+) -> set[str]:
     """Loads a captured help text fixture and returns its set of parsed flag names."""
-    base_dir = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "cli_help" / version
+    base_dir = Path(__file__).resolve().parent / "fixtures" / "cli_help" / version
     fixture_file = base_dir / f"{help_name}.txt"
 
     if not fixture_file.exists():
         if raise_on_missing:
-            raise FileNotFoundError(f"Help fixture '{help_name}' not found for version '{version}' at {fixture_file}")
+            raise FileNotFoundError(
+                f"Help fixture '{help_name}' not found for version '{version}' at {fixture_file}"
+            )
         return set()
 
     try:

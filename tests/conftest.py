@@ -1,5 +1,5 @@
 """Shared pytest fixtures for Immich-Go GUI test suite."""
-import os
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,12 +23,14 @@ def gui(qapp):
     Session teardown must not show Save/Discard dialogs: function-scoped
     monkeypatches are already gone when this fixture exits. Use _force_close.
     """
-    with patch.object(ImmichGoGUI, "check_binary_version"), \
-         patch.object(ImmichGoGUI, "load_configuration"), \
-         patch.object(ImmichGoGUI, "_probe_keyring", return_value=True), \
-         patch("PySide6.QtWidgets.QMessageBox.warning"), \
-         patch("PySide6.QtWidgets.QMessageBox.question",
-               return_value=QMessageBox.StandardButton.Discard):
+    with patch.object(ImmichGoGUI, "check_binary_version"), patch.object(
+        ImmichGoGUI, "load_configuration"
+    ), patch.object(ImmichGoGUI, "_probe_keyring", return_value=True), patch(
+        "PySide6.QtWidgets.QMessageBox.warning"
+    ), patch(
+        "PySide6.QtWidgets.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Discard,
+    ):
         g = ImmichGoGUI()
         g.binary_path = "./immich-go"
         # Never fire silent connection tests during the suite — they hit the
@@ -58,6 +60,7 @@ def suppress_qt_dialogs(monkeypatch):
 @pytest.fixture(autouse=True)
 def _clear_profiles_cache():
     from core.profile_manager import clear_profiles_cache
+
     clear_profiles_cache()
     yield
     clear_profiles_cache()
