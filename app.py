@@ -24,6 +24,10 @@ import os
 import subprocess
 import shlex
 import webbrowser
+import logging
+import traceback
+import zipfile
+import tomllib
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
@@ -54,8 +58,17 @@ from PySide6.QtWidgets import (
     QToolButton,
     QTabWidget,
 )
-from PySide6.QtGui import QAction, QPainter, QPen, QColor, QBrush, QFont
-from PySide6.QtCore import Qt, QEvent, QTimer, QSettings, QThread, Signal, QSize
+from PySide6.QtGui import (
+    QAction,
+    QPainter,
+    QPen,
+    QColor,
+    QBrush,
+    QFont,
+    QIcon,
+    QDesktopServices,
+)
+from PySide6.QtCore import Qt, QEvent, QTimer, QSettings, QThread, Signal, QSize, QUrl
 
 SP = QStyle.StandardPixmap
 
@@ -67,6 +80,7 @@ from theme import (
     set_fusion_style,
     apply_application_theme,
     connect_system_theme_changes,
+    connect_screen_changes,
     load_themed_icon,
     clear_icon_cache,
 )
@@ -99,6 +113,7 @@ from core.logging_config import setup_logging
 from core import (
     AppConfig,
     BINARY_BASE_DIR,
+    METADATA_PATH,
     TESTED_IMMICH_GO_VERSION,
     SERVER_REQUIRED_TABS,
     BinaryManager,
@@ -124,7 +139,7 @@ from core import (
     validate_state,
     validate_state_light,
 )
-from core.config_manager import SecretStore
+from core.config_manager import SecretStore, get_config_load_warning
 from core.command_builder import (
     collect_paths,
     mask_command_for_display,
@@ -139,6 +154,77 @@ def _gui_version() -> str:
         return _pkg_version("immich-go-gui")
     except PackageNotFoundError:
         return "dev"
+
+
+def _install_exception_hook(log: logging.Logger | None = None) -> None:
+    """Log unhandled exceptions and show a non-blocking error dialog."""
+    logger = log or logging.getLogger("immich_go_gui")
+    default_hook = sys.excepthook
+
+    def _hook(exc_type, exc_value, exc_tb):
+        if exc_type is KeyboardInterrupt:
+            default_hook(exc_type, exc_value, exc_tb)
+            return
+        logger.critical(
+            "Unhandled exception",
+            exc_info=(exc_type, exc_value, exc_tb),
+        )
+        try:
+            if QApplication.instance() is not None:
+
+                def _show_dialog():
+                    QMessageBox.critical(
+                        None,
+                        "Unexpected Error",
+                        "An unexpected error occurred.\n\nSee the log file for details.",
+                    )
+
+                QTimer.singleShot(0, _show_dialog)
+        except Exception:
+            pass
+        default_hook(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _hook
+
+
+_SENSITIVE_FIELD_KEYS = frozenset(
+    {
+        "api_key",
+        "api-key",
+        "admin_api_key",
+        "admin-api-key",
+        "from-api-key",
+        "from-admin-api-key",
+    }
+)
+
+
+def _redact_diagnostics_toml(text: str) -> str:
+    """Return TOML text with secret-like values redacted for diagnostics export."""
+    try:
+        data = tomllib.loads(text)
+    except Exception:
+        return "# [unparseable config omitted]\n"
+
+    form_state = data.get("form_state")
+    if isinstance(form_state, dict):
+
+        def _redact_mapping(mapping: dict) -> None:
+            for key, value in list(mapping.items()):
+                key_l = str(key).lower()
+                if any(s in key_l for s in ("api", "secret", "password", "token")):
+                    mapping[key] = "***REDACTED***"
+                elif isinstance(value, dict):
+                    _redact_mapping(value)
+
+        _redact_mapping(form_state)
+
+    try:
+        import tomli_w
+
+        return tomli_w.dumps(data)
+    except Exception:
+        return "# [config redaction failed]\n"
 
 
 # ==========================================================
@@ -632,6 +718,7 @@ class ImmichGoGUI(QMainWindow):
 
         self.inputs = {}
         self.adv_frames = []
+        self._field_error_labels: dict[tuple[str, str], QLabel] = {}
 
         self._build_sidebar()
         self._build_content_area()
@@ -655,6 +742,7 @@ class ImmichGoGUI(QMainWindow):
         self.load_configuration()
         self.apply_theme(self.theme_mode)
         connect_system_theme_changes(self.on_system_theme_changed)
+        connect_screen_changes(self._on_screen_changed)
 
         if not self._probe_keyring() and self.app_config.secrets_provider == "keyring":
             QMessageBox.warning(
@@ -821,6 +909,71 @@ class ImmichGoGUI(QMainWindow):
     def on_system_theme_changed(self):
         if getattr(self, "theme_mode", THEME_SYSTEM) == THEME_SYSTEM:
             QTimer.singleShot(0, lambda: self.apply_theme(THEME_SYSTEM))
+
+    def _on_screen_changed(self):
+        clear_icon_cache()
+        resolved = apply_application_theme(self.theme_mode)
+        self.refresh_sidebar_icons(resolved)
+
+    def _make_field_error_label(self) -> QLabel:
+        lbl = QLabel("")
+        lbl.setObjectName("FieldError")
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet("color: #E06C75; font-size: 12px;")
+        lbl.hide()
+        return lbl
+
+    def _register_field_error_label(
+        self, tab_key: str, field_key: str, label: QLabel
+    ) -> None:
+        self._field_error_labels[(tab_key, field_key)] = label
+
+    def _wrap_with_field_error(
+        self, tab_key: str, field_key: str, widget: QWidget
+    ) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(widget)
+        err = self._make_field_error_label()
+        layout.addWidget(err)
+        self._register_field_error_label(tab_key, field_key, err)
+        self._bind_field_error_clear(tab_key, field_key, widget)
+        return container
+
+    def _bind_field_error_clear(self, tab_key: str, field_key: str, widget) -> None:
+        def clear_error(*_args):
+            self._clear_field_error(tab_key, field_key)
+
+        if hasattr(widget, "textChanged"):
+            widget.textChanged.connect(clear_error)
+        elif hasattr(widget, "plainTextChanged"):
+            widget.plainTextChanged.connect(clear_error)
+
+    def _clear_field_error(self, tab_key: str, field_key: str) -> None:
+        lbl = self._field_error_labels.get((tab_key, field_key))
+        if lbl is not None:
+            lbl.clear()
+            lbl.hide()
+
+    def _apply_field_errors(
+        self, tab_key: str, field_errors: dict[str, str] | None
+    ) -> None:
+        field_errors = field_errors or {}
+        for (label_tab, field_key), lbl in self._field_error_labels.items():
+            if field_key in ("server", "api_key"):
+                msg = field_errors.get(field_key, "")
+            elif label_tab == tab_key:
+                msg = field_errors.get(field_key, "")
+            else:
+                msg = ""
+            if msg:
+                lbl.setText(msg)
+                lbl.show()
+            else:
+                lbl.clear()
+                lbl.hide()
 
     def event(self, e):
         if e.type() == QEvent.Type.ThemeChange:
@@ -1071,7 +1224,10 @@ class ImmichGoGUI(QMainWindow):
         self.server_url_edit = QLineEdit()
         self.server_url_edit.setPlaceholderText("http://localhost:2283")
         self.inputs["config"]["server"] = self.server_url_edit
-        form.add_row("Server URL", self.server_url_edit)
+        form.add_row(
+            "Server URL",
+            self._wrap_with_field_error("config", "server", self.server_url_edit),
+        )
 
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -1079,7 +1235,7 @@ class ImmichGoGUI(QMainWindow):
         self.inputs["config"]["api_key"] = self.api_key_edit
         form.add_row(
             "API Key",
-            self.api_key_edit,
+            self._wrap_with_field_error("config", "api_key", self.api_key_edit),
             "You can generate an API key in Immich under Account Settings -> API Keys.",
         )
 
@@ -1263,6 +1419,10 @@ class ImmichGoGUI(QMainWindow):
         path_layout.setSpacing(6)
         path_layout.addWidget(self.source_path_edit)
         path_layout.addLayout(btn_box)
+        path_err = self._make_field_error_label()
+        path_layout.addWidget(path_err)
+        self._register_field_error_label("upload-folder", "path", path_err)
+        self._bind_field_error_clear("upload-folder", "path", self.source_path_edit)
 
         form.add_row(
             "Folder / ZIP to upload",
@@ -1356,6 +1516,10 @@ class ImmichGoGUI(QMainWindow):
         gp_layout.setSpacing(6)
         gp_layout.addWidget(self.gp_path_edit)
         gp_layout.addLayout(gp_btn_box)
+        gp_err = self._make_field_error_label()
+        gp_layout.addWidget(gp_err)
+        self._register_field_error_label("upload-gp", "path", gp_err)
+        self._bind_field_error_clear("upload-gp", "path", self.gp_path_edit)
 
         form.add_row(
             "Takeout Source",
@@ -1428,13 +1592,19 @@ class ImmichGoGUI(QMainWindow):
         t_server = QLineEdit()
         t_server.setPlaceholderText("http://old-server:2283")
         self.inputs["upload-immich"]["from-server"] = t_server
-        form.add_row("Source Server URL", t_server)
+        form.add_row(
+            "Source Server URL",
+            self._wrap_with_field_error("upload-immich", "from-server", t_server),
+        )
 
         t_api = QLineEdit()
         t_api.setEchoMode(QLineEdit.EchoMode.Password)
         t_api.setPlaceholderText("Source API Key")
         self.inputs["upload-immich"]["from-api-key"] = t_api
-        form.add_row("Source API Key", t_api)
+        form.add_row(
+            "Source API Key",
+            self._wrap_with_field_error("upload-immich", "from-api-key", t_api),
+        )
 
         d_range = QLineEdit()
         d_range.setPlaceholderText("2023-01-01,2023-12-31")
@@ -1492,6 +1662,10 @@ class ImmichGoGUI(QMainWindow):
         p_layout.setSpacing(6)
         p_layout.addWidget(p_edit)
         p_layout.addLayout(btn_box)
+        icloud_err = self._make_field_error_label()
+        p_layout.addWidget(icloud_err)
+        self._register_field_error_label("upload-icloud", "path", icloud_err)
+        self._bind_field_error_clear("upload-icloud", "path", p_edit)
 
         form.add_row("iCloud Export Path", p_container)
 
@@ -1564,6 +1738,10 @@ class ImmichGoGUI(QMainWindow):
         p_layout.setSpacing(6)
         p_layout.addWidget(p_edit)
         p_layout.addLayout(btn_box)
+        picasa_err = self._make_field_error_label()
+        p_layout.addWidget(picasa_err)
+        self._register_field_error_label("upload-picasa", "path", picasa_err)
+        self._bind_field_error_clear("upload-picasa", "path", p_edit)
 
         form.add_row("Picasa Collection Path", p_container)
 
@@ -1646,6 +1824,10 @@ class ImmichGoGUI(QMainWindow):
         p_layout.setSpacing(6)
         p_layout.addWidget(p_edit)
         p_layout.addLayout(btn_box)
+        path_err = self._make_field_error_label()
+        p_layout.addWidget(path_err)
+        self._register_field_error_label("archive-folder", "path", path_err)
+        self._bind_field_error_clear("archive-folder", "path", p_edit)
 
         form.add_row("Source Folder Path", p_container)
 
@@ -1659,7 +1841,10 @@ class ImmichGoGUI(QMainWindow):
         t_write.setPlaceholderText("/organized-photos")
         self.inputs["archive-folder"]["write-to"] = t_write
         self._add_browse_action(t_write, "Select Archive Destination")
-        form.add_row("Destination Folder", t_write)
+        form.add_row(
+            "Destination Folder",
+            self._wrap_with_field_error("archive-folder", "write-to", t_write),
+        )
 
         card.layout.addLayout(form)
         lay.addWidget(card)
@@ -1710,6 +1895,10 @@ class ImmichGoGUI(QMainWindow):
         gp_layout.setSpacing(6)
         gp_layout.addWidget(self.archive_gp_path_edit)
         gp_layout.addLayout(gp_btn_box)
+        gp_err = self._make_field_error_label()
+        gp_layout.addWidget(gp_err)
+        self._register_field_error_label("archive-gp", "path", gp_err)
+        self._bind_field_error_clear("archive-gp", "path", self.archive_gp_path_edit)
 
         form.add_row("Takeout Source", gp_container)
 
@@ -1723,7 +1912,10 @@ class ImmichGoGUI(QMainWindow):
         t_write.setPlaceholderText("/organized-takeout")
         self.inputs["archive-gp"]["write-to"] = t_write
         self._add_browse_action(t_write, "Select Archive Destination")
-        form.add_row("Destination Folder", t_write)
+        form.add_row(
+            "Destination Folder",
+            self._wrap_with_field_error("archive-gp", "write-to", t_write),
+        )
 
         chk_partner = QCheckBox("Include Partner Photos")
         chk_partner.setChecked(True)
@@ -1784,6 +1976,10 @@ class ImmichGoGUI(QMainWindow):
         p_layout.setSpacing(6)
         p_layout.addWidget(p_edit)
         p_layout.addLayout(btn_box)
+        arch_icloud_err = self._make_field_error_label()
+        p_layout.addWidget(arch_icloud_err)
+        self._register_field_error_label("archive-icloud", "path", arch_icloud_err)
+        self._bind_field_error_clear("archive-icloud", "path", p_edit)
 
         form.add_row("iCloud Export Path", p_container)
 
@@ -1797,7 +1993,10 @@ class ImmichGoGUI(QMainWindow):
         t_write.setPlaceholderText("/organized-icloud")
         self.inputs["archive-icloud"]["write-to"] = t_write
         self._add_browse_action(t_write, "Select Archive Destination")
-        form.add_row("Destination Folder", t_write)
+        form.add_row(
+            "Destination Folder",
+            self._wrap_with_field_error("archive-icloud", "write-to", t_write),
+        )
 
         card.layout.addLayout(form)
         lay.addWidget(card)
@@ -1843,6 +2042,10 @@ class ImmichGoGUI(QMainWindow):
         p_layout.setSpacing(6)
         p_layout.addWidget(p_edit)
         p_layout.addLayout(btn_box)
+        arch_picasa_err = self._make_field_error_label()
+        p_layout.addWidget(arch_picasa_err)
+        self._register_field_error_label("archive-picasa", "path", arch_picasa_err)
+        self._bind_field_error_clear("archive-picasa", "path", p_edit)
 
         form.add_row("Picasa Collection Path", p_container)
 
@@ -1856,7 +2059,10 @@ class ImmichGoGUI(QMainWindow):
         t_write.setPlaceholderText("/organized-picasa")
         self.inputs["archive-picasa"]["write-to"] = t_write
         self._add_browse_action(t_write, "Select Archive Destination")
-        form.add_row("Destination Folder", t_write)
+        form.add_row(
+            "Destination Folder",
+            self._wrap_with_field_error("archive-picasa", "write-to", t_write),
+        )
 
         card.layout.addLayout(form)
         lay.addWidget(card)
@@ -1897,7 +2103,10 @@ class ImmichGoGUI(QMainWindow):
         t_write.setPlaceholderText("/backup/photos")
         self.inputs["archive-immich"]["write-to"] = t_write
         self._add_browse_action(t_write, "Select Archive Destination")
-        form.add_row("Destination Folder", t_write)
+        form.add_row(
+            "Destination Folder",
+            self._wrap_with_field_error("archive-immich", "write-to", t_write),
+        )
 
         d_range = QLineEdit()
         d_range.setPlaceholderText("2023-01-01,2023-12-31")
@@ -2070,6 +2279,20 @@ class ImmichGoGUI(QMainWindow):
         gui_repo_action = QAction("Immich-Go GUI GitHub", self)
         gui_repo_action.triggered.connect(self.open_immich_go_gui_link)
         help_menu.addAction(gui_repo_action)
+
+        help_menu.addSeparator()
+
+        open_config_action = QAction("Open Config Folder", self)
+        open_config_action.triggered.connect(self.open_config_folder)
+        help_menu.addAction(open_config_action)
+
+        open_log_action = QAction("Open Log Folder", self)
+        open_log_action.triggered.connect(self.open_log_folder)
+        help_menu.addAction(open_log_action)
+
+        export_diag_action = QAction("Export Diagnostics…", self)
+        export_diag_action.triggered.connect(self.export_diagnostics)
+        help_menu.addAction(export_diag_action)
 
         help_menu.addSeparator()
 
@@ -2873,6 +3096,8 @@ class ImmichGoGUI(QMainWindow):
             getattr(self, "running_process", False) is True
         )
         validation = self.validate_inputs_light()
+        active_tab = self._get_active_tab_key()
+        self._apply_field_errors(active_tab, validation.field_errors)
 
         if is_running:
             self.lbl_running_warning.setVisible(True)
@@ -2882,7 +3107,6 @@ class ImmichGoGUI(QMainWindow):
             self.lbl_running_warning.setVisible(False)
 
         last_test = getattr(self, "_last_conn_test_ok", None)
-        active_tab = self._get_active_tab_key()
 
         if last_test is False and active_tab in ("config", *SERVER_REQUIRED_TABS):
             self.status_card.set_server("err", "Server: Connection Failed")
@@ -2976,6 +3200,8 @@ class ImmichGoGUI(QMainWindow):
                 return
 
         validation = self.validate_inputs()
+        active_tab = self._get_active_tab_key()
+        self._apply_field_errors(active_tab, validation.field_errors)
         if validation.errors:
             QMessageBox.warning(
                 self,
@@ -3691,6 +3917,84 @@ class ImmichGoGUI(QMainWindow):
     def open_immich_go_gui_link(self):
         webbrowser.open("https://github.com/shitan198u/immich-go-gui")
 
+    def open_config_folder(self):
+        cfg_dir = default_config_dir()
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(cfg_dir)))
+
+    def open_log_folder(self):
+        log_dir = default_config_dir() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir)))
+
+    def export_diagnostics(self):
+        from core.profile_manager import global_profiles_path
+
+        default_name = f"immich-go-diagnostics-{_gui_version()}.zip"
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Diagnostics",
+            default_name,
+            "Zip Archives (*.zip)",
+        )
+        if not dest:
+            return
+        if not dest.endswith(".zip"):
+            dest += ".zip"
+
+        cfg_dir = default_config_dir()
+        log_dir = cfg_dir / "logs"
+        meta_path = Path(METADATA_PATH)
+
+        try:
+            with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                summary = [
+                    f"gui_version={_gui_version()}",
+                    f"cli_target_version={TESTED_IMMICH_GO_VERSION}",
+                ]
+                warning = get_config_load_warning()
+                if warning:
+                    summary.append(f"config_load_warning={warning}")
+                zf.writestr("summary.txt", "\n".join(summary) + "\n")
+
+                cfg_path = default_config_path()
+                if cfg_path.is_file():
+                    zf.writestr(
+                        "config.toml",
+                        _redact_diagnostics_toml(cfg_path.read_text(encoding="utf-8")),
+                    )
+
+                profiles_path = global_profiles_path()
+                if profiles_path.is_file():
+                    zf.write(profiles_path, arcname="profiles.toml")
+
+                if meta_path.is_file():
+                    zf.write(meta_path, arcname="binary_metadata.json")
+
+                if log_dir.is_dir():
+                    logs = sorted(
+                        log_dir.glob("*.log"),
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True,
+                    )
+                    if logs:
+                        tail = logs[0].read_text(encoding="utf-8", errors="replace")
+                        if len(tail) > 200_000:
+                            tail = tail[-200_000:]
+                        zf.writestr("log_tail.txt", tail)
+
+            QMessageBox.information(
+                self,
+                "Diagnostics Exported",
+                f"Diagnostics package saved to:\n{dest}",
+            )
+        except OSError as exc:
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                f"Could not write diagnostics package:\n{exc}",
+            )
+
     def show_about_dialog(self):
         QMessageBox.about(
             self,
@@ -3745,7 +4049,13 @@ if __name__ == "__main__":
             print(f"self-test failed: {exc}", file=sys.stderr)
             sys.exit(1)
 
+    log = setup_logging()
+    _install_exception_hook(log)
+
     app = QApplication(sys.argv)
+    icon_path = Path(__file__).resolve().parent / "immich-go-gui.ico"
+    if icon_path.is_file():
+        app.setWindowIcon(QIcon(str(icon_path)))
     set_fusion_style()
     base_font = QFont()
     base_font.setFamilies(
