@@ -11,8 +11,38 @@ on:
     tags:
       - 'v*'
 
+env:
+  CREATE_DMG_VERSION: '7.3.0'
+  NFPM_VERSION: '2.41.2'
+
 jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Install Linux Desktop Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 xvfb libegl1 libgl1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0
+
+      - name: Run pytest
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: xvfb-run uv run pytest
+
+      - name: Self-test entrypoint
+        run: uv run python app.py --self-test
+
   build:
+    needs: test
     runs-on: ${{ matrix.os }}
     outputs:
       version: ${{ steps.set-version.outputs.version }}
@@ -52,13 +82,30 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev
 
-      # --- WINDOWS BUILD ---
+      - name: Detect macOS architecture
+        if: matrix.name == 'macos'
+        id: macos-arch
+        run: |
+          ARCH=$(uname -m)
+          if [[ "$ARCH" == "arm64" ]]; then
+            echo "suffix=macOS-arm64" >> $GITHUB_OUTPUT
+          else
+            echo "suffix=macOS-x86_64" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build Windows
         if: matrix.name == 'windows'
         shell: bash
         run: |
           NUMERIC_VERSION=$(echo "${{ env.VERSION }}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || echo "1.0.0")
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico --company-name="Shitan198u" --product-name="Immich-Go GUI" --file-version="${NUMERIC_VERSION}.0" --product-version="${NUMERIC_VERSION}.0" app.py
+          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe \
+            --include-data-files=immich-go-gui.png=immich-go-gui.png \
+            --include-data-files=core/flags.toml=core/flags.toml \
+            --include-data-dir=assets=assets \
+            --include-data-dir=core/fixtures=core/fixtures \
+            --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico \
+            --company-name="Shitan198u" --product-name="Immich-Go GUI" \
+            --file-version="${NUMERIC_VERSION}.0" --product-version="${NUMERIC_VERSION}.0" app.py
 
       - name: Create Windows Portable Archive
         if: matrix.name == 'windows'
@@ -82,7 +129,6 @@ jobs:
             Move-Item -Path "..\Immich-Go-GUI-*.exe" -Destination "." -Force
           }
 
-      # --- MACOS BUILD ---
       - name: Setup Node.js
         if: matrix.name == 'macos'
         uses: actions/setup-node@v7
@@ -92,16 +138,23 @@ jobs:
       - name: Build macOS
         if: matrix.name == 'macos'
         run: |
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets app.py
-          npm install -g create-dmg
-          create-dmg app.app || true
-          mv *.dmg "Immich-Go-GUI-${{ env.VERSION }}-macOS-x86_64.dmg" || true
+          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI \
+            --include-data-files=immich-go-gui.png=immich-go-gui.png \
+            --include-data-files=core/flags.toml=core/flags.toml \
+            --include-data-dir=assets=assets \
+            --include-data-dir=core/fixtures=core/fixtures app.py
+          npm install -g create-dmg@${{ env.CREATE_DMG_VERSION }}
+          create-dmg app.app
+          mv *.dmg "Immich-Go-GUI-${{ env.VERSION }}-${{ steps.macos-arch.outputs.suffix }}.dmg"
 
-      # --- LINUX BUILD ---
       - name: Build Linux Standalone
         if: matrix.name == 'linux'
         run: |
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets app.py
+          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI \
+            --include-data-files=immich-go-gui.png=immich-go-gui.png \
+            --include-data-files=core/flags.toml=core/flags.toml \
+            --include-data-dir=assets=assets \
+            --include-data-dir=core/fixtures=core/fixtures app.py
 
       - name: Create Linux Portable Archive
         if: matrix.name == 'linux'
@@ -141,8 +194,7 @@ jobs:
       - name: Install nFPM
         if: matrix.name == 'linux'
         run: |
-          URL=$(curl -s https://api.github.com/repos/goreleaser/nfpm/releases/latest | jq -r '.assets[] | select(.name | endswith("Linux_x86_64.tar.gz")) | .browser_download_url')
-          curl -sL $URL | tar xz nfpm
+          curl -sL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" | tar xz nfpm
           sudo mv nfpm /usr/local/bin/
 
       - name: Build DEB and RPM
@@ -152,7 +204,17 @@ jobs:
           nfpm pkg --packager deb --target "../../Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.deb"
           nfpm pkg --packager rpm --target "../../Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.rpm"
 
-      # --- UPLOAD ARTIFACTS ---
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          SUMS_FILE="Immich-Go-GUI-${{ env.VERSION }}-SHA256SUMS.txt"
+          : > "$SUMS_FILE"
+          for f in Immich-Go-GUI-${{ env.VERSION }}-*; do
+            if [ -f "$f" ]; then
+              sha256sum "$f" >> "$SUMS_FILE"
+            fi
+          done
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -161,11 +223,12 @@ jobs:
           path: |
             Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Setup.exe
             Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Portable.zip
-            Immich-Go-GUI-${{ env.VERSION }}-macOS-x86_64.dmg
+            Immich-Go-GUI-${{ env.VERSION }}-macOS-*.dmg
             Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.AppImage
             Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64-Portable.tar.gz
             Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.deb
             Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.rpm
+            Immich-Go-GUI-${{ env.VERSION }}-SHA256SUMS.txt
 
   release:
     needs: build
@@ -186,11 +249,12 @@ jobs:
           files: |
             artifacts/Immich-Go-GUI-*-Windows-x86_64-Setup.exe
             artifacts/Immich-Go-GUI-*-Windows-x86_64-Portable.zip
-            artifacts/Immich-Go-GUI-*-macOS-x86_64.dmg
+            artifacts/Immich-Go-GUI-*-macOS-*.dmg
             artifacts/Immich-Go-GUI-*-Linux-x86_64.AppImage
             artifacts/Immich-Go-GUI-*-Linux-x86_64-Portable.tar.gz
             artifacts/Immich-Go-GUI-*-Linux-x86_64.deb
             artifacts/Immich-Go-GUI-*-Linux-x86_64.rpm
+            artifacts/Immich-Go-GUI-*-SHA256SUMS.txt
 
       - name: Create Test Pre-Release
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -202,9 +266,9 @@ jobs:
           files: |
             artifacts/Immich-Go-GUI-*-Windows-x86_64-Setup.exe
             artifacts/Immich-Go-GUI-*-Windows-x86_64-Portable.zip
-            artifacts/Immich-Go-GUI-*-macOS-x86_64.dmg
+            artifacts/Immich-Go-GUI-*-macOS-*.dmg
             artifacts/Immich-Go-GUI-*-Linux-x86_64.AppImage
             artifacts/Immich-Go-GUI-*-Linux-x86_64-Portable.tar.gz
             artifacts/Immich-Go-GUI-*-Linux-x86_64.deb
             artifacts/Immich-Go-GUI-*-Linux-x86_64.rpm
-
+            artifacts/Immich-Go-GUI-*-SHA256SUMS.txt

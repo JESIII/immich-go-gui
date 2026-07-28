@@ -106,8 +106,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Audit Python Dependencies
-        run: |
-          uv run --with pip-audit pip-audit --desc || echo "Security audit completed"
+        run: uv run --with pip-audit pip-audit --desc
 
       - name: Dependency Review
         if: github.event_name == 'pull_request'

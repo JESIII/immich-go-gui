@@ -5,7 +5,26 @@ on:
     branches: [ "master" ]
 
 jobs:
+  quality:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Pyright (core)
+        run: uv run pyright core/
+
+      - name: Pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
   test:
+    needs: quality
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,12 +47,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 xvfb libegl1 libgl1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0
 
-      - name: Run Tests (Linux)
+      - name: Run Tests with Coverage (Linux)
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: xvfb-run uv run pytest
+        run: xvfb-run uv run pytest --cov=core --cov=app --cov-fail-under=80
 
-      - name: Run Tests (macOS / Windows)
+      - name: Run Tests with Coverage (macOS / Windows)
         if: runner.os != 'Linux'
-        run: uv run pytest
+        run: uv run pytest --cov=core --cov=app --cov-fail-under=80
+
+  self-test:
+    needs: quality
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run packaged self-test entrypoint
+        run: uv run python app.py --self-test

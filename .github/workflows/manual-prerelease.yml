@@ -88,7 +88,7 @@ jobs:
               MAJOR=${BASH_REMATCH[1]}
               MINOR=${BASH_REMATCH[2]}
               PATCH=${BASH_REMATCH[3]}
-              
+
               case "${{ github.event.inputs.version_type }}" in
                 "major")
                   BASE_VER="v$((MAJOR + 1)).0.0"
