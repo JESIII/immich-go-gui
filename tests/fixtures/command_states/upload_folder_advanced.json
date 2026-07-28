@@ -8,13 +8,13 @@
   },
   "tab_state": {
     "path": "/data/photos",
-    "folder-album": "RELATIVE",
+    "folder-album": "PATH",
     "manage-burst": "Stack"
   },
   "advanced_state": {
     "client-timeout": { "enabled": true, "value": 30 },
     "concurrent-tasks": { "enabled": true, "value": 4 },
-    "include-type": { "enabled": true, "value": "image" },
+    "include-type": { "enabled": true, "value": "IMAGE" },
     "overwrite": { "enabled": true, "value": true },
     "date-range": { "enabled": true, "value": "2023-01-01,2023-12-31" },
     "include-ext": { "enabled": true, "value": ".jpg,.png" },
@@ -27,7 +27,7 @@
     "upload",
     "from-folder",
     "--server=http://localhost:2283",
-    "--folder-as-album=RELATIVE",
+    "--folder-as-album=PATH",
     "--manage-burst=Stack",
     "--client-timeout=30m",
     "--concurrent-tasks=4",
@@ -39,7 +39,7 @@
     "--tag=2023",
     "--session-tag",
     "--overwrite",
-    "--include-type=image",
+    "--include-type=IMAGE",
     "/data/photos"
   ]
 }

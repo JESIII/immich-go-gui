@@ -1,4 +1,5 @@
 """Rotating file logger for the GUI. Qt-free."""
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +19,8 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
         handler = RotatingFileHandler(
             log_file, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
         )
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        ))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
         logger.addHandler(handler)
     return logger

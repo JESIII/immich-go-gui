@@ -146,7 +146,11 @@ def validate_advanced_state(tab_key: str, advanced_state: dict) -> ValidationRes
 
         if def_.key == "on-errors":
             v = str(value or "").strip().lower()
-            if v and v not in ("stop", "continue") and not (v.isdigit() and int(v) >= 0):
+            if (
+                v
+                and v not in ("stop", "continue")
+                and not (v.isdigit() and int(v) >= 0)
+            ):
                 res.errors.append(
                     "On errors must be 'stop', 'continue', or a non-negative integer "
                     "(max tolerated errors)."

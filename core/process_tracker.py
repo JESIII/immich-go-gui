@@ -122,6 +122,7 @@ def _is_process_alive(pid: int | None) -> bool:
     if sys.platform.startswith("win"):
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
             handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
@@ -160,8 +161,22 @@ def is_lock_active(lock_path: Path) -> bool:
         except (ValueError, OSError):
             pass
 
-    if shell_pid and _is_process_alive(shell_pid):
+    had_shell_pid = shell_pid is not None and shell_pid > 0
+    if had_shell_pid and _is_process_alive(shell_pid):
         return True
+
+    # Dead shell PID: do not fall through to heartbeat on POSIX (orphan HB loop
+    # would keep the lock alive after the user closes the terminal).
+    if had_shell_pid and not sys.platform.startswith("win"):
+        if lock.started_at:
+            try:
+                start_dt = datetime.fromisoformat(lock.started_at)
+                now = datetime.now(timezone.utc)
+                if (now - start_dt).total_seconds() < 60:
+                    return True
+            except ValueError:
+                pass
+        return False
 
     # 2. Check terminal_pid
     if lock.terminal_pid:
@@ -182,7 +197,7 @@ def is_lock_active(lock_path: Path) -> bool:
     if hb_file.exists():
         try:
             mtime = hb_file.stat().st_mtime
-            age = (datetime.now().timestamp() - mtime)
+            age = datetime.now().timestamp() - mtime
             if age < 60:
                 return True
         except OSError:

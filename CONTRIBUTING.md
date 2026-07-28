@@ -129,19 +129,19 @@ Local Nuitka smoke builds:
 **Windows:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico app.py
+uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico app.py
 ```
 
 **macOS:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --macos-create-app-bundle --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets app.py
+uv run python -m nuitka --assume-yes-for-downloads --macos-create-app-bundle --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures app.py
 ```
 
 **Linux:**
 
 ```bash
-uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-dir=assets=assets app.py
+uv run python -m nuitka --assume-yes-for-downloads --standalone --enable-plugin=pyside6 --include-data-files=immich-go-gui.png=immich-go-gui.png --include-data-files=core/flags.toml=core/flags.toml --include-data-dir=assets=assets --include-data-dir=core/fixtures=core/fixtures app.py
 ```
 
 Official multi-format packages are produced by `.github/workflows/release.yml`. See [CI/CD and Releases](docs/developer-guide/ci-cd-and-releases.md).

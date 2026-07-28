@@ -163,6 +163,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -421,6 +423,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -701,6 +705,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -968,6 +974,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -1242,6 +1250,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -1449,6 +1459,7 @@ flag = "from-dry-run"
 label = "Source dry run"
 kind = "bool"
 default = false
+hidden = true
 mode = "advanced"
 
 [[flags.upload-immich]]
@@ -1579,6 +1590,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -1722,6 +1735,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -1893,6 +1908,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -2047,6 +2064,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -2206,6 +2225,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16
@@ -2395,6 +2416,7 @@ flag = "from-dry-run"
 label = "Source dry run"
 kind = "bool"
 default = false
+hidden = true
 mode = "advanced"
 
 [[flags.archive-immich]]
@@ -2453,6 +2475,8 @@ key = "concurrent-tasks"
 flag = "concurrent-tasks"
 label = "Concurrent upload tasks"
 kind = "int"
+min = 1
+max = 20
 mode = "advanced"
 
 default = 16

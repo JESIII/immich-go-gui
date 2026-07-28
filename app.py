@@ -1,7 +1,8 @@
 # nuitka-project: --assume-yes-for-downloads
 # nuitka-project: --enable-plugin=pyside6
 # nuitka-project: --include-data-files=immich-go-gui.png=immich-go-gui.png
-# nuitka-project: --include-data-dir=assets=assets
+# nuitka-project: --include-data-files=core/flags.toml=core/flags.toml
+# nuitka-project: --include-data-dir=core/fixtures=core/fixtures
 
 # nuitka-project-if: {OS} == "Windows":
 #   nuitka-project: --standalone
@@ -27,86 +28,110 @@ from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QCheckBox, QComboBox, QPushButton, QFileDialog,
-    QPlainTextEdit, QStackedWidget, QFrame, QSizePolicy,
-    QScrollArea, QMessageBox, QDialog, QProgressBar, QSpinBox, QStyle, QLayout,
-    QFormLayout, QToolButton, QTabWidget, QMenu
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QCheckBox,
+    QComboBox,
+    QPushButton,
+    QFileDialog,
+    QPlainTextEdit,
+    QStackedWidget,
+    QFrame,
+    QSizePolicy,
+    QScrollArea,
+    QMessageBox,
+    QDialog,
+    QProgressBar,
+    QSpinBox,
+    QStyle,
+    QLayout,
+    QFormLayout,
+    QToolButton,
+    QTabWidget,
 )
-from PySide6.QtGui import (
-    QAction, QDragEnterEvent, QDropEvent, QIcon, QPainter, QPen, QColor,
-    QBrush, QFont, QCursor
-)
-from PySide6.QtCore import (
-    Qt, QEvent, QTimer, QSettings, QThread, Signal, QSize
-)
+from PySide6.QtGui import QAction, QPainter, QPen, QColor, QBrush, QFont
+from PySide6.QtCore import Qt, QEvent, QTimer, QSettings, QThread, Signal, QSize
 
 SP = QStyle.StandardPixmap
 
 from theme import (
-    THEME_SYSTEM, THEME_LIGHT, THEME_DARK,
-    normalize_theme_mode, set_fusion_style,
-    apply_application_theme, connect_system_theme_changes,
-    load_themed_icon, clear_icon_cache
+    THEME_SYSTEM,
+    THEME_LIGHT,
+    THEME_DARK,
+    normalize_theme_mode,
+    set_fusion_style,
+    apply_application_theme,
+    connect_system_theme_changes,
+    load_themed_icon,
+    clear_icon_cache,
 )
-from core.network import test_immich_connection, check_preflight_server_connection, ConnectionTestResult
-from core.validation import (
-    clean_date_range, normalize_extensions_csv, normalize_list_csv,
-    expand_source_paths, validate_destination_folder
+from core.network import (
+    test_immich_connection,
+    check_preflight_server_connection,
+    normalize_server_url,
 )
 from core.profile_manager import (
-    list_profiles, active_profile_name, set_active_profile_name,
-    create_profile, rename_profile, duplicate_profile, delete_profile,
-    validate_profile_name, ensure_default_profile
+    list_profiles,
+    active_profile_name,
+    set_active_profile_name,
+    create_profile,
+    rename_profile,
+    duplicate_profile,
+    delete_profile,
+    validate_profile_name,
 )
 from core.process_tracker import (
-    create_lock, release_lock, read_lock, is_lock_active,
-    scan_locks, cleanup_stale_locks, reset_all_locks
+    create_lock,
+    release_lock,
+    is_lock_active,
+    scan_locks,
+    cleanup_stale_locks,
 )
-from core.terminal_launcher import launch_external_terminal, LaunchResult
+from core.terminal_launcher import launch_external_terminal
 from core.flag_registry import REGISTRY
 from core.advanced_flags import ADVANCED_FLAGS
 from core.logging_config import setup_logging
 from core import (
     AppConfig,
     BINARY_BASE_DIR,
-    METADATA_PATH,
     TESTED_IMMICH_GO_VERSION,
-    ENV_KEY_MAP,
-    SECRET_FLAGS,
     SERVER_REQUIRED_TABS,
-    SERVERLESS_TABS,
-    TAB_COMMANDS,
-    UPLOAD_TABS,
     BinaryManager,
-    BinaryStatus,
     CommandPlan,
     SecretStore,
-    UpdateDecision,
-    UpdateSeverity,
     ValidationResult,
-    VersionSupport,
     build_environment,
     build_plan_from_state,
     clean_version,
-    clear_api_key,
-    collect_paths,
+    collect_safety_warnings,
+    default_config_dir,
     default_config_path,
     default_secrets_path,
-    get_api_key,
     get_binary_path,
+    get_config_load_warning,
     get_secret_with_fallback,
     load_binary_metadata,
     load_config,
-    mask_command_for_display,
-    normalize_server_url,
     save_binary_metadata,
     save_config,
     save_secret_with_fallback,
     set_api_key,
-    validate_date_range,
     validate_state,
+    validate_state_light,
 )
+from core.config_manager import SecretStore
+from core.command_builder import (
+    collect_paths,
+    mask_command_for_display,
+    build_environment,
+    validate_date_range,
+)
+from core.models import CommandPlan
 
 
 def _gui_version() -> str:
@@ -119,6 +144,7 @@ def _gui_version() -> str:
 # ==========================================================
 # CUSTOM WIDGETS
 # ==========================================================
+
 
 class DroppableLineEdit(QLineEdit):
     def __init__(self, parent=None):
@@ -134,7 +160,9 @@ class DroppableLineEdit(QLineEdit):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
-        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+        paths = [
+            url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()
+        ]
         if paths:
             self.setText(paths[0])
         event.acceptProposedAction()
@@ -154,10 +182,13 @@ class DroppablePlainTextEdit(QPlainTextEdit):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
-        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+        paths = [
+            url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()
+        ]
         if paths:
             self.setPlainText("\n".join(paths))
         event.acceptProposedAction()
+
 
 class SwitchButton(QWidget):
     toggled = Signal(bool)
@@ -215,7 +246,8 @@ class AdvancedFlagRow(QWidget):
         self.enable = QCheckBox(f"--{def_.flag}")
         self.enable.setObjectName("AdvancedFlagEnable")
         self.enable.setChecked(False)
-        self.enable.setToolTip(def_.label)
+        tooltip = self.def_.hint or self.def_.label
+        self.enable.setToolTip(tooltip)
 
         self.value_widget = self._create_value_widget()
         self.value_widget.setEnabled(False)
@@ -246,9 +278,14 @@ class AdvancedFlagRow(QWidget):
 
         if kind == "int":
             w = QSpinBox()
-            w.setRange(0, 999999)
+            w.setRange(
+                self.def_.min_val if self.def_.min_val is not None else 0,
+                self.def_.max_val if self.def_.max_val is not None else 999999,
+            )
             if isinstance(self.def_.default, int):
                 w.setValue(self.def_.default)
+            if self.def_.hint:
+                w.setToolTip(self.def_.hint)
             return w
 
         if kind == "duration_minutes":
@@ -259,12 +296,16 @@ class AdvancedFlagRow(QWidget):
                 w.setValue(self.def_.default)
             else:
                 w.setValue(20)
+            if self.def_.hint:
+                w.setToolTip(self.def_.hint)
             return w
 
         if kind == "lines_repeat":
             w = QPlainTextEdit()
             w.setPlaceholderText(self.def_.placeholder)
             w.setMaximumHeight(80)
+            if self.def_.hint:
+                w.setToolTip(self.def_.hint)
             return w
 
         # text, extensions, csv_repeat, date_range
@@ -272,6 +313,8 @@ class AdvancedFlagRow(QWidget):
         if self.def_.secret_env:
             w.setEchoMode(QLineEdit.EchoMode.Password)
         w.setPlaceholderText(self.def_.placeholder)
+        if self.def_.hint:
+            w.setToolTip(self.def_.hint)
         return w
 
     def get_value(self):
@@ -367,7 +410,9 @@ class FormSection(QFormLayout):
         lbl = QLabel(label_text)
         lbl.setObjectName("FieldLabel")
         if isinstance(widget, QPlainTextEdit):
-            widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
         elif isinstance(widget, QWidget):
             widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         if hint:
@@ -401,7 +446,9 @@ class ElidingLabel(QLabel):
     def _refresh(self):
         fm = self.fontMetrics()
         w = self.contentsRect().width() or self.width()
-        super().setText(fm.elidedText(self._full, self._elide, w) if w > 0 else self._full)
+        super().setText(
+            fm.elidedText(self._full, self._elide, w) if w > 0 else self._full
+        )
 
     def sizeHint(self):
         fm = self.fontMetrics()
@@ -439,7 +486,9 @@ class BasePage(QWidget):
         self.scroll_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.container = QWidget()
         self.container.setMaximumWidth(1480)
-        self.container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.container.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self.layout = QVBoxLayout(self.container)
         self.layout.setContentsMargins(24, 24, 24, 24)
         self.layout.setSpacing(24)
@@ -528,6 +577,7 @@ class StatusCard(QFrame):
 # MAIN APPLICATION
 # ==========================================================
 
+
 class ImmichGoGUI(QMainWindow):
     TAB_KEYS = [
         "config",
@@ -553,6 +603,7 @@ class ImmichGoGUI(QMainWindow):
         SecretStore.migrate_from_qsettings(self.settings)
 
         from core.terminal_launcher import cleanup_stale_temp_dirs
+
         cleanup_stale_temp_dirs()
         self._cleanup_timer = QTimer(self)
         self._cleanup_timer.timeout.connect(
@@ -617,8 +668,9 @@ class ImmichGoGUI(QMainWindow):
 
         cleanup_stale_locks()
         active_locks = scan_locks()
+        self.active_lock_paths = {lock.lock_path for lock in active_locks}
         self.active_lock_path = active_locks[0].lock_path if active_locks else None
-        self.running_process = bool(self.active_lock_path)
+        self.running_process = bool(self.active_lock_paths)
         if self.active_lock_path:
             self._start_process_timer()
 
@@ -627,15 +679,25 @@ class ImmichGoGUI(QMainWindow):
         for tab_dict in self.inputs.values():
             for widget in tab_dict.values():
                 if isinstance(widget, QLineEdit):
-                    widget.textChanged.connect(lambda _, w=widget: self._schedule_status_update())
+                    widget.textChanged.connect(
+                        lambda _, w=widget: self._schedule_status_update()
+                    )
                 elif isinstance(widget, QCheckBox):
-                    widget.toggled.connect(lambda _, w=widget: self._schedule_status_update())
+                    widget.toggled.connect(
+                        lambda _, w=widget: self._schedule_status_update()
+                    )
                 elif isinstance(widget, QComboBox):
-                    widget.currentIndexChanged.connect(lambda _, w=widget: self._schedule_status_update())
+                    widget.currentIndexChanged.connect(
+                        lambda _, w=widget: self._schedule_status_update()
+                    )
                 elif isinstance(widget, QSpinBox):
-                    widget.valueChanged.connect(lambda _, w=widget: self._schedule_status_update())
+                    widget.valueChanged.connect(
+                        lambda _, w=widget: self._schedule_status_update()
+                    )
                 elif isinstance(widget, QPlainTextEdit):
-                    widget.textChanged.connect(lambda w=widget: self._schedule_status_update())
+                    widget.textChanged.connect(
+                        lambda w=widget: self._schedule_status_update()
+                    )
 
         self.update_status()
 
@@ -644,7 +706,9 @@ class ImmichGoGUI(QMainWindow):
         if idx == 0:
             return "config"
         elif idx == 1:
-            u_idx = self.upload_tabs.currentIndex() if hasattr(self, "upload_tabs") else 0
+            u_idx = (
+                self.upload_tabs.currentIndex() if hasattr(self, "upload_tabs") else 0
+            )
             if u_idx == 0:
                 return "upload-folder"
             elif u_idx == 1:
@@ -656,7 +720,9 @@ class ImmichGoGUI(QMainWindow):
             else:
                 return "upload-immich"
         elif idx == 2:
-            a_idx = self.archive_tabs.currentIndex() if hasattr(self, "archive_tabs") else 0
+            a_idx = (
+                self.archive_tabs.currentIndex() if hasattr(self, "archive_tabs") else 0
+            )
             if a_idx == 0:
                 return "archive-folder"
             elif a_idx == 1:
@@ -672,8 +738,6 @@ class ImmichGoGUI(QMainWindow):
         return "config"
 
     def _build_advanced_flags_card(self, tab_key: str):
-        from core.advanced_flags import ADVANCED_FLAGS
-
         card = Card("Advanced Flags")
         form = FormSection()
 
@@ -693,11 +757,17 @@ class ImmichGoGUI(QMainWindow):
             row = AdvancedFlagRow(def_)
             row.enable.toggled.connect(lambda _, r=row: self._schedule_status_update())
             if hasattr(row.value_widget, "textChanged"):
-                row.value_widget.textChanged.connect(lambda _, r=row: self._schedule_status_update())
+                row.value_widget.textChanged.connect(
+                    lambda *_, r=row: self._schedule_status_update()
+                )
             elif hasattr(row.value_widget, "currentIndexChanged"):
-                row.value_widget.currentIndexChanged.connect(lambda _, r=row: self._schedule_status_update())
+                row.value_widget.currentIndexChanged.connect(
+                    lambda _, r=row: self._schedule_status_update()
+                )
             elif hasattr(row.value_widget, "valueChanged"):
-                row.value_widget.valueChanged.connect(lambda _, r=row: self._schedule_status_update())
+                row.value_widget.valueChanged.connect(
+                    lambda _, r=row: self._schedule_status_update()
+                )
             self.adv_rows[tab_key][def_.key] = row
             form.addRow("", row)
 
@@ -735,8 +805,10 @@ class ImmichGoGUI(QMainWindow):
         if not hasattr(self, "btn_config"):
             return
         nav_buttons = [
-            self.btn_config, self.btn_upload,
-            self.btn_archive, self.btn_stack
+            self.btn_config,
+            self.btn_upload,
+            self.btn_archive,
+            self.btn_stack,
         ]
         for btn in nav_buttons:
             if hasattr(btn, "icon_name") and btn.icon_name:
@@ -760,12 +832,13 @@ class ImmichGoGUI(QMainWindow):
     # UI STRUCTURE BUILDERS
     # ==========================================================
 
-    def _nav_icon(self, theme_name, sp_fallback):
-        return QIcon.fromTheme(theme_name, self.style().standardIcon(sp_fallback, None, self))
-
-    def _add_ssl_skip_row(self, form: FormSection, tab_dict: dict,
-                          key: str = "skip-ssl",
-                          label_text: str = "Skip SSL Verification"):
+    def _add_ssl_skip_row(
+        self,
+        form: FormSection,
+        tab_dict: dict,
+        key: str = "skip-ssl",
+        label_text: str = "Skip SSL Verification",
+    ):
         chk_ssl = QCheckBox(label_text)
         tab_dict[key] = chk_ssl
         container = QVBoxLayout()
@@ -788,8 +861,7 @@ class ImmichGoGUI(QMainWindow):
     def _add_browse_action(self, line_edit: QLineEdit, title: str):
         theme = getattr(self, "theme_mode", "dark")
         action = line_edit.addAction(
-            load_themed_icon("folder", theme),
-            QLineEdit.ActionPosition.TrailingPosition
+            load_themed_icon("folder", theme), QLineEdit.ActionPosition.TrailingPosition
         )
         action.icon_name = "folder"
         action.triggered.connect(lambda: self._browse_into(line_edit, title))
@@ -941,10 +1013,14 @@ class ImmichGoGUI(QMainWindow):
         adv_box = QHBoxLayout()
         self.lbl_mode = QLabel("Simple")
         self.lbl_mode.setObjectName("ModeLabel")
-        self.lbl_mode.setToolTip("Simple mode hides advanced options and excludes them from the generated command.")
+        self.lbl_mode.setToolTip(
+            "Simple mode hides advanced options and excludes them from the generated command."
+        )
         adv_box.addWidget(self.lbl_mode)
         self.switch_advanced = SwitchButton()
-        self.switch_advanced.setToolTip("Simple mode hides advanced options and excludes them from the generated command.")
+        self.switch_advanced.setToolTip(
+            "Simple mode hides advanced options and excludes them from the generated command."
+        )
         self.switch_advanced.toggled.connect(self.toggle_advanced)
         adv_box.addWidget(self.switch_advanced)
         header_layout.addLayout(adv_box)
@@ -1004,7 +1080,7 @@ class ImmichGoGUI(QMainWindow):
         form.add_row(
             "API Key",
             self.api_key_edit,
-            "You can generate an API key in Immich under Account Settings -> API Keys."
+            "You can generate an API key in Immich under Account Settings -> API Keys.",
         )
 
         self._conn_test_debounce = QTimer(self)
@@ -1013,7 +1089,9 @@ class ImmichGoGUI(QMainWindow):
         self._conn_test_debounce.timeout.connect(self._auto_test_connection)
         self.server_url_edit.textChanged.connect(self._reset_conn_test_state)
         self.api_key_edit.textChanged.connect(self._reset_conn_test_state)
-        self.server_url_edit.textChanged.connect(lambda: self._conn_test_debounce.start())
+        self.server_url_edit.textChanged.connect(
+            lambda: self._conn_test_debounce.start()
+        )
         self.api_key_edit.textChanged.connect(lambda: self._conn_test_debounce.start())
 
         self._add_ssl_skip_row(form, self.inputs["config"])
@@ -1035,7 +1113,7 @@ class ImmichGoGUI(QMainWindow):
         sec_form.add_row(
             "Secret Storage",
             self.cmb_secret_provider,
-            "OS Keyring uses system credential store (Keychain/KWallet/Credential Manager)."
+            "OS Keyring uses system credential store (Keychain/KWallet/Credential Manager).",
         )
 
         self.lbl_secret_status = QLabel("")
@@ -1049,10 +1127,12 @@ class ImmichGoGUI(QMainWindow):
         sec_form.add_row(
             "Admin API Key",
             self.admin_api_key_edit,
-            "Required for administrative operations like partner shared albums or user management."
+            "Required for administrative operations like partner shared albums or user management.",
         )
 
-        self.lbl_secrets_path_hint = QLabel(f"Local secrets path: {default_secrets_path()}")
+        self.lbl_secrets_path_hint = QLabel(
+            f"Local secrets path: {default_secrets_path()}"
+        )
         self.lbl_secrets_path_hint.setObjectName("Hint")
         sec_form.add_row("", self.lbl_secrets_path_hint)
 
@@ -1091,11 +1171,13 @@ class ImmichGoGUI(QMainWindow):
         self.binary_debounce.setSingleShot(True)
         self.binary_debounce.setInterval(400)
         self.binary_debounce.timeout.connect(self._on_manual_binary_changed)
-        self.manual_binary_edit.textChanged.connect(lambda: self.binary_debounce.start())
+        self.manual_binary_edit.textChanged.connect(
+            lambda _text="": self.binary_debounce.start()
+        )
         manual_form.add_row(
             "Manual Binary Path",
             self.manual_binary_edit,
-            "If set, this path is used instead of the managed binary."
+            "If set, this path is used instead of the managed binary.",
         )
         card2.layout.addLayout(manual_form)
         page.addWidget(card2)
@@ -1109,7 +1191,7 @@ class ImmichGoGUI(QMainWindow):
         theme_form.add_row(
             "Theme",
             self.theme_mode_combo,
-            "System follows your operating system theme when supported by Qt."
+            "System follows your operating system theme when supported by Qt.",
         )
         card3.layout.addLayout(theme_form)
         page.addWidget(card3)
@@ -1123,7 +1205,9 @@ class ImmichGoGUI(QMainWindow):
         adv_form.addRow("", self.allow_untested_check)
 
         self.preferred_terminal_combo = QComboBox()
-        self.preferred_terminal_combo.addItems(["auto", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"])
+        self.preferred_terminal_combo.addItems(
+            ["auto", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
+        )
         self.inputs["config"]["preferred_terminal"] = self.preferred_terminal_combo
         adv_form.add_row("Preferred Terminal", self.preferred_terminal_combo)
 
@@ -1135,9 +1219,9 @@ class ImmichGoGUI(QMainWindow):
         page.addStretch()
         return page
 
-    def _on_manual_binary_changed(self, text: str):
+    def _on_manual_binary_changed(self, text: str = ""):
         meta = load_binary_metadata()
-        meta["manual_path"] = text.strip()
+        meta["manual_path"] = self.manual_binary_edit.text().strip()
         save_binary_metadata(meta)
         self.binary_path = get_binary_path(meta)
         self.check_binary_version()
@@ -1153,7 +1237,9 @@ class ImmichGoGUI(QMainWindow):
         form = FormSection()
 
         self.source_path_edit = DroppableLineEdit()
-        self.source_path_edit.setPlaceholderText("/path/to/files or /path/to/archive.zip")
+        self.source_path_edit.setPlaceholderText(
+            "/path/to/files or /path/to/archive.zip"
+        )
         self.inputs["upload-folder"]["path"] = self.source_path_edit
 
         btn_folder = QPushButton("Select Folder…")
@@ -1181,7 +1267,7 @@ class ImmichGoGUI(QMainWindow):
         form.add_row(
             "Folder / ZIP to upload",
             path_container,
-            "Every file inside this folder will be considered. ZIP archives are also supported."
+            "Every file inside this folder will be considered. ZIP archives are also supported.",
         )
 
         card.layout.addLayout(form)
@@ -1206,12 +1292,16 @@ class ImmichGoGUI(QMainWindow):
         form.add_row("Burst Photos", c_burst)
 
         c_raw = QComboBox()
-        c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
+        c_raw.addItems(
+            ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
+        )
         self.inputs["upload-folder"]["manage-raw-jpeg"] = c_raw
         form.add_row("RAW + JPEG Pairs", c_raw)
 
         c_heic = QComboBox()
-        c_heic.addItems(["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"])
+        c_heic.addItems(
+            ["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"]
+        )
         self.inputs["upload-folder"]["manage-heic-jpeg"] = c_heic
         form.add_row("HEIC + JPEG Pairs", c_heic)
 
@@ -1270,7 +1360,7 @@ class ImmichGoGUI(QMainWindow):
         form.add_row(
             "Takeout Source",
             gp_container,
-            "Paste multiple ZIP paths (one per line) or a glob pattern like takeout-*.zip"
+            "Paste multiple ZIP paths (one per line) or a glob pattern like takeout-*.zip",
         )
 
         card.layout.addLayout(form)
@@ -1300,7 +1390,9 @@ class ImmichGoGUI(QMainWindow):
         form.add_row("Burst Photos", c_burst)
 
         c_heic = QComboBox()
-        c_heic.addItems(["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"])
+        c_heic.addItems(
+            ["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"]
+        )
         self.inputs["upload-gp"]["manage-heic-jpeg"] = c_heic
         form.add_row("HEIC + JPEG Pairs", c_heic)
 
@@ -1320,7 +1412,9 @@ class ImmichGoGUI(QMainWindow):
         lay.setSpacing(24)
         self.inputs["upload-immich"] = {}
 
-        banner = QLabel("ℹ️ Destination Immich Server is configured in the Configuration tab. Source Immich Server is configured below.")
+        banner = QLabel(
+            "ℹ️ Destination Immich Server is configured in the Configuration tab. Source Immich Server is configured below."
+        )
         banner.setWordWrap(True)
         banner.setStyleSheet(
             "background-color: rgba(97, 175, 239, 0.12); padding: 10px 14px; "
@@ -1413,12 +1507,16 @@ class ImmichGoGUI(QMainWindow):
         form.add_row("Burst Photos", c_burst)
 
         c_raw = QComboBox()
-        c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
+        c_raw.addItems(
+            ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
+        )
         self.inputs["upload-icloud"]["manage-raw-jpeg"] = c_raw
         form.add_row("RAW + JPEG Pairs", c_raw)
 
         c_heic = QComboBox()
-        c_heic.addItems(["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"])
+        c_heic.addItems(
+            ["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"]
+        )
         self.inputs["upload-icloud"]["manage-heic-jpeg"] = c_heic
         form.add_row("HEIC + JPEG Pairs", c_heic)
 
@@ -1491,12 +1589,16 @@ class ImmichGoGUI(QMainWindow):
         form.add_row("Burst Photos", c_burst)
 
         c_raw = QComboBox()
-        c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
+        c_raw.addItems(
+            ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
+        )
         self.inputs["upload-picasa"]["manage-raw-jpeg"] = c_raw
         form.add_row("RAW + JPEG Pairs", c_raw)
 
         c_heic = QComboBox()
-        c_heic.addItems(["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"])
+        c_heic.addItems(
+            ["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"]
+        )
         self.inputs["upload-picasa"]["manage-heic-jpeg"] = c_heic
         form.add_row("HEIC + JPEG Pairs", c_heic)
 
@@ -1779,7 +1881,11 @@ class ImmichGoGUI(QMainWindow):
         t_server.setEnabled(False)
         t_server.setText("Not Configured")
         self.inputs["archive-immich"]["target-server"] = t_server
-        form.add_row("Source Immich Server URL", t_server, "Archive source server is configured in the Configuration tab.")
+        form.add_row(
+            "Source Immich Server URL",
+            t_server,
+            "Archive source server is configured in the Configuration tab.",
+        )
 
         card.layout.addLayout(form)
         lay.addWidget(card)
@@ -1837,12 +1943,16 @@ class ImmichGoGUI(QMainWindow):
         form.add_row("Manage Bursts", c_burst)
 
         c_raw = QComboBox()
-        c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
+        c_raw.addItems(
+            ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
+        )
         self.inputs["stack"]["manage-raw-jpeg"] = c_raw
         form.add_row("Manage RAW+JPEG", c_raw)
 
         c_heic = QComboBox()
-        c_heic.addItems(["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"])
+        c_heic.addItems(
+            ["NoStack", "KeepHeic", "KeepJPG", "StackCoverHeic", "StackCoverJPG"]
+        )
         self.inputs["stack"]["manage-heic-jpeg"] = c_heic
         form.add_row("Manage HEIC+JPEG", c_heic)
 
@@ -1863,6 +1973,10 @@ class ImmichGoGUI(QMainWindow):
         self.is_advanced = checked
         if hasattr(self, "app_config"):
             self.app_config.advanced_mode = checked
+        if hasattr(self, "switch_advanced"):
+            self.switch_advanced.blockSignals(True)
+            self.switch_advanced.setChecked(checked)
+            self.switch_advanced.blockSignals(False)
         if hasattr(self, "btn_mode"):
             self.btn_mode.blockSignals(True)
             self.btn_mode.setChecked(checked)
@@ -1906,7 +2020,9 @@ class ImmichGoGUI(QMainWindow):
         if tab_key in self.inputs and "target-server" in self.inputs[tab_key]:
             srv_edit = self.inputs.get("config", {}).get("server")
             srv = srv_edit.text() if srv_edit else ""
-            self.inputs[tab_key]["target-server"].setText(srv if srv else "Not Configured")
+            self.inputs[tab_key]["target-server"].setText(
+                srv if srv else "Not Configured"
+            )
 
     def update_header_crumb(self, text):
         self.lbl_crumb.setText(text)
@@ -1919,7 +2035,7 @@ class ImmichGoGUI(QMainWindow):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
         save_action = QAction("Save Configuration", self)
-        save_action.triggered.connect(self.save_configuration)
+        save_action.triggered.connect(lambda: self.save_configuration())
         file_menu.addAction(save_action)
         load_action = QAction("Load Configuration", self)
         load_action.triggered.connect(self.load_configuration)
@@ -1963,7 +2079,11 @@ class ImmichGoGUI(QMainWindow):
 
     def show_cli_compatibility_dialog(self):
         from core.cli_contract import check_fixtures, check_binary_help
-        from core.binary_manager import get_binary_path, load_binary_metadata, TESTED_IMMICH_GO_VERSION
+        from core.binary_manager import (
+            get_binary_path,
+            load_binary_metadata,
+            TESTED_IMMICH_GO_VERSION,
+        )
 
         meta = load_binary_metadata()
         bin_path = Path(get_binary_path(meta))
@@ -1976,12 +2096,10 @@ class ImmichGoGUI(QMainWindow):
 
         # Merge fixture + live-binary results
         missing: dict[str, set[str]] = {
-            tab: set(flags)
-            for tab, flags in report.missing_flags_by_tab.items()
+            tab: set(flags) for tab, flags in report.missing_flags_by_tab.items()
         }
         unknown: dict[str, set[str]] = {
-            tab: set(flags)
-            for tab, flags in report.unknown_flags_by_tab.items()
+            tab: set(flags) for tab, flags in report.unknown_flags_by_tab.items()
         }
 
         supported = bool(report.supported)
@@ -2043,6 +2161,7 @@ class ImmichGoGUI(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             from core.process_tracker import reset_all_locks
+
             reset_all_locks()
             self.active_lock_path = None
             self.running_process = False
@@ -2080,7 +2199,9 @@ class ImmichGoGUI(QMainWindow):
             act.setCheckable(True)
             if pinfo.name == active:
                 act.setChecked(True)
-            act.triggered.connect(lambda checked, name=pinfo.name: self.switch_profile(name))
+            act.triggered.connect(
+                lambda checked, name=pinfo.name: self.switch_profile(name)
+            )
             self.profiles_menu.addAction(act)
 
     def switch_profile(self, target_name: str):
@@ -2092,7 +2213,9 @@ class ImmichGoGUI(QMainWindow):
             self,
             "Switch Profile",
             f"Save changes to current profile '{active}' before switching?",
-            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Save,
         )
 
@@ -2112,13 +2235,16 @@ class ImmichGoGUI(QMainWindow):
 
     def on_new_profile_clicked(self):
         from PySide6.QtWidgets import QInputDialog
+
         name, ok = QInputDialog.getText(self, "New Profile", "Enter profile name:")
         if ok and name.strip():
             clean_n = name.strip()
             existing = [p.name for p in list_profiles()]
             valid, err = validate_profile_name(clean_n, existing)
             if not valid:
-                QMessageBox.warning(self, "Invalid Name", err or "Invalid profile name.")
+                QMessageBox.warning(
+                    self, "Invalid Name", err or "Invalid profile name."
+                )
                 return
             try:
                 create_profile(clean_n)
@@ -2128,6 +2254,7 @@ class ImmichGoGUI(QMainWindow):
 
     def on_duplicate_profile_clicked(self):
         from PySide6.QtWidgets import QInputDialog
+
         active = active_profile_name()
         name, ok = QInputDialog.getText(
             self, "Duplicate Profile", f"Enter name for duplicate of '{active}':"
@@ -2137,7 +2264,9 @@ class ImmichGoGUI(QMainWindow):
             existing = [p.name for p in list_profiles()]
             valid, err = validate_profile_name(clean_n, existing)
             if not valid:
-                QMessageBox.warning(self, "Invalid Name", err or "Invalid profile name.")
+                QMessageBox.warning(
+                    self, "Invalid Name", err or "Invalid profile name."
+                )
                 return
             try:
                 duplicate_profile(active, clean_n)
@@ -2147,20 +2276,28 @@ class ImmichGoGUI(QMainWindow):
 
     def on_rename_profile_clicked(self):
         from PySide6.QtWidgets import QInputDialog
+
         active = active_profile_name()
         if active == "default":
-            QMessageBox.warning(self, "Cannot Rename", "The 'default' profile cannot be renamed.")
+            QMessageBox.warning(
+                self, "Cannot Rename", "The 'default' profile cannot be renamed."
+            )
             return
 
         name, ok = QInputDialog.getText(
-            self, "Rename Profile", f"Enter new name for profile '{active}':", text=active
+            self,
+            "Rename Profile",
+            f"Enter new name for profile '{active}':",
+            text=active,
         )
         if ok and name.strip() and name.strip() != active:
             clean_n = name.strip()
             existing = [p.name for p in list_profiles() if p.name != active]
             valid, err = validate_profile_name(clean_n, existing)
             if not valid:
-                QMessageBox.warning(self, "Invalid Name", err or "Invalid profile name.")
+                QMessageBox.warning(
+                    self, "Invalid Name", err or "Invalid profile name."
+                )
                 return
             try:
                 rename_profile(active, clean_n)
@@ -2172,7 +2309,9 @@ class ImmichGoGUI(QMainWindow):
     def on_delete_profile_clicked(self):
         active = active_profile_name()
         if active == "default":
-            QMessageBox.warning(self, "Cannot Delete", "The 'default' profile cannot be deleted.")
+            QMessageBox.warning(
+                self, "Cannot Delete", "The 'default' profile cannot be deleted."
+            )
             return
 
         reply = QMessageBox.question(
@@ -2192,7 +2331,13 @@ class ImmichGoGUI(QMainWindow):
                 QMessageBox.critical(self, "Error Deleting Profile", str(e))
 
     def collect_form_state(self) -> dict:
-        secret_keys = {"api_key", "from-api-key", "admin_api_key", "from-admin-api-key", "target-server"}
+        secret_keys = {
+            "api_key",
+            "from-api-key",
+            "admin_api_key",
+            "from-admin-api-key",
+            "target-server",
+        }
         fields = {}
         for tab_key, widgets in self.inputs.items():
             tab_dict = {}
@@ -2216,8 +2361,12 @@ class ImmichGoGUI(QMainWindow):
         for tab_key, rows in getattr(self, "adv_rows", {}).items():
             tab_adv = {}
             for k, row in rows.items():
+                if k == "from-dry-run":
+                    continue
                 st = row.state()
-                if (getattr(row, "def_", None) and row.def_.secret_env) or (k in secret_keys):
+                if (getattr(row, "def_", None) and row.def_.secret_env) or (
+                    k in secret_keys
+                ):
                     st = {"enabled": False, "value": ""}
                 tab_adv[k] = st
             if tab_adv:
@@ -2239,7 +2388,13 @@ class ImmichGoGUI(QMainWindow):
             fields_state = state
             advanced_state = {}
 
-        secret_keys = {"api_key", "from-api-key", "admin_api_key", "from-admin-api-key", "target-server"}
+        secret_keys = {
+            "api_key",
+            "from-api-key",
+            "admin_api_key",
+            "from-admin-api-key",
+            "target-server",
+        }
         for tab_key, tab_dict in fields_state.items():
             if tab_key in self.inputs and isinstance(tab_dict, dict):
                 for k, val in tab_dict.items():
@@ -2252,13 +2407,17 @@ class ImmichGoGUI(QMainWindow):
                         widget.blockSignals(True)
                         if isinstance(widget, QLineEdit) and isinstance(val, str):
                             widget.setText(val)
-                        elif isinstance(widget, QPlainTextEdit) and isinstance(val, str):
+                        elif isinstance(widget, QPlainTextEdit) and isinstance(
+                            val, str
+                        ):
                             widget.setPlainText(val)
                         elif isinstance(widget, QCheckBox) and isinstance(val, bool):
                             widget.setChecked(val)
                         elif isinstance(widget, QComboBox) and isinstance(val, str):
                             widget.setCurrentText(val)
-                        elif isinstance(widget, QSpinBox) and isinstance(val, (int, float)):
+                        elif isinstance(widget, QSpinBox) and isinstance(
+                            val, (int, float)
+                        ):
                             widget.setValue(int(val))
                     finally:
                         widget.blockSignals(False)
@@ -2289,10 +2448,12 @@ class ImmichGoGUI(QMainWindow):
 
         for t in tabs:
             for row in getattr(self, "adv_rows", {}).get(t, {}).values():
-                row.set_state({
-                    "enabled": False,
-                    "value": row.def_.default,
-                })
+                row.set_state(
+                    {
+                        "enabled": False,
+                        "value": row.def_.default,
+                    }
+                )
 
         self.update_status()
 
@@ -2305,14 +2466,22 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_upload(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["upload-folder"]["path"].setText(file_path)
 
     def browse_takeout_zips(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select Takeout ZIP parts", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select Takeout ZIP parts",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if files:
             self.inputs["upload-gp"]["path"].setPlainText("\n".join(files))
@@ -2333,7 +2502,11 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_archive(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["archive-folder"]["path"].setText(file_path)
@@ -2347,7 +2520,11 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_upload_icloud(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select iCloud ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select iCloud ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["upload-icloud"]["path"].setText(file_path)
@@ -2361,14 +2538,22 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_upload_picasa(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Picasa ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select Picasa ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["upload-picasa"]["path"].setText(file_path)
 
     def browse_archive_gp_zips(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select Takeout ZIP parts", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select Takeout ZIP parts",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if files:
             self.inputs["archive-gp"]["path"].setPlainText("\n".join(files))
@@ -2389,7 +2574,11 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_archive_icloud(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select iCloud ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select iCloud ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["archive-icloud"]["path"].setText(file_path)
@@ -2403,7 +2592,11 @@ class ImmichGoGUI(QMainWindow):
 
     def browse_zip_archive_picasa(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Picasa ZIP Archive", "", "ZIP archives (*.zip *.ZIP);;All Files (*)", options=QFileDialog.Option(0)
+            self,
+            "Select Picasa ZIP Archive",
+            "",
+            "ZIP archives (*.zip *.ZIP);;All Files (*)",
+            options=QFileDialog.Option(0),
         )
         if file_path:
             self.inputs["archive-picasa"]["path"].setText(file_path)
@@ -2419,8 +2612,12 @@ class ImmichGoGUI(QMainWindow):
         return {
             "server": c.get("server").text() if c.get("server") else "",
             "api_key": c.get("api_key").text().strip() if c.get("api_key") else "",
-            "admin_api_key": c.get("admin_api_key").text().strip() if c.get("admin_api_key") else "",
-            "secrets_provider": c.get("secret_provider").currentData() if c.get("secret_provider") else "keyring",
+            "admin_api_key": c.get("admin_api_key").text().strip()
+            if c.get("admin_api_key")
+            else "",
+            "secrets_provider": c.get("secret_provider").currentData()
+            if c.get("secret_provider")
+            else "keyring",
             "skip-ssl": c.get("skip-ssl").isChecked() if c.get("skip-ssl") else False,
         }
 
@@ -2582,10 +2779,37 @@ class ImmichGoGUI(QMainWindow):
         )
 
         from core.advanced_flags import validate_advanced_state
+
         adv = validate_advanced_state(tab_key, advanced_state)
 
         base.errors.extend(adv.errors)
         base.warnings.extend(adv.warnings)
+        return base
+
+    def validate_inputs_light(self) -> ValidationResult:
+        tab_key = self._get_active_tab_key()
+        if tab_key == "config":
+            return ValidationResult()
+
+        config_state = self._collect_config_state()
+        tab_state = self._collect_tab_state(tab_key)
+        advanced_state = self._collect_advanced_state(tab_key)
+
+        base = validate_state_light(
+            tab_key=tab_key,
+            config_state=config_state,
+            tab_state=tab_state,
+        )
+
+        from core.advanced_flags import validate_advanced_state
+
+        adv = validate_advanced_state(tab_key, advanced_state)
+
+        base.errors.extend(adv.errors)
+        base.warnings.extend(adv.warnings)
+        base.warnings.extend(
+            collect_safety_warnings(tab_key, config_state, advanced_state)
+        )
         return base
 
     def _reset_conn_test_state(self):
@@ -2615,10 +2839,14 @@ class ImmichGoGUI(QMainWindow):
         skip_ssl = ssl_widget.isChecked() if ssl_widget else False
 
         if not server_url:
-            QMessageBox.warning(self, "Test Connection", "Please enter a Server URL first.")
+            QMessageBox.warning(
+                self, "Test Connection", "Please enter a Server URL first."
+            )
             return
         if not api_key:
-            QMessageBox.warning(self, "Test Connection", "Please enter an API Key first.")
+            QMessageBox.warning(
+                self, "Test Connection", "Please enter an API Key first."
+            )
             return
 
         res = test_immich_connection(server_url, api_key, skip_ssl=skip_ssl)
@@ -2638,9 +2866,13 @@ class ImmichGoGUI(QMainWindow):
         self._do_update_status()
 
     def _do_update_status(self):
-        active_lock = getattr(self, "active_lock_path", None)
-        is_running = (active_lock is not None and is_lock_active(active_lock)) or (getattr(self, "running_process", False) is True)
-        validation = self.validate_inputs()
+        active_paths = getattr(self, "active_lock_paths", set())
+        if not active_paths and getattr(self, "active_lock_path", None):
+            active_paths = {self.active_lock_path}
+        is_running = any(is_lock_active(p) for p in active_paths) or (
+            getattr(self, "running_process", False) is True
+        )
+        validation = self.validate_inputs_light()
 
         if is_running:
             self.lbl_running_warning.setVisible(True)
@@ -2652,9 +2884,9 @@ class ImmichGoGUI(QMainWindow):
         last_test = getattr(self, "_last_conn_test_ok", None)
         active_tab = self._get_active_tab_key()
 
-        if last_test is False:
+        if last_test is False and active_tab in ("config", *SERVER_REQUIRED_TABS):
             self.status_card.set_server("err", "Server: Connection Failed")
-            if not is_running:
+            if not is_running and active_tab in SERVER_REQUIRED_TABS:
                 self.btn_run.setEnabled(False)
                 self.btn_dry_run.setEnabled(False)
         elif last_test is True and active_tab == "config":
@@ -2668,25 +2900,20 @@ class ImmichGoGUI(QMainWindow):
                 self.status_card.set_server("ok", "Server: Configured")
             else:
                 self.status_card.set_server("err", "Server: Not Set")
+        elif validation.warnings and not validation.errors:
+            self.status_card.set_server("warn", validation.warnings[0])
+            if not is_running:
+                self.btn_run.setEnabled(True)
+                self.btn_dry_run.setEnabled(True)
         elif validation.is_valid:
-            # Secondary check: build the plan to surface emitter-level errors
-            # (e.g. a flag in ADVANCED_FLAGS but not in TAB_ALLOWED_FLAGS)
-            try:
-                plan = self.build_plan(dry_run=False)
-                if plan.errors:
-                    self.status_card.set_server("err", plan.errors[0])
-                    if not is_running:
-                        self.btn_run.setEnabled(False)
-                        self.btn_dry_run.setEnabled(False)
-                    return
-            except Exception:
-                pass
             self.status_card.set_server("ok", "Server: Ready")
             if not is_running:
                 self.btn_run.setEnabled(True)
                 self.btn_dry_run.setEnabled(True)
         else:
-            first_error = validation.errors[0] if validation.errors else "Server: Not Set"
+            first_error = (
+                validation.errors[0] if validation.errors else "Server: Not Set"
+            )
             self.status_card.set_server("err", f"Server: {first_error}")
             if not is_running:
                 self.btn_run.setEnabled(False)
@@ -2696,7 +2923,9 @@ class ImmichGoGUI(QMainWindow):
         srv = normalize_server_url(srv_edit.text()) if srv_edit else ""
         for t in ["archive-immich", "stack"]:
             if t in self.inputs and "target-server" in self.inputs[t]:
-                self.inputs[t]["target-server"].setText(srv if srv else "Not Configured")
+                self.inputs[t]["target-server"].setText(
+                    srv if srv else "Not Configured"
+                )
 
     def build_plan(self, dry_run: bool) -> CommandPlan:
         tab_key = self._get_active_tab_key()
@@ -2731,9 +2960,10 @@ class ImmichGoGUI(QMainWindow):
         ready, msg = self.check_binary_ready()
         if not ready:
             reply = QMessageBox.question(
-                self, "Binary Not Ready",
+                self,
+                "Binary Not Ready",
                 f"{msg}\n\nDo you want to download it now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
                 if not self.update_binary(force_download=True):
@@ -2748,23 +2978,25 @@ class ImmichGoGUI(QMainWindow):
         validation = self.validate_inputs()
         if validation.errors:
             QMessageBox.warning(
-                self, "Validation Errors",
-                "\n".join(f"• {e}" for e in validation.errors)
+                self,
+                "Validation Errors",
+                "\n".join(f"• {e}" for e in validation.errors),
             )
             return
 
         plan = self.build_plan(dry_run=is_dry_run)
         if plan.errors:
             QMessageBox.critical(
-                self, "Command Build Errors",
-                "\n".join(f"• {e}" for e in plan.errors)
+                self, "Command Build Errors", "\n".join(f"• {e}" for e in plan.errors)
             )
             return
 
         if plan.tab_key in SERVER_REQUIRED_TABS:
             config_state = self._collect_config_state()
             tab_state = self._collect_tab_state(plan.tab_key)
-            conn_res = check_preflight_server_connection(plan.tab_key, config_state, tab_state, timeout=3.0)
+            conn_res = check_preflight_server_connection(
+                plan.tab_key, config_state, tab_state, timeout=3.0
+            )
             if not conn_res.ok:
                 reply = QMessageBox.warning(
                     self,
@@ -2777,7 +3009,9 @@ class ImmichGoGUI(QMainWindow):
                 )
                 if reply != QMessageBox.StandardButton.Yes:
                     return
-                plan.warnings.insert(0, f"Server pre-flight check failed: {conn_res.message}")
+                plan.warnings.insert(
+                    0, f"Server pre-flight check failed: {conn_res.message}"
+                )
 
         if validation.warnings:
             for w in validation.warnings:
@@ -2833,10 +3067,7 @@ class ImmichGoGUI(QMainWindow):
         cmd_block.setMaximumHeight(110)
         layout.addWidget(cmd_block)
 
-        immich_env = {
-            k: v for k, v in plan.env.items()
-            if k.startswith("IMMICH_GO_")
-        }
+        immich_env = {k: v for k, v in plan.env.items() if k.startswith("IMMICH_GO_")}
         if immich_env:
             lbl_env = QLabel("Environment Variables")
             lbl_env.setObjectName("Subhead")
@@ -2892,9 +3123,7 @@ class ImmichGoGUI(QMainWindow):
 
         btn_copy = QPushButton("Copy Command")
         btn_copy.setObjectName("BtnPreview")
-        btn_copy.clicked.connect(
-            lambda: QApplication.clipboard().setText(cmd_str)
-        )
+        btn_copy.clicked.connect(lambda: QApplication.clipboard().setText(cmd_str))
         btn_row.addWidget(btn_copy)
 
         btn_cancel = QPushButton("Cancel")
@@ -2976,7 +3205,11 @@ class ImmichGoGUI(QMainWindow):
             return
 
         release_notes = self.binary_manager.get_release_notes(latest_version)
-        allow_untested = getattr(self.app_config, "allow_untested_updates", False) if hasattr(self, "app_config") else False
+        allow_untested = (
+            getattr(self.app_config, "allow_untested_updates", False)
+            if hasattr(self, "app_config")
+            else False
+        )
 
         decision = self.binary_manager.evaluate_update(
             current_version=current_version,
@@ -3014,15 +3247,21 @@ class ImmichGoGUI(QMainWindow):
         self.binary_path = binary_path
         self.check_binary_version()
 
-    def update_binary(self, version: str | None = None, force_download: bool = False) -> bool:
+    def update_binary(
+        self, version: str | None = None, force_download: bool = False
+    ) -> bool:
         if version is None:
             version = self.get_latest_release_info()
             if not version:
-                QMessageBox.critical(self, "Error", "Could not determine latest version.")
+                QMessageBox.critical(
+                    self, "Error", "Could not determine latest version."
+                )
                 return False
 
         clean_v = version.lstrip("v")
-        binary_filename = "immich-go.exe" if sys.platform.startswith("win") else "immich-go"
+        binary_filename = (
+            "immich-go.exe" if sys.platform.startswith("win") else "immich-go"
+        )
         binary_path = os.path.join(BINARY_BASE_DIR, clean_v, binary_filename)
 
         if os.path.exists(binary_path) and not force_download:
@@ -3096,17 +3335,35 @@ class ImmichGoGUI(QMainWindow):
         elif cancelled:
             QMessageBox.information(self, "Cancelled", "Download was cancelled.")
         else:
-            QMessageBox.critical(self, "Update Failed", message or "Download/installation failed.")
+            QMessageBox.critical(
+                self, "Update Failed", message or "Download/installation failed."
+            )
 
         return success
 
     def build_environment(self, tab_key: str = None) -> dict:
         if tab_key is None:
             tab_key = self._get_active_tab_key()
-        server = self.inputs.get("config", {}).get("server").text().strip() if self.inputs.get("config", {}).get("server") else ""
-        api_key = self.inputs.get("config", {}).get("api_key").text().strip() if self.inputs.get("config", {}).get("api_key") else ""
-        from_server = self.inputs.get("upload-immich", {}).get("from-server").text().strip() if self.inputs.get("upload-immich", {}).get("from-server") else ""
-        from_api_key = self.inputs.get("upload-immich", {}).get("from-api-key").text().strip() if self.inputs.get("upload-immich", {}).get("from-api-key") else ""
+        server = (
+            self.inputs.get("config", {}).get("server").text().strip()
+            if self.inputs.get("config", {}).get("server")
+            else ""
+        )
+        api_key = (
+            self.inputs.get("config", {}).get("api_key").text().strip()
+            if self.inputs.get("config", {}).get("api_key")
+            else ""
+        )
+        from_server = (
+            self.inputs.get("upload-immich", {}).get("from-server").text().strip()
+            if self.inputs.get("upload-immich", {}).get("from-server")
+            else ""
+        )
+        from_api_key = (
+            self.inputs.get("upload-immich", {}).get("from-api-key").text().strip()
+            if self.inputs.get("upload-immich", {}).get("from-api-key")
+            else ""
+        )
         return build_environment(tab_key, server, api_key, from_server, from_api_key)
 
     def _start_process_timer(self):
@@ -3117,24 +3374,19 @@ class ImmichGoGUI(QMainWindow):
             self.check_process_timer.start(1000)
 
     def _check_lock_file(self):
-        active_path = getattr(self, "active_lock_path", None)
-        if not active_path:
+        active_locks = scan_locks()
+        self.active_lock_paths = {lock.lock_path for lock in active_locks}
+        self.active_lock_path = active_locks[0].lock_path if active_locks else None
+
+        if not self.active_lock_paths:
             if hasattr(self, "check_process_timer"):
                 self.check_process_timer.stop()
             self.running_process = False
             self.update_status()
             return
 
-        if not is_lock_active(active_path):
-            if hasattr(self, "check_process_timer"):
-                self.check_process_timer.stop()
-            release_lock(active_path)
-            self.active_lock_path = None
-            self.running_process = False
-            self.update_status()
-        else:
-            self.running_process = True
-            self.update_status()
+        self.running_process = True
+        self.update_status()
 
     def check_if_process_running(self):
         """Backward compatible alias for _check_lock_file."""
@@ -3149,8 +3401,8 @@ class ImmichGoGUI(QMainWindow):
             return
 
         active_locks = scan_locks()
-        active_path = getattr(self, "active_lock_path", None)
-        if active_locks or (active_path and is_lock_active(active_path)):
+        active_paths = getattr(self, "active_lock_paths", set())
+        if active_locks or active_paths:
             reply = QMessageBox.question(
                 self,
                 "Running Command Detected",
@@ -3184,19 +3436,32 @@ class ImmichGoGUI(QMainWindow):
     def run_command(self, plan: CommandPlan):
         if plan.errors:
             QMessageBox.critical(
-                self, "Command Build Errors",
-                "\n".join(f"• {e}" for e in plan.errors)
+                self, "Command Build Errors", "\n".join(f"• {e}" for e in plan.errors)
             )
             return
 
         binary_path = plan.binary_path or getattr(self, "binary_path", "./immich-go")
-        if not os.path.exists(binary_path):
+        try:
+            resolved = Path(binary_path).expanduser().resolve()
+            if resolved.is_file():
+                binary_path = str(resolved)
+        except OSError:
+            resolved = Path(binary_path)
+
+        if not os.path.isfile(binary_path):
             if not self.update_binary():
                 QMessageBox.critical(
-                    self, "Error",
-                    "Immich-Go binary is missing or not executable."
+                    self, "Error", "Immich-Go binary is missing or not executable."
                 )
                 return
+
+        if not sys.platform.startswith("win") and not os.access(binary_path, os.X_OK):
+            QMessageBox.critical(
+                self, "Error", "Immich-Go binary exists but is not executable."
+            )
+            return
+
+        plan.binary_path = binary_path
 
         if hasattr(self, "log"):
             self.log.info(
@@ -3233,6 +3498,7 @@ class ImmichGoGUI(QMainWindow):
             self.btn_dry_run.setEnabled(True)
             return
 
+        self.active_lock_paths = {lock_path}
         self.active_lock_path = lock_path
         self.running_process = True
         self.btn_run.setEnabled(False)
@@ -3271,7 +3537,9 @@ class ImmichGoGUI(QMainWindow):
             self.inputs["config"]["skip-ssl"].setChecked(self.app_config.skip_ssl)
 
         if "secret_provider" in self.inputs["config"]:
-            idx = self.inputs["config"]["secret_provider"].findData(self.app_config.secrets_provider)
+            idx = self.inputs["config"]["secret_provider"].findData(
+                self.app_config.secrets_provider
+            )
             if idx >= 0:
                 self.inputs["config"]["secret_provider"].setCurrentIndex(idx)
 
@@ -3314,6 +3582,11 @@ class ImmichGoGUI(QMainWindow):
 
         self.apply_theme(self.theme_mode)
         self.toggle_advanced(self.app_config.advanced_mode)
+
+        cfg_warning = get_config_load_warning()
+        if cfg_warning:
+            QMessageBox.warning(self, "Configuration Reset", cfg_warning)
+
         self.update_window_title()
         self._update_secret_status()
 
@@ -3324,17 +3597,19 @@ class ImmichGoGUI(QMainWindow):
             self.app_config.skip_ssl = self.inputs["config"]["skip-ssl"].isChecked()
 
         if "secret_provider" in self.inputs["config"]:
-            self.app_config.secrets_provider = self.inputs["config"]["secret_provider"].currentData()
+            self.app_config.secrets_provider = self.inputs["config"][
+                "secret_provider"
+            ].currentData()
 
         if "allow_untested_updates" in self.inputs["config"]:
-            self.app_config.allow_untested_updates = (
-                self.inputs["config"]["allow_untested_updates"].isChecked()
-            )
+            self.app_config.allow_untested_updates = self.inputs["config"][
+                "allow_untested_updates"
+            ].isChecked()
 
         if "preferred_terminal" in self.inputs["config"]:
-            self.app_config.preferred_terminal = (
-                self.inputs["config"]["preferred_terminal"].currentText()
-            )
+            self.app_config.preferred_terminal = self.inputs["config"][
+                "preferred_terminal"
+            ].currentText()
 
         if hasattr(self, "theme_mode_combo"):
             self.app_config.theme_mode = self.theme_mode_combo.currentText()
@@ -3344,7 +3619,11 @@ class ImmichGoGUI(QMainWindow):
 
         prof_name = getattr(self.app_config, "profile_name", "default")
         api_key = self.inputs["config"]["api_key"].text().strip()
-        admin_key = self.inputs["config"]["admin_api_key"].text().strip() if "admin_api_key" in self.inputs["config"] else ""
+        admin_key = (
+            self.inputs["config"]["admin_api_key"].text().strip()
+            if "admin_api_key" in self.inputs["config"]
+            else ""
+        )
 
         res_api = save_secret_with_fallback(
             profile_name=prof_name,
@@ -3377,6 +3656,7 @@ class ImmichGoGUI(QMainWindow):
         """One-time check: can we actually talk to the keyring?"""
         try:
             import keyring
+
             keyring.get_password("immich-go-gui-probe", "probe")
             return True
         except Exception:
@@ -3384,6 +3664,7 @@ class ImmichGoGUI(QMainWindow):
 
     def _secrets_file_has_key(self) -> bool:
         from core.config_manager import load_secrets
+
         return bool(load_secrets().get("api_key"))
 
     def _update_secret_status(self):
@@ -3416,12 +3697,12 @@ class ImmichGoGUI(QMainWindow):
             "About Immich-Go GUI",
             "<h3>Immich-Go GUI</h3>"
             "<p>A modern PySide6 desktop interface for <b>immich-go</b>.</p>"
-            f"<p><b>Version:</b> {_gui_version()} (CLI Target: v0.32.0)</p>"
+            f"<p><b>Version:</b> {_gui_version()} (CLI Target: v{TESTED_IMMICH_GO_VERSION})</p>"
             "<hr/>"
             "<p><b>Immich-Go GUI Repository:</b><br/>"
             "<a href='https://github.com/shitan198u/immich-go-gui'>https://github.com/shitan198u/immich-go-gui</a></p>"
             "<p><b>Immich-Go CLI Engine:</b><br/>"
-            "<a href='https://github.com/simulot/immich-go'>https://github.com/simulot/immich-go</a></p>"
+            "<a href='https://github.com/simulot/immich-go'>https://github.com/simulot/immich-go</a></p>",
         )
 
 
@@ -3430,15 +3711,56 @@ class ImmichGoGUI(QMainWindow):
 # ==========================================================
 
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        try:
+            from core.flag_registry import REGISTRY
+
+            if not REGISTRY.tabs:
+                print("self-test: flag registry empty", file=sys.stderr)
+                sys.exit(1)
+
+            plan = build_plan_from_state(
+                tab_key="upload-folder",
+                config_state={
+                    "server": "http://localhost:2283",
+                    "api_key": "test-key",
+                    "skip-ssl": False,
+                },
+                tab_state={"path": "/tmp"},
+                binary_path="./immich-go",
+                dry_run=True,
+            )
+            if plan.errors:
+                print(f"self-test: plan errors: {plan.errors}", file=sys.stderr)
+                sys.exit(1)
+
+            cfg_dir = default_config_dir()
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            probe = cfg_dir / ".self-test-write"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            print("self-test: ok")
+            sys.exit(0)
+        except Exception as exc:
+            print(f"self-test failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     app = QApplication(sys.argv)
     set_fusion_style()
     base_font = QFont()
-    base_font.setFamilies([
-        "Segoe UI", "Segoe UI Emoji",
-        "Helvetica Neue", "Apple Color Emoji",
-        "Noto Sans", "Noto Color Emoji", "DejaVu Sans", "Ubuntu",
-        "sans-serif",
-    ])
+    base_font.setFamilies(
+        [
+            "Segoe UI",
+            "Segoe UI Emoji",
+            "Helvetica Neue",
+            "Apple Color Emoji",
+            "Noto Sans",
+            "Noto Color Emoji",
+            "DejaVu Sans",
+            "Ubuntu",
+            "sans-serif",
+        ]
+    )
     base_font.setPointSize(10)
     app.setFont(base_font)
     window = ImmichGoGUI()

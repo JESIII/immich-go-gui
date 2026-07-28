@@ -14,7 +14,6 @@ Defaults:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 # Directory names skipped anywhere in a path.
@@ -132,7 +131,22 @@ def _should_skip_file(path: Path) -> bool:
         return True
     if name.endswith(_SKIP_NAME_SUFFIXES):
         return True
-    if name.endswith((".pyc", ".pyo", ".png", ".ico", ".jpg", ".jpeg", ".gif", ".webp", ".bin", ".exe", ".dmg", ".AppImage")):
+    if name.endswith(
+        (
+            ".pyc",
+            ".pyo",
+            ".png",
+            ".ico",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".bin",
+            ".exe",
+            ".dmg",
+            ".AppImage",
+        )
+    ):
         return True
     return False
 
@@ -235,7 +249,12 @@ def collect_project_files(repo_root: Path, full: bool = False) -> list[Path]:
     return sorted(found, key=sort_key)
 
 
-def _build_header(repo_root: Path, valid: list[tuple[Path, Path, int, str]], full: bool, skipped_binary: int) -> str:
+def _build_header(
+    repo_root: Path,
+    valid: list[tuple[Path, Path, int, str]],
+    full: bool,
+    skipped_binary: int,
+) -> str:
     profile = "FULL" if full else "LEAN CODE REVIEW"
     lines = [
         "=" * 80,
@@ -270,7 +289,9 @@ def _build_header(repo_root: Path, valid: list[tuple[Path, Path, int, str]], ful
             ]
         )
     else:
-        lines.append("  - Excluded: docs/, .vscode/, icons/*.svg, uv.lock, meta docs files")
+        lines.append(
+            "  - Excluded: docs/, .vscode/, icons/*.svg, uv.lock, meta docs files"
+        )
 
     lines.append("")
     lines.append("Files:")
@@ -329,7 +350,11 @@ def main() -> None:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
-    out_file = Path(args.output_path) if args.output_path else repo_root / "immichgo_modules_bundle.txt"
+    out_file = (
+        Path(args.output_path)
+        if args.output_path
+        else repo_root / "immichgo_modules_bundle.txt"
+    )
     bundle_codebase(out_file, full=args.full)
 
 

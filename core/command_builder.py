@@ -6,7 +6,6 @@ It operates entirely on plain Python dictionaries and primitive types.
 
 import glob
 import os
-import re
 from typing import Any
 
 from .models import CommandPlan, ValidationResult
@@ -21,23 +20,27 @@ from .cli_schema import (
 )
 from .validation import (
     clean_date_range,
-    normalize_extensions_csv,
     normalize_list_csv,
     validate_date_range as validate_date_range_func,
     validate_server_url,
     expand_source_paths,
     validate_destination_folder,
 )
+from .network import normalize_server_url
 
 
 STRUCTURAL_KEYS = frozenset({"server", "skip-ssl", "dry-run"})
-POSITIONAL_OWNED_KEYS = frozenset({"from-server", "from-date-range", "from-albums", "write-to"})
+POSITIONAL_OWNED_KEYS = frozenset(
+    {"from-server", "from-date-range", "from-albums", "write-to"}
+)
 
 
 class FlagEmitter:
     """Helper class that checks per-tab flag allowlists before emitting CLI options."""
 
-    def __init__(self, tab_key: str, strict: bool = False, plan: CommandPlan | None = None):
+    def __init__(
+        self, tab_key: str, strict: bool = False, plan: CommandPlan | None = None
+    ):
         self.tab_key = tab_key
         self.strict = strict
         self.opts: list[str] = []
@@ -50,13 +53,17 @@ class FlagEmitter:
 
     def _log(self, arg: str, source: str, key: str = "") -> None:
         if self._plan is not None:
-            self._plan.emission_log.append({
-                "flag": arg,
-                "source": source,
-                "key": key or self._flag_name_from_arg(arg),
-            })
+            self._plan.emission_log.append(
+                {
+                    "flag": arg,
+                    "source": source,
+                    "key": key or self._flag_name_from_arg(arg),
+                }
+            )
 
-    def add_option(self, flag_name: str, value: Any, *, source: str = "advanced") -> bool:
+    def add_option(
+        self, flag_name: str, value: Any, *, source: str = "advanced"
+    ) -> bool:
         clean_name = str(flag_name).lstrip("-")
         val_str = str(value)
         if not val_str:
@@ -72,7 +79,9 @@ class FlagEmitter:
         self._log(arg, source, clean_name)
         return True
 
-    def add_flag(self, flag_name: str, enabled: bool = True, *, source: str = "advanced") -> bool:
+    def add_flag(
+        self, flag_name: str, enabled: bool = True, *, source: str = "advanced"
+    ) -> bool:
         clean_name = str(flag_name).lstrip("-")
         if not enabled:
             return False
@@ -92,7 +101,9 @@ class FlagEmitter:
         self.opts.append(arg)
         self._log(arg, source)
 
-    def add_bool_val(self, flag_name: str, value: bool, *, source: str = "advanced") -> bool:
+    def add_bool_val(
+        self, flag_name: str, value: bool, *, source: str = "advanced"
+    ) -> bool:
         clean_name = str(flag_name).lstrip("-")
         if not flag_allowed_for_tab(self.tab_key, clean_name):
             err = f"Flag '--{clean_name}' is not allowed for tab '{self.tab_key}'"
@@ -104,39 +115,6 @@ class FlagEmitter:
         self.opts.append(arg)
         self._log(arg, source, clean_name)
         return True
-
-
-def emit_bool_flag(
-    emitter: FlagEmitter,
-    flag_name: str,
-    value: bool,
-    default: bool = False,
-    *,
-    source: str = "advanced",
-) -> None:
-    """Emits boolean CLI options respecting CLI default value.
-    - Default True: emits --<flag>=false if value is False.
-    - Default False: emits --<flag> if value is True.
-    """
-    if default:
-        if not value:
-            emitter.add_bool_val(flag_name, False, source=source)
-    else:
-        if value:
-            emitter.add_flag(flag_name, source=source)
-
-
-def emit_if_not_default(
-    emitter: FlagEmitter,
-    flag_name: str,
-    value: Any,
-    default: Any = "",
-    *,
-    source: str = "advanced",
-) -> None:
-    """Emits CLI option if value is not equal to default and is non-empty."""
-    if value != default and value not in ("", None):
-        emitter.add_option(flag_name, value, source=source)
 
 
 def _simple_value_is_default(value: Any, default: Any) -> bool:
@@ -178,13 +156,17 @@ def _emit_positional_owned_flags(
         from_server = tab_state.get("from-server", "")
         if from_server:
             emitter.add_option(
-                "from-server", normalize_server_url(from_server), source="simple",
+                "from-server",
+                normalize_server_url(from_server),
+                source="simple",
             )
     elif tab_key == "archive-immich":
         from_srv = tab_state.get("from-server", "") or config_state.get("server", "")
         if from_srv:
             emitter.add_option(
-                "from-server", normalize_server_url(from_srv), source="simple",
+                "from-server",
+                normalize_server_url(from_srv),
+                source="simple",
             )
 
     write_to = tab_state.get("write-to")
@@ -207,24 +189,6 @@ def _collect_path_positional_args(tab_state: dict) -> list[str]:
     if raw_path:
         path_opt.extend(collect_paths(raw_path))
     return path_opt
-
-
-_DATE_RANGE_RE = re.compile(
-    r"^\d{4}(-\d{2}(-\d{2})?)?"
-    r"(,\d{4}(-\d{2}(-\d{2})?)?)?$"
-)
-
-
-def normalize_server_url(url: str) -> str:
-    """Normalize a server URL for CLI consumption."""
-    url = url.strip()
-    if not url:
-        return ""
-
-    if not url.startswith("http://") and not url.startswith("https://"):
-        url = "http://" + url
-
-    return url.rstrip("/")
 
 
 def collect_paths(raw_text: str) -> list[str]:
@@ -344,18 +308,26 @@ def validate_state(
         key = config_state.get("api_key", "").strip()
         if not srv:
             if tab_key == "archive-immich":
-                res.errors.append("Source server URL is required. Configure it in the Configuration tab.")
+                res.errors.append(
+                    "Source server URL is required. Configure it in the Configuration tab."
+                )
             elif tab_key == "stack":
-                res.errors.append("Immich server URL is required. Configure it in the Configuration tab.")
+                res.errors.append(
+                    "Immich server URL is required. Configure it in the Configuration tab."
+                )
             else:
-                res.errors.append("Server URL is required. Configure it in the Configuration tab.")
+                res.errors.append(
+                    "Server URL is required. Configure it in the Configuration tab."
+                )
         else:
-            ok, err = validate_server_url(srv)
+            ok, err = validate_server_url(normalize_server_url(srv))
             if not ok and err:
                 res.errors.append(err)
 
         if not key:
-            res.errors.append("API Key is required. Configure it in the Configuration tab.")
+            res.errors.append(
+                "API Key is required. Configure it in the Configuration tab."
+            )
 
     if tab_key == "upload-folder":
         p = tab_state.get("path", "").strip()
@@ -466,6 +438,135 @@ def validate_state(
     return res
 
 
+def validate_state_light(
+    tab_key: str,
+    config_state: dict,
+    tab_state: dict,
+) -> ValidationResult:
+    """Lightweight validation without glob expansion or filesystem walks."""
+    res = ValidationResult()
+
+    if tab_key in SERVER_REQUIRED_TABS:
+        srv = config_state.get("server", "").strip()
+        key = config_state.get("api_key", "").strip()
+        if not srv:
+            if tab_key == "archive-immich":
+                res.errors.append(
+                    "Source server URL is required. Configure it in the Configuration tab."
+                )
+            elif tab_key == "stack":
+                res.errors.append(
+                    "Immich server URL is required. Configure it in the Configuration tab."
+                )
+            else:
+                res.errors.append(
+                    "Server URL is required. Configure it in the Configuration tab."
+                )
+        else:
+            ok, err = validate_server_url(normalize_server_url(srv))
+            if not ok and err:
+                res.errors.append(err)
+
+        if not key:
+            res.errors.append(
+                "API Key is required. Configure it in the Configuration tab."
+            )
+
+    if tab_key == "upload-folder":
+        if not tab_state.get("path", "").strip():
+            res.errors.append("Source folder path is required.")
+
+    elif tab_key == "upload-gp":
+        if not tab_state.get("path", "").strip():
+            res.errors.append("Google Photos takeout source path is required.")
+
+    elif tab_key == "upload-immich":
+        fs = tab_state.get("from-server", "").strip()
+        fk = tab_state.get("from-api-key", "").strip()
+        if not fs:
+            res.errors.append("Source Immich Server URL is required.")
+        else:
+            ok, err = validate_server_url(normalize_server_url(fs))
+            if not ok and err:
+                res.errors.append(f"Source {err}")
+        if not fk:
+            res.errors.append("Source Immich API Key is required.")
+
+    elif tab_key == "upload-icloud":
+        if not tab_state.get("path", "").strip():
+            res.errors.append("iCloud export path is required.")
+
+    elif tab_key == "upload-picasa":
+        if not tab_state.get("path", "").strip():
+            res.errors.append("Picasa collection path is required.")
+
+    elif tab_key in (
+        "archive-folder",
+        "archive-gp",
+        "archive-icloud",
+        "archive-picasa",
+    ):
+        p = tab_state.get("path", "").strip()
+        w = tab_state.get("write-to", "").strip()
+        if not p:
+            label = tab_key.replace("archive-", "").replace(
+                "gp", "Google Photos takeout"
+            )
+            if tab_key == "archive-folder":
+                res.errors.append("Source folder path is required.")
+            elif tab_key == "archive-gp":
+                res.errors.append("Google Photos takeout source path is required.")
+            elif tab_key == "archive-icloud":
+                res.errors.append("iCloud export path is required.")
+            else:
+                res.errors.append("Picasa collection path is required.")
+        if not w:
+            res.errors.append("Destination folder is required.")
+
+    elif tab_key == "archive-immich":
+        if not tab_state.get("write-to", "").strip():
+            res.errors.append("Destination folder is required.")
+
+    for key in ("date-range", "from-date-range"):
+        if key in tab_state and tab_state[key].strip():
+            valid, err = validate_date_range_func(tab_state[key])
+            if not valid:
+                res.errors.append(f"Invalid date range format: {err}")
+
+    return res
+
+
+_PAUSE_JOBS_WARNING = (
+    "Job pausing disabled: no Admin API Key is configured. "
+    "Set an Admin API Key in the Configuration tab to enable "
+    "pausing of Immich background jobs during upload."
+)
+
+
+def collect_safety_warnings(
+    tab_key: str,
+    config_state: dict,
+    advanced_state: dict | None = None,
+) -> list[str]:
+    """Return safety warnings (e.g. forced pause-jobs disable) without building a full plan."""
+    if tab_key not in UPLOAD_TABS and tab_key != "stack":
+        return []
+
+    if config_state.get("admin_api_key", "").strip():
+        return []
+
+    if isinstance(advanced_state, dict):
+        pause_entry = advanced_state.get("pause-immich-jobs", {})
+        if (
+            isinstance(pause_entry, dict)
+            and pause_entry.get("enabled")
+            and not pause_entry.get("value")
+        ):
+            return []
+
+    return [_PAUSE_JOBS_WARNING]
+
+
 def build_plan_from_state(
     tab_key: str,
     config_state: dict,
@@ -510,6 +611,13 @@ def build_plan_from_state(
     )
 
     # ── 1. Structural flags ──────────────────────────────────
+    if tab_key == "archive-immich" and config_state.get("skip-ssl"):
+        emitter.add_flag("from-skip-verify-ssl", source="always")
+        plan.warnings.append(
+            "Source SSL verification is disabled. "
+            "Use only on trusted networks or self-hosted test servers."
+        )
+
     if tab_key not in SERVERLESS_TABS and tab_key != "archive-immich":
         if server:
             emitter.add_option("server", normalize_server_url(server), source="always")
@@ -543,6 +651,7 @@ def build_plan_from_state(
     # ── 3. Advanced rows (emit ONLY if enabled) ────────────────
     if advanced_state is not None:
         from .advanced_flags import apply_advanced_flags_to_plan
+
         apply_advanced_flags_to_plan(
             plan=plan,
             emitter=emitter,
@@ -562,16 +671,23 @@ def build_plan_from_state(
     # ── 6. Safety: pause-jobs without admin key ────────────────
     if tab_key in UPLOAD_TABS or tab_key == "stack":
         has_pause = any(
-            emitter._flag_name_from_arg(o) == "pause-immich-jobs"
-            for o in emitter.opts
+            emitter._flag_name_from_arg(o) == "pause-immich-jobs" for o in emitter.opts
         )
-        if not has_pause and not admin_api_key:
+        if not admin_api_key:
+            pause_opts = [
+                o
+                for o in emitter.opts
+                if emitter._flag_name_from_arg(o) == "pause-immich-jobs"
+            ]
+            user_set_false = any(o.endswith("=false") for o in pause_opts)
+            emitter.opts = [
+                o
+                for o in emitter.opts
+                if emitter._flag_name_from_arg(o) != "pause-immich-jobs"
+            ]
             emitter.add_bool_val("pause-immich-jobs", False, source="safety")
-            plan.warnings.append(
-                "Job pausing disabled: no Admin API Key is configured. "
-                "Set an Admin API Key in the Configuration tab to enable "
-                "pausing of Immich background jobs during upload."
-            )
+            if not user_set_false:
+                plan.warnings.append(_PAUSE_JOBS_WARNING)
 
     if emitter.errors:
         plan.errors.extend(emitter.errors)

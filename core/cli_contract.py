@@ -14,7 +14,23 @@ from .cli_help import (
     parse_help_flags,
     help_name_for_tab,
 )
-from .cli_schema import TAB_ALLOWED_FLAGS, TAB_KEYS, COMPATIBILITY_MATRIX
+from .cli_schema import TAB_ALLOWED_FLAGS, COMPATIBILITY_MATRIX
+
+
+IGNORED_UPSTREAM_FLAGS = frozenset(
+    {
+        "api-key",
+        "admin-api-key",
+        "from-api-key",
+        "from-admin-api-key",
+        "config",
+        "save-config",
+        "log-file",
+        "log-type",
+        "help",
+        "no-ui",
+    }
+)
 
 
 @dataclass
@@ -35,7 +51,7 @@ def check_fixtures(version: str = TESTED_IMMICH_GO_VERSION) -> CompatibilityRepo
     matrix_entry = COMPATIBILITY_MATRIX.get(version, {})
     report.notes = matrix_entry.get("notes", "")
 
-    fixtures_dir = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "cli_help" / version
+    fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "cli_help" / version
     if not fixtures_dir.exists():
         report.supported = False
         report.notes += f"\n[Error] CLI help fixtures directory for version {version} does not exist."
@@ -52,7 +68,7 @@ def check_fixtures(version: str = TESTED_IMMICH_GO_VERSION) -> CompatibilityRepo
             continue
 
         missing = set(gui_allowed) - fixture_flags
-        unknown = fixture_flags - set(gui_allowed)
+        unknown = fixture_flags - set(gui_allowed) - IGNORED_UPSTREAM_FLAGS
 
         if missing:
             report.missing_flags_by_tab[tab_key] = missing
@@ -92,7 +108,9 @@ def collect_bool_defaults_from_binary(binary_path: Path) -> dict[str, dict[str, 
     return result
 
 
-def check_binary_help(binary_path: Path, version: str = TESTED_IMMICH_GO_VERSION) -> CompatibilityReport:
+def check_binary_help(
+    binary_path: Path, version: str = TESTED_IMMICH_GO_VERSION
+) -> CompatibilityReport:
     """Runs --help on target subcommands of live binary and compares against GUI allowlists."""
     report = CompatibilityReport(version=version)
     matrix_entry = COMPATIBILITY_MATRIX.get(version, {})
@@ -110,7 +128,7 @@ def check_binary_help(binary_path: Path, version: str = TESTED_IMMICH_GO_VERSION
             continue
 
         missing = set(gui_allowed) - binary_flags
-        unknown = binary_flags - set(gui_allowed)
+        unknown = binary_flags - set(gui_allowed) - IGNORED_UPSTREAM_FLAGS
 
         if missing:
             report.missing_flags_by_tab[tab_key] = missing

@@ -6,7 +6,6 @@ or perform any file I/O or network operations.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class VersionSupport(str, Enum):
@@ -26,6 +25,7 @@ class UpdateSeverity(str, Enum):
 @dataclass
 class ValidationResult:
     """Structured validation output for form states."""
+
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -37,6 +37,7 @@ class ValidationResult:
 @dataclass
 class CommandPlan:
     """Represents a fully resolved immich-go execution plan."""
+
     argv: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     display_argv: list[str] = field(default_factory=list)
@@ -51,6 +52,7 @@ class CommandPlan:
 @dataclass
 class BinaryStatus:
     """Status details for an immich-go binary."""
+
     state: str  # "ok" | "warn" | "err"
     card_text: str
     version_text: str
@@ -61,6 +63,7 @@ class BinaryStatus:
 @dataclass
 class UpdateDecision:
     """Evaluation result for a software update attempt."""
+
     allowed: bool
     requires_confirmation: bool
     severity: UpdateSeverity
@@ -72,6 +75,7 @@ class UpdateDecision:
 @dataclass
 class AppConfig:
     """Application user configuration model."""
+
     schema_version: int = 2
 
     profile_name: str = "default"

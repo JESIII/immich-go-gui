@@ -1,4 +1,5 @@
 """Tests for unified flag registry (core/flags.toml and core/flag_registry.py)."""
+
 import pytest
 
 from core.flag_registry import REGISTRY
@@ -7,25 +8,42 @@ from core.flag_registry import REGISTRY
 def test_registry_loads():
     assert len(REGISTRY.tabs) == 11
     assert REGISTRY.serverless_tabs == {
-        "archive-folder", "archive-gp", "archive-icloud", "archive-picasa"
+        "archive-folder",
+        "archive-gp",
+        "archive-icloud",
+        "archive-picasa",
     }
     assert REGISTRY.server_required_tabs == {
-        "upload-folder", "upload-gp", "upload-icloud", "upload-picasa",
-        "upload-immich", "archive-immich", "stack"
+        "upload-folder",
+        "upload-gp",
+        "upload-icloud",
+        "upload-picasa",
+        "upload-immich",
+        "archive-immich",
+        "stack",
     }
 
 
 def test_registry_flag_counts_match_docs():
     """Counts must match docs/reference/cli-command-mapping.md."""
     expected = {
-        "upload-folder": 30, "upload-gp": 33, "upload-icloud": 31,
-        "upload-picasa": 31, "upload-immich": 45, "archive-folder": 17,
-        "archive-gp": 20, "archive-icloud": 18, "archive-picasa": 18,
-        "archive-immich": 31, "stack": 16,
+        "upload-folder": 30,
+        "upload-gp": 33,
+        "upload-icloud": 31,
+        "upload-picasa": 31,
+        "upload-immich": 45,
+        "archive-folder": 17,
+        "archive-gp": 20,
+        "archive-icloud": 18,
+        "archive-picasa": 18,
+        "archive-immich": 31,
+        "stack": 16,
     }
     for tab, count in expected.items():
         allowed = REGISTRY.allowed_flags(tab)
-        assert len(allowed) == count, f"Tab {tab}: expected {count}, got {len(allowed)}: {sorted(allowed)}"
+        assert (
+            len(allowed) == count
+        ), f"Tab {tab}: expected {count}, got {len(allowed)}: {sorted(allowed)}"
 
 
 def test_upload_picasa_folder_album_not_stripped_in_simple_mode(gui):

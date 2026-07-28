@@ -4,6 +4,7 @@ Pure Python module, Qt-free.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import shlex
@@ -14,8 +15,6 @@ import tempfile
 
 from .process_tracker import update_lock
 
-
-from datetime import datetime, timezone
 
 @dataclass
 class LaunchResult:
@@ -51,6 +50,38 @@ def _quote_sh_env_val(val: str) -> str:
     return "'" + val.replace("'", "'\"'\"'") + "'"
 
 
+def _resolve_command_binary(command: list[str]) -> list[str]:
+    """Resolve the binary path (argv[0]) to an absolute path when possible."""
+    if not command:
+        return command
+    try:
+        resolved = Path(command[0]).expanduser().resolve()
+        if resolved.is_file():
+            return [str(resolved)] + command[1:]
+    except OSError:
+        pass
+    return command
+
+
+def _write_posix_env_file(env_dir: Path, env: dict[str, str]) -> Path | None:
+    """Write IMMICH_GO_* secrets to a restricted env.sh file for sourcing in run.sh."""
+    immich_vars = {k: v for k, v in env.items() if k.startswith("IMMICH_GO_") and v}
+    if not immich_vars:
+        return None
+
+    env_sh = env_dir / "env.sh"
+    lines = ["#!/usr/bin/env bash\n"]
+    for key, val in sorted(immich_vars.items()):
+        lines.append(f"export {key}={_quote_sh_env_val(val)}\n")
+    env_sh.write_text("".join(lines), encoding="utf-8")
+    if os.name == "posix":
+        try:
+            os.chmod(env_sh, 0o600)
+        except OSError:
+            pass
+    return env_sh
+
+
 def launch_external_terminal(
     command: list[str],
     env: dict[str, str],
@@ -59,8 +90,11 @@ def launch_external_terminal(
 ) -> LaunchResult:
     """Launches command in an external terminal window without exposing secrets on CLI."""
     if not command:
-        return LaunchResult(ok=False, message="Empty command passed to terminal launcher.")
+        return LaunchResult(
+            ok=False, message="Empty command passed to terminal launcher."
+        )
 
+    command = _resolve_command_binary(command)
     l_path = Path(lock_path).resolve()
 
     if sys.platform.startswith("win"):
@@ -76,7 +110,7 @@ def launch_external_terminal(
                 f'set "HB_FILE={hb_path}"\r\n'
                 f'start /b cmd /c "for /L %%i in (1,1,999999) do ('
                 f'type nul > "%HB_FILE%" 2>nul & '
-                f'timeout /t 10 /nobreak >nul & '
+                f"timeout /t 10 /nobreak >nul & "
                 f'if not exist "%LOCK_FILE%" exit)"\r\n'
                 f"{cmd_str}\r\n"
                 f"set ERR=%ERRORLEVEL%\r\n"
@@ -93,21 +127,19 @@ def launch_external_terminal(
             bat_path.write_text(bat_content, encoding="utf-8")
 
             CREATE_NEW_CONSOLE = 0x00000010
-            # Use the list form so Python's subprocess.list2cmdline() correctly
-            # quotes any path tokens that contain spaces (e.g. user profile
-            # paths like C:\Users\John Doe\AppData\...). Do NOT use shell=True
-            # here: shell=True wraps the command inside `cmd.exe /c`, and when
-            # combined with CREATE_NEW_CONSOLE the resulting console window is
-            # not visible to the user.
             proc = subprocess.Popen(
                 ["cmd", "/k", str(bat_path)],
                 creationflags=CREATE_NEW_CONSOLE,
                 env=env,
             )
             update_lock(l_path, terminal_pid=proc.pid)
-            return LaunchResult(ok=True, message="External terminal launched successfully.")
+            return LaunchResult(
+                ok=True, message="External terminal launched successfully."
+            )
         except Exception as e:
-            return LaunchResult(ok=False, message=f"Failed to launch Windows terminal: {str(e)}")
+            return LaunchResult(
+                ok=False, message=f"Failed to launch Windows terminal: {str(e)}"
+            )
 
     # Linux / macOS POSIX execution
     try:
@@ -122,11 +154,23 @@ def launch_external_terminal(
                 pass
 
         run_sh_path = temp_dir / "run.sh"
+        env_sh_path = _write_posix_env_file(temp_dir, env)
 
         pid_file_path = l_path.with_suffix(".pid")
         hb_file_path = l_path.with_suffix(".heartbeat")
 
         cmd_quoted = " ".join(shlex.quote(c) for c in command)
+        env_setup = ""
+        if env_sh_path is not None:
+            env_setup = (
+                f"ENV_FILE={shlex.quote(str(env_sh_path))}\n"
+                'if [ -f "$ENV_FILE" ]; then\n'
+                "  # shellcheck source=/dev/null\n"
+                '  source "$ENV_FILE"\n'
+                '  rm -f "$ENV_FILE"\n'
+                "fi\n"
+            )
+
         run_sh_content = (
             "#!/usr/bin/env bash\n"
             f"PID_FILE={shlex.quote(str(pid_file_path))}\n"
@@ -134,6 +178,7 @@ def launch_external_terminal(
             f"LOCK_FILE={shlex.quote(str(l_path))}\n"
             f"TEMP_DIR={shlex.quote(str(temp_dir))}\n"
             "\n"
+            f"{env_setup}"
             'echo $$ > "$PID_FILE"\n'
             "(\n"
             "  while true; do\n"
@@ -152,11 +197,11 @@ def launch_external_terminal(
             '  rm -f "$PID_FILE" "$HB_FILE" "$LOCK_FILE"\n'
             "}\n"
             "\n"
-            "trap cleanup EXIT INT TERM\n"
+            "trap cleanup EXIT INT TERM HUP\n"
             f"{cmd_quoted}\n"
             "code=$?\n"
             "\n"
-            "trap - EXIT INT TERM\n"
+            "trap - EXIT INT TERM HUP\n"
             "cleanup\n"
             "\n"
             'echo ""\n'
@@ -177,9 +222,12 @@ def launch_external_terminal(
             proc = subprocess.Popen(
                 [
                     "osascript",
-                    "-e", "on run argv",
-                    "-e", 'tell application "Terminal" to do script (item 1 of argv)',
-                    "-e", "end run",
+                    "-e",
+                    "on run argv",
+                    "-e",
+                    'tell application "Terminal" to do script (item 1 of argv)',
+                    "-e",
+                    "end run",
                     str(run_sh_path),
                 ],
                 env=posix_env,
@@ -192,30 +240,37 @@ def launch_external_terminal(
         if preferred_terminal and preferred_terminal != "auto":
             terminals_to_try.append(preferred_terminal)
 
-        terminals_to_try.extend([
-            "x-terminal-emulator",
-            "gnome-terminal",
-            "konsole",
-            "xfce4-terminal",
-            "xterm",
-        ])
+        terminals_to_try.extend(
+            [
+                "x-terminal-emulator",
+                "gnome-terminal",
+                "konsole",
+                "xfce4-terminal",
+                "xterm",
+            ]
+        )
 
         launched_proc = None
         for term in terminals_to_try:
             if shutil.which(term):
                 try:
                     if term == "gnome-terminal":
-                        launched_proc = subprocess.Popen([term, "--", str(run_sh_path)], env=posix_env)
+                        launched_proc = subprocess.Popen(
+                            [term, "--", str(run_sh_path)], env=posix_env
+                        )
                     elif term == "xterm":
-                        launched_proc = subprocess.Popen([term, "-hold", "-e", str(run_sh_path)], env=posix_env)
+                        launched_proc = subprocess.Popen(
+                            [term, "-hold", "-e", str(run_sh_path)], env=posix_env
+                        )
                     else:
-                        launched_proc = subprocess.Popen([term, "-e", str(run_sh_path)], env=posix_env)
+                        launched_proc = subprocess.Popen(
+                            [term, "-e", str(run_sh_path)], env=posix_env
+                        )
                     break
                 except Exception:
                     continue
 
         if not launched_proc:
-            # Fallback cleanup on launch failure
             try:
                 if l_path.exists():
                     l_path.unlink()

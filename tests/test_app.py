@@ -13,14 +13,9 @@ from app import (
     SecretStore,
     DroppablePlainTextEdit,
     CommandPlan,
-    ValidationResult,
     normalize_server_url,
     validate_date_range,
-    load_binary_metadata,
-    save_binary_metadata,
-    get_binary_path,
 )
-from PySide6.QtWidgets import QApplication, QLineEdit, QPlainTextEdit
 from PySide6.QtCore import QUrl, Qt, QMimeData, QPointF
 from PySide6.QtGui import QDropEvent
 
@@ -29,13 +24,18 @@ from PySide6.QtGui import QDropEvent
 # 1. PURE LOGIC TESTS (Decoupled from GUI - Fast & Reliable)
 # ==============================================================================
 
+
 def test_collect_paths_single_file():
-    assert _norm_argv(collect_paths("/path/to/file.zip")) == _norm_argv(["/path/to/file.zip"])
+    assert _norm_argv(collect_paths("/path/to/file.zip")) == _norm_argv(
+        ["/path/to/file.zip"]
+    )
 
 
 def test_collect_paths_multiline():
     text = "/path/one.zip\n\n/path/two.zip\n"
-    assert _norm_argv(collect_paths(text)) == _norm_argv(["/path/one.zip", "/path/two.zip"])
+    assert _norm_argv(collect_paths(text)) == _norm_argv(
+        ["/path/one.zip", "/path/two.zip"]
+    )
 
 
 def test_collect_paths_glob_expansion(tmp_path):
@@ -56,7 +56,10 @@ def test_normalize_server_url_strips_trailing_slash():
 
 
 def test_normalize_server_url_preserves_https():
-    assert normalize_server_url("https://photos.example.com/") == "https://photos.example.com"
+    assert (
+        normalize_server_url("https://photos.example.com/")
+        == "https://photos.example.com"
+    )
 
 
 def test_normalize_server_url_empty():
@@ -65,8 +68,14 @@ def test_normalize_server_url_empty():
 
 
 def test_mask_command_for_display():
-    cmd = ["immich-go", "upload", "from-folder",
-           "--server=http://local", "--api-key=super_secret_123", "/photos"]
+    cmd = [
+        "immich-go",
+        "upload",
+        "from-folder",
+        "--server=http://local",
+        "--api-key=super_secret_123",
+        "/photos",
+    ]
     masked = mask_command_for_display(cmd)
     assert "--api-key=super_secret_123" not in masked
     assert "--api-key=********" in masked
@@ -183,16 +192,17 @@ def test_build_environment_upload_immich(gui):
 # 2. GUI SMOKE TESTS (Using qtbot, decoupled from internal dict structure)
 # ==============================================================================
 
+
 def test_tab_switching_updates_crumb(gui):
     gui.stacked_widget.setCurrentIndex(1)  # Upload page
-    gui.upload_tabs.setCurrentIndex(1)    # Google Takeout sub-tab
+    gui.upload_tabs.setCurrentIndex(1)  # Google Takeout sub-tab
     assert gui.lbl_crumb.text() == "upload · from-google-photos"
 
-    gui.upload_tabs.setCurrentIndex(4)    # From Immich sub-tab
+    gui.upload_tabs.setCurrentIndex(4)  # From Immich sub-tab
     assert gui.lbl_crumb.text() == "upload · from-immich"
 
     gui.stacked_widget.setCurrentIndex(2)  # Archive page
-    gui.archive_tabs.setCurrentIndex(4)    # Archive Server sub-tab
+    gui.archive_tabs.setCurrentIndex(4)  # Archive Server sub-tab
     assert gui.lbl_crumb.text() == "archive · from-immich"
 
 
@@ -202,8 +212,11 @@ def test_droppable_plain_text_edit_drop(qapp, qtbot):
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile("/path/a.zip"), QUrl.fromLocalFile("/path/b.zip")])
     event = QDropEvent(
-        QPointF(0, 0), Qt.DropAction.CopyAction, mime,
-        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier
+        QPointF(0, 0),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
     )
     edit.dropEvent(event)
     assert edit.toPlainText() == "/path/a.zip\n/path/b.zip"
@@ -213,10 +226,12 @@ def test_global_flag_ordering(gui):
     """Global opts (--log-level) must appear in subcommand options when enabled in advanced flags."""
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(0)     # upload-folder
+    gui.upload_tabs.setCurrentIndex(0)  # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
-    gui.adv_rows["upload-folder"]["log-level"].set_state({"enabled": True, "value": "DEBUG"})
+    gui.adv_rows["upload-folder"]["log-level"].set_state(
+        {"enabled": True, "value": "DEBUG"}
+    )
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=False)
     assert "--log-level=DEBUG" in opts
@@ -225,7 +240,7 @@ def test_global_flag_ordering(gui):
 def test_pause_jobs_not_on_archive(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
-    gui.archive_tabs.setCurrentIndex(0)    # archive-folder
+    gui.archive_tabs.setCurrentIndex(0)  # archive-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["archive-folder"]["path"].setText("/src")
@@ -250,11 +265,13 @@ def test_pause_jobs_auto_disables_on_stack_without_admin_key(gui):
 def test_on_errors_emitted_when_configured(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
-    gui.archive_tabs.setCurrentIndex(4)    # archive-immich
+    gui.archive_tabs.setCurrentIndex(4)  # archive-immich
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["archive-immich"]["write-to"].setText("/dst")
-    gui.adv_rows["archive-immich"]["on-errors"].set_state({"enabled": True, "value": "continue"})
+    gui.adv_rows["archive-immich"]["on-errors"].set_state(
+        {"enabled": True, "value": "continue"}
+    )
     opts = gui.build_command(dry_run=False)
     assert "--on-errors=continue" in opts
 
@@ -262,10 +279,12 @@ def test_on_errors_emitted_when_configured(gui):
 def test_client_timeout_emitted(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(0)     # upload-folder
+    gui.upload_tabs.setCurrentIndex(0)  # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
-    gui.adv_rows["upload-folder"]["client-timeout"].set_state({"enabled": True, "value": 60})
+    gui.adv_rows["upload-folder"]["client-timeout"].set_state(
+        {"enabled": True, "value": 60}
+    )
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=False)
     assert "--client-timeout=60m" in opts
@@ -274,7 +293,7 @@ def test_client_timeout_emitted(gui):
 def test_device_uuid_emitted(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(0)     # upload-folder
+    gui.upload_tabs.setCurrentIndex(0)  # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.adv_rows["upload-folder"]["device-uuid"].set_state(
@@ -288,7 +307,7 @@ def test_device_uuid_emitted(gui):
 def test_api_trace_on_upload_gp(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(1)     # upload-gp
+    gui.upload_tabs.setCurrentIndex(1)  # upload-gp
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-gp"]["path"].setPlainText("/takeout")
@@ -310,19 +329,21 @@ def test_api_trace_on_stack(gui):
 def test_from_client_timeout(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(4)     # upload-immich
+    gui.upload_tabs.setCurrentIndex(4)  # upload-immich
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-immich"]["from-server"].setText("http://old:2283")
     gui.inputs["upload-immich"]["from-api-key"].setText("old-key")
-    gui.adv_rows["upload-immich"]["from-client-timeout"].set_state({"enabled": True, "value": 60})
+    gui.adv_rows["upload-immich"]["from-client-timeout"].set_state(
+        {"enabled": True, "value": 60}
+    )
     opts = gui.build_command(dry_run=False)
     assert "--from-client-timeout=60m" in opts
 
 
 def test_gp_multi_path(gui):
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(1)     # upload-gp
+    gui.upload_tabs.setCurrentIndex(1)  # upload-gp
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-gp"]["path"].setPlainText("/takeout-001.zip\n/takeout-002.zip")
@@ -331,10 +352,21 @@ def test_gp_multi_path(gui):
     assert "/takeout-002.zip" in opts
 
 
+def test_archive_immich_global_skip_ssl(gui):
+    gui.inputs["config"]["skip-ssl"].setChecked(True)
+    gui.stacked_widget.setCurrentIndex(2)
+    gui.archive_tabs.setCurrentIndex(4)
+    gui.inputs["config"]["server"].setText("http://local:2283")
+    gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["archive-immich"]["write-to"].setText("/backup")
+    opts = gui.build_command(dry_run=True)
+    assert "--from-skip-verify-ssl" in opts
+
+
 def test_global_skip_ssl_option(gui):
     gui.inputs["config"]["skip-ssl"].setChecked(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(0)     # upload-folder
+    gui.upload_tabs.setCurrentIndex(0)  # upload-folder
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
@@ -368,6 +400,7 @@ def test_secret_store_migration():
 # 3. EXISTING TESTS (adapted for 4-page navigation structure)
 # ==============================================================================
 
+
 def test_build_command_stack(gui):
     gui.stacked_widget.setCurrentIndex(3)  # stack
     gui.inputs["config"]["server"].setText("http://stack:2283")
@@ -395,7 +428,7 @@ def test_api_trace_on_stack_disabled(gui):
 def test_build_command_upload_immich(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
-    gui.upload_tabs.setCurrentIndex(4)     # upload-immich sub-tab
+    gui.upload_tabs.setCurrentIndex(4)  # upload-immich sub-tab
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("local-key")
     gui.inputs["upload-immich"]["from-server"].setText("http://remote:2283")
@@ -403,18 +436,42 @@ def test_build_command_upload_immich(gui):
     # from-date-range and from-albums are now simple-mode controls
     gui.inputs["upload-immich"]["from-date-range"].setText("2020-01-01,2021-01-01")
     gui.inputs["upload-immich"]["from-albums"].setText("Album1, Album2")
-    gui.adv_rows["upload-immich"]["from-favorite"].set_state({"enabled": True, "value": True})
-    gui.adv_rows["upload-immich"]["from-archived"].set_state({"enabled": True, "value": True})
-    gui.adv_rows["upload-immich"]["from-trash"].set_state({"enabled": True, "value": True})
-    gui.adv_rows["upload-immich"]["from-minimal-rating"].set_state({"enabled": True, "value": 3})
-    gui.adv_rows["upload-immich"]["from-people"].set_state({"enabled": True, "value": "John, Jane"})
-    gui.adv_rows["upload-immich"]["from-tags"].set_state({"enabled": True, "value": "Vacation, Family"})
-    gui.adv_rows["upload-immich"]["from-city"].set_state({"enabled": True, "value": "Paris"})
-    gui.adv_rows["upload-immich"]["from-state"].set_state({"enabled": True, "value": "IDF"})
-    gui.adv_rows["upload-immich"]["from-country"].set_state({"enabled": True, "value": "France"})
-    gui.adv_rows["upload-immich"]["from-make"].set_state({"enabled": True, "value": "Apple"})
-    gui.adv_rows["upload-immich"]["from-model"].set_state({"enabled": True, "value": "iPhone 13"})
-    gui.adv_rows["upload-immich"]["from-skip-ssl"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-immich"]["from-favorite"].set_state(
+        {"enabled": True, "value": True}
+    )
+    gui.adv_rows["upload-immich"]["from-archived"].set_state(
+        {"enabled": True, "value": True}
+    )
+    gui.adv_rows["upload-immich"]["from-trash"].set_state(
+        {"enabled": True, "value": True}
+    )
+    gui.adv_rows["upload-immich"]["from-minimal-rating"].set_state(
+        {"enabled": True, "value": 3}
+    )
+    gui.adv_rows["upload-immich"]["from-people"].set_state(
+        {"enabled": True, "value": "John, Jane"}
+    )
+    gui.adv_rows["upload-immich"]["from-tags"].set_state(
+        {"enabled": True, "value": "Vacation, Family"}
+    )
+    gui.adv_rows["upload-immich"]["from-city"].set_state(
+        {"enabled": True, "value": "Paris"}
+    )
+    gui.adv_rows["upload-immich"]["from-state"].set_state(
+        {"enabled": True, "value": "IDF"}
+    )
+    gui.adv_rows["upload-immich"]["from-country"].set_state(
+        {"enabled": True, "value": "France"}
+    )
+    gui.adv_rows["upload-immich"]["from-make"].set_state(
+        {"enabled": True, "value": "Apple"}
+    )
+    gui.adv_rows["upload-immich"]["from-model"].set_state(
+        {"enabled": True, "value": "iPhone 13"}
+    )
+    gui.adv_rows["upload-immich"]["from-skip-ssl"].set_state(
+        {"enabled": True, "value": True}
+    )
     opts = gui.build_command(dry_run=False)
     assert "upload" in opts
     assert "from-immich" in opts
@@ -443,11 +500,13 @@ def test_build_command_upload_immich(gui):
 def test_build_command_archive_folder(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
-    gui.archive_tabs.setCurrentIndex(0)    # archive-folder sub-tab
+    gui.archive_tabs.setCurrentIndex(0)  # archive-folder sub-tab
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["archive-folder"]["path"].setText("/source/folder")
     gui.inputs["archive-folder"]["write-to"].setText("/dest/folder")
-    gui.adv_rows["archive-folder"]["date-range"].set_state({"enabled": True, "value": "2024-01-01,2024-02-01"})
+    gui.adv_rows["archive-folder"]["date-range"].set_state(
+        {"enabled": True, "value": "2024-01-01,2024-02-01"}
+    )
     opts = _norm_argv(gui.build_command(dry_run=True))
     assert "archive" in opts
     assert "from-folder" in opts
@@ -461,7 +520,7 @@ def test_build_command_archive_folder(gui):
 def test_build_command_archive_immich(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
-    gui.archive_tabs.setCurrentIndex(4)    # archive-immich sub-tab
+    gui.archive_tabs.setCurrentIndex(4)  # archive-immich sub-tab
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["archive-immich"]["write-to"].setText("/dest/folder")
@@ -480,43 +539,58 @@ def test_build_command_archive_immich(gui):
 def test_browse_takeout_zips(gui):
     gui.stacked_widget.setCurrentIndex(1)
     gui.upload_tabs.setCurrentIndex(1)
-    with patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames", return_value=(["/path/a.zip", "/path/b.zip"], "")):
+    with patch(
+        "PySide6.QtWidgets.QFileDialog.getOpenFileNames",
+        return_value=(["/path/a.zip", "/path/b.zip"], ""),
+    ):
         gui.browse_takeout_zips()
-        assert gui.inputs["upload-gp"]["path"].toPlainText() == "/path/a.zip\n/path/b.zip"
+        assert (
+            gui.inputs["upload-gp"]["path"].toPlainText() == "/path/a.zip\n/path/b.zip"
+        )
 
 
 def test_browse_folder_upload(gui):
     gui.stacked_widget.setCurrentIndex(1)
     gui.upload_tabs.setCurrentIndex(0)
-    with patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/selected/folder"):
+    with patch(
+        "PySide6.QtWidgets.QFileDialog.getExistingDirectory",
+        return_value="/selected/folder",
+    ):
         gui.browse_folder_upload()
         assert gui.inputs["upload-folder"]["path"].text() == "/selected/folder"
 
 
 def test_native_dialog_options_passed(gui):
-    with patch("PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/test/path") as mock_get_dir:
+    with patch(
+        "PySide6.QtWidgets.QFileDialog.getExistingDirectory", return_value="/test/path"
+    ) as mock_get_dir:
         gui._browse_into(MagicMock(), "Test Caption")
         mock_get_dir.assert_called_once()
         from PySide6.QtWidgets import QFileDialog
+
         args, kwargs = mock_get_dir.call_args
-        assert args[3] == QFileDialog.Option.ShowDirsOnly or kwargs.get("options") == QFileDialog.Option.ShowDirsOnly
+        assert (
+            args[3] == QFileDialog.Option.ShowDirsOnly
+            or kwargs.get("options") == QFileDialog.Option.ShowDirsOnly
+        )
 
 
 # ==============================================================================
 # GOLDEN COMMAND TESTS (§4.2)
 # ==============================================================================
 
+
 def _norm_argv(argv):
     normed = []
     for arg in argv:
-        clean = str(arg).replace('\\', '/')
-        if '=' in clean:
-            key, val = clean.split('=', 1)
-            if len(val) >= 2 and val[1] == ':' and val[0].isalpha():
+        clean = str(arg).replace("\\", "/")
+        if "=" in clean:
+            key, val = clean.split("=", 1)
+            if len(val) >= 2 and val[1] == ":" and val[0].isalpha():
                 val = val[2:]
             clean = f"{key}={val}"
         else:
-            if len(clean) >= 2 and clean[1] == ':' and clean[0].isalpha():
+            if len(clean) >= 2 and clean[1] == ":" and clean[0].isalpha():
                 clean = clean[2:]
         normed.append(clean)
     return normed
@@ -534,11 +608,14 @@ def test_golden_upload_folder(gui):
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "upload", "from-folder",
-        "--server=http://localhost:2283",
-        "/photos",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "upload",
+            "from-folder",
+            "--server=http://localhost:2283",
+            "/photos",
+        ]
+    )
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "test-key"
     assert not any("--api-key" in p for p in plan.argv)
 
@@ -555,12 +632,15 @@ def test_golden_upload_gp(gui):
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "upload", "from-google-photos",
-        "--server=http://localhost:2283",
-        "/takeout-001.zip",
-        "/takeout-002.zip",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "upload",
+            "from-google-photos",
+            "--server=http://localhost:2283",
+            "/takeout-001.zip",
+            "/takeout-002.zip",
+        ]
+    )
 
 
 def test_golden_stack(gui):
@@ -576,11 +656,13 @@ def test_golden_stack(gui):
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "stack",
-        "--server=http://localhost:2283",
-        "--manage-burst=Stack",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "stack",
+            "--server=http://localhost:2283",
+            "--manage-burst=Stack",
+        ]
+    )
 
 
 def test_golden_stack_advanced_with_date_range(gui):
@@ -591,16 +673,20 @@ def test_golden_stack_advanced_with_date_range(gui):
     gui.inputs["config"]["api_key"].setText("test-key")
     gui.inputs["config"]["admin_api_key"].setText("admin-key")  # prevent auto-disable
     gui.inputs["stack"]["manage-burst"].setCurrentText("Stack")
-    gui.adv_rows["stack"]["date-range"].set_state({"enabled": True, "value": "2023-01-01,2023-12-31"})
+    gui.adv_rows["stack"]["date-range"].set_state(
+        {"enabled": True, "value": "2023-01-01,2023-12-31"}
+    )
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "stack",
-        "--server=http://localhost:2283",
-        "--manage-burst=Stack",
-        "--date-range=2023-01-01,2023-12-31",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "stack",
+            "--server=http://localhost:2283",
+            "--manage-burst=Stack",
+            "--date-range=2023-01-01,2023-12-31",
+        ]
+    )
 
 
 def test_golden_archive_folder(gui):
@@ -613,12 +699,15 @@ def test_golden_archive_folder(gui):
 
     plan = gui.build_plan(dry_run=True)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "archive", "from-folder",
-        "--write-to-folder=/organized",
-        "--dry-run",
-        "/messy/photos",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "archive",
+            "from-folder",
+            "--write-to-folder=/organized",
+            "--dry-run",
+            "/messy/photos",
+        ]
+    )
     assert not any("--server" in p for p in plan.argv)
 
 
@@ -637,11 +726,14 @@ def test_golden_upload_immich(gui):
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "upload", "from-immich",
-        "--server=http://new:2283",
-        "--from-server=http://old:2283",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "upload",
+            "from-immich",
+            "--server=http://new:2283",
+            "--from-server=http://old:2283",
+        ]
+    )
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "new-key"
     assert plan.env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY") == "old-key"
 
@@ -659,11 +751,14 @@ def test_golden_archive_immich(gui):
 
     plan = gui.build_plan(dry_run=False)
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "archive", "from-immich",
-        "--from-server=http://localhost:2283",
-        "--write-to-folder=/backup/photos",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "archive",
+            "from-immich",
+            "--from-server=http://localhost:2283",
+            "--write-to-folder=/backup/photos",
+        ]
+    )
     assert plan.env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_API_KEY") == "test-key"
 
 
@@ -677,12 +772,24 @@ def test_simple_mode_ignores_advanced_upload_folder_flags(gui):
     gui.inputs["config"]["api_key"].setText("key")
 
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["log-level"].set_state({"enabled": True, "value": "DEBUG"})
-    gui.adv_rows["upload-folder"]["recursive"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-folder"]["date-from-name"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-folder"]["album-path-joiner"].set_state({"enabled": True, "value": "/"})
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({"enabled": True, "value": "UTC"})
-    gui.adv_rows["upload-folder"]["manage-epson"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-folder"]["log-level"].set_state(
+        {"enabled": True, "value": "DEBUG"}
+    )
+    gui.adv_rows["upload-folder"]["recursive"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-folder"]["date-from-name"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-folder"]["album-path-joiner"].set_state(
+        {"enabled": True, "value": "/"}
+    )
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {"enabled": True, "value": "UTC"}
+    )
+    gui.adv_rows["upload-folder"]["manage-epson"].set_state(
+        {"enabled": True, "value": True}
+    )
 
     plan = gui.build_plan(dry_run=True)
 
@@ -704,12 +811,24 @@ def test_advanced_mode_emits_advanced_upload_folder_flags(gui):
     gui.inputs["config"]["api_key"].setText("key")
 
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["log-level"].set_state({"enabled": True, "value": "DEBUG"})
-    gui.adv_rows["upload-folder"]["recursive"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-folder"]["date-from-name"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-folder"]["album-path-joiner"].set_state({"enabled": True, "value": "/"})
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({"enabled": True, "value": "UTC"})
-    gui.adv_rows["upload-folder"]["manage-epson"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-folder"]["log-level"].set_state(
+        {"enabled": True, "value": "DEBUG"}
+    )
+    gui.adv_rows["upload-folder"]["recursive"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-folder"]["date-from-name"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-folder"]["album-path-joiner"].set_state(
+        {"enabled": True, "value": "/"}
+    )
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {"enabled": True, "value": "UTC"}
+    )
+    gui.adv_rows["upload-folder"]["manage-epson"].set_state(
+        {"enabled": True, "value": True}
+    )
 
     plan = gui.build_plan(dry_run=True)
 
@@ -729,7 +848,9 @@ def test_simple_mode_ignores_advanced_stack_flags(gui):
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
 
-    gui.adv_rows["stack"]["date-range"].set_state({"enabled": True, "value": "2023-01-01,2023-12-31"})
+    gui.adv_rows["stack"]["date-range"].set_state(
+        {"enabled": True, "value": "2023-01-01,2023-12-31"}
+    )
     gui.adv_rows["stack"]["time-zone"].set_state({"enabled": True, "value": "UTC"})
     gui.adv_rows["stack"]["manage-epson"].set_state({"enabled": True, "value": True})
     gui.adv_rows["stack"]["api-trace"].set_state({"enabled": True, "value": True})
@@ -795,13 +916,15 @@ def test_build_plan_from_state_upload_folder_golden():
         base_env={},
     )
 
-    assert _norm_argv(plan.argv) == _norm_argv([
-        "upload",
-        "from-folder",
-        "--server=http://localhost:2283",
-        "--manage-burst=Stack",
-        "/photos",
-    ])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "upload",
+            "from-folder",
+            "--server=http://localhost:2283",
+            "--manage-burst=Stack",
+            "/photos",
+        ]
+    )
 
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "test-key"
     assert not any("--api-key" in part for part in plan.argv)
@@ -934,14 +1057,17 @@ def test_normalize_extensions_csv():
 
 
 def test_normalize_list_csv():
-    assert normalize_list_csv(" vacation, family/reunion , ") == ["vacation", "family/reunion"]
+    assert normalize_list_csv(" vacation, family/reunion , ") == [
+        "vacation",
+        "family/reunion",
+    ]
     assert normalize_list_csv("") == []
 
 
 def test_glob_and_path_validation(tmp_path):
     f1 = tmp_path / "photo1.jpg"
     f1.touch()
-    
+
     assert has_glob_pattern("*.jpg") is True
     assert has_glob_pattern("/path/to/file") is False
 
@@ -1008,36 +1134,48 @@ def test_network_connection_timeout():
 
 def test_check_preflight_server_connection_serverless():
     from core.network import check_preflight_server_connection
-    res = check_preflight_server_connection("archive-folder", {"server": "http://localhost:2283"})
+
+    res = check_preflight_server_connection(
+        "archive-folder", {"server": "http://localhost:2283"}
+    )
     assert res.ok is True
     assert "Serverless" in res.message
 
 
 def test_check_preflight_server_connection_success():
     from core.network import check_preflight_server_connection
+
     with patch("requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"version": "v1.100.0"}
         mock_get.return_value = mock_resp
 
-        res = check_preflight_server_connection("upload-folder", {"server": "http://localhost:2283", "api_key": "key"})
+        res = check_preflight_server_connection(
+            "upload-folder", {"server": "http://localhost:2283", "api_key": "key"}
+        )
         assert res.ok is True
 
 
 def test_check_preflight_server_connection_unreachable():
     from core.network import check_preflight_server_connection
+
     with patch("requests.get", side_effect=requests.exceptions.ConnectionError):
-        res = check_preflight_server_connection("upload-folder", {"server": "http://localhost:2283", "api_key": "key"})
+        res = check_preflight_server_connection(
+            "upload-folder", {"server": "http://localhost:2283", "api_key": "key"}
+        )
         assert res.ok is False
         assert "Failed to connect to server" in res.message
 
 
 def test_status_card_reflects_connection_test_failure(gui):
+    gui.stacked_widget.setCurrentIndex(0)
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
 
-    with patch("requests.get", side_effect=requests.exceptions.ConnectionError):
+    with patch("requests.get", side_effect=requests.exceptions.ConnectionError), patch(
+        "PySide6.QtWidgets.QMessageBox.warning"
+    ):
         gui.on_test_connection_clicked()
         assert gui._last_conn_test_ok is False
         assert "Connection Failed" in gui.status_card.txt_s.text()
@@ -1074,8 +1212,6 @@ from core.config_manager import (
     SecretStore,
     get_secret_with_fallback,
     save_secret_with_fallback,
-    load_secrets,
-    save_secrets,
 )
 
 
@@ -1241,8 +1377,6 @@ from core.process_tracker import (
     read_lock,
     is_lock_active,
     scan_locks,
-    cleanup_stale_locks,
-    reset_all_locks,
 )
 from core.terminal_launcher import launch_external_terminal
 
@@ -1293,8 +1427,6 @@ def test_terminal_launcher_posix_script_creation(tmp_path, monkeypatch):
 from core.cli_help import parse_help_flags, load_help_fixture, help_name_for_tab
 from core.cli_schema import (
     TAB_ALLOWED_FLAGS,
-    flag_allowed_for_tab,
-    assert_flag_allowed,
 )
 
 
@@ -1331,6 +1463,7 @@ def test_load_help_fixture():
 
 def test_all_tab_allowed_flags_exist_in_help_fixtures():
     from core.flag_registry import REGISTRY
+
     tabs = list(REGISTRY.tabs.keys())
     for tab_key in tabs:
         fixture_name = help_name_for_tab(tab_key)
@@ -1338,7 +1471,9 @@ def test_all_tab_allowed_flags_exist_in_help_fixtures():
         allowed_flags = TAB_ALLOWED_FLAGS[tab_key]
 
         for flag in allowed_flags:
-            assert flag in fixture_flags, f"Flag '--{flag}' registered in TAB_ALLOWED_FLAGS[{tab_key}] was not found in fixture '{fixture_name}'"
+            assert (
+                flag in fixture_flags
+            ), f"Flag '--{flag}' registered in TAB_ALLOWED_FLAGS[{tab_key}] was not found in fixture '{fixture_name}'"
 
 
 # ==============================================================================
@@ -1374,7 +1509,12 @@ def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
         res = launch_external_terminal(cmd, env, lock_path, preferred_terminal="auto")
         assert res.ok is True
 
-    temp_dirs = list(set(list(Path(tempfile.gettempdir()).glob("immich-go-run-*")) + list(Path("/tmp").glob("immich-go-run-*"))))
+    temp_dirs = list(
+        set(
+            list(Path(tempfile.gettempdir()).glob("immich-go-run-*"))
+            + list(Path("/tmp").glob("immich-go-run-*"))
+        )
+    )
     assert temp_dirs, "Expected POSIX launcher to create a temp run directory"
 
     latest_temp = max(temp_dirs, key=lambda d: d.stat().st_mtime)
@@ -1385,6 +1525,7 @@ def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
 
     assert 'SAFE_DIR="$HOME"' in content
     assert 'cd "$SAFE_DIR"' in content
+    assert "trap cleanup EXIT INT TERM HUP" in content
     assert f"cd '{latest_temp}'" not in content
     assert f"rm -rf '{latest_temp}'" not in content
 
@@ -1394,7 +1535,6 @@ def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
 # ==============================================================================
 
 import json
-from core.command_builder import build_plan_from_state
 
 
 def test_golden_json_fixtures():
@@ -1418,14 +1558,16 @@ def test_golden_json_fixtures():
             dry_run=False,
             advanced_state=advanced_state,
         )
-        assert _norm_argv(plan.argv) == _norm_argv(expected_argv), f"Fixture {jf.name} produced unexpected argv: {plan.argv} != {expected_argv}"
+        assert _norm_argv(plan.argv) == _norm_argv(
+            expected_argv
+        ), f"Fixture {jf.name} produced unexpected argv: {plan.argv} != {expected_argv}"
 
 
 # ==============================================================================
 # SECTION 3: CLI CORRECTNESS & COMPATIBILITY TESTS (MILESTONE 4)
 # ==============================================================================
 
-from core.cli_contract import check_fixtures, check_binary_help
+from core.cli_contract import check_fixtures
 
 
 def test_check_fixtures_compatibility():
@@ -1447,7 +1589,7 @@ def test_show_cli_compatibility_dialog(gui):
 # SECTION 3: CRITICAL FIX 2 & CRITICAL FIX 3 TESTS
 # ==============================================================================
 
-from core.command_builder import CommandPlan, build_environment, build_plan_from_state
+from core.command_builder import CommandPlan, build_environment
 
 
 def test_archive_immich_source_model_env():
@@ -1457,9 +1599,15 @@ def test_archive_immich_source_model_env():
         api_key="source-key",
         admin_api_key="source-admin-key",
     )
-    assert env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER") == "http://source-server:2283"
+    assert (
+        env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER")
+        == "http://source-server:2283"
+    )
     assert env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_API_KEY") == "source-key"
-    assert env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_ADMIN_API_KEY") == "source-admin-key"
+    assert (
+        env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_ADMIN_API_KEY")
+        == "source-admin-key"
+    )
     assert "IMMICH_GO_ARCHIVE_SERVER" not in env
 
 
@@ -1514,7 +1662,10 @@ def test_running_process_boolean_state(gui):
     gui.update_status()
     assert gui.lbl_running_warning.isHidden() is False
 
-    with patch("PySide6.QtWidgets.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+    with patch(
+        "PySide6.QtWidgets.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
+    ):
         gui.on_reset_run_state_clicked()
         assert gui.running_process is False
         assert gui.active_lock_path is None
@@ -1523,7 +1674,12 @@ def test_running_process_boolean_state(gui):
 
 def test_stale_lock_detection_with_pid_and_heartbeat(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
-    from core.process_tracker import create_lock, update_lock, is_lock_active, release_lock
+    from core.process_tracker import (
+        create_lock,
+        update_lock,
+        is_lock_active,
+        release_lock,
+    )
 
     l_path = create_lock("upload-folder", "upload", "./immich-go")
     assert is_lock_active(l_path) is True
@@ -1549,7 +1705,12 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     monkeypatch.setattr("core.process_tracker.sys.platform", "win32")
     monkeypatch.setattr("core.process_tracker._is_process_alive", lambda pid: False)
-    from core.process_tracker import create_lock, update_lock, is_lock_active, release_lock
+    from core.process_tracker import (
+        create_lock,
+        update_lock,
+        is_lock_active,
+        release_lock,
+    )
 
     l_path = create_lock("upload-folder", "upload", "./immich-go")
 
@@ -1557,7 +1718,7 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     # (so grace period does not keep it alive), shell_pid not set.
     update_lock(
         l_path,
-        terminal_pid=999999,          # dead PID — cmd window is "closed"
+        terminal_pid=999999,  # dead PID — cmd window is "closed"
         started_at="2020-01-01T00:00:00+00:00",
     )
 
@@ -1569,9 +1730,9 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
 
     # BEFORE fix: is_lock_active() would return True (heartbeat check wins).
     # AFTER fix: should return False because terminal_pid is dead on win32.
-    assert is_lock_active(l_path) is False, (
-        "Lock must be stale when cmd window PID is dead, even if heartbeat file is fresh"
-    )
+    assert (
+        is_lock_active(l_path) is False
+    ), "Lock must be stale when cmd window PID is dead, even if heartbeat file is fresh"
 
     release_lock(l_path)
 
@@ -1595,6 +1756,7 @@ def test_is_process_alive_win32_still_active(monkeypatch):
 
     fake_kernel32 = FakeKernel32()
     import ctypes
+
     fake_windll = type("windll", (), {})()
     fake_windll.kernel32 = fake_kernel32
     monkeypatch.setattr(ctypes, "windll", fake_windll, raising=False)
@@ -1608,6 +1770,7 @@ def test_is_process_alive_win32_still_active(monkeypatch):
 
 def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
     from core.terminal_launcher import launch_external_terminal
+
     dummy_lock = tmp_path / "test.lock"
     dummy_lock.write_text("{}", encoding="utf-8")
 
@@ -1617,7 +1780,9 @@ def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
         "OTHER_VAR": "ignored",
     }
 
-    with patch("subprocess.Popen") as mock_popen, patch("shutil.which", return_value="/usr/bin/gnome-terminal"):
+    with patch("subprocess.Popen") as mock_popen, patch(
+        "shutil.which", return_value="/usr/bin/gnome-terminal"
+    ):
         launch_external_terminal(
             command=["./immich-go", "archive", "from-immich"],
             env=test_env,
@@ -1628,7 +1793,10 @@ def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
         args, kwargs = call_args
         env_used = kwargs.get("env", {})
         assert env_used.get("IMMICH_GO_CUSTOM_VAR") == "custom_val"
-        assert env_used.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER") == "http://srv:2283"
+        assert (
+            env_used.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER")
+            == "http://srv:2283"
+        )
 
 
 def test_archive_ui_options_removed(gui):
@@ -1649,6 +1817,7 @@ def test_config_tab_completeness(gui):
 
 def test_default_true_boolean_emission():
     from core.command_builder import build_plan_from_state
+
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "test_key",
@@ -1662,11 +1831,15 @@ def test_default_true_boolean_emission():
         "date-from-name": {"enabled": True, "value": False},
         "pause-jobs": {"enabled": True, "value": False},
     }
-    plan_folder = build_plan_from_state("upload-folder", config_state, tab_state_folder, advanced_state=advanced_folder)
+    plan_folder = build_plan_from_state(
+        "upload-folder", config_state, tab_state_folder, advanced_state=advanced_folder
+    )
     assert "--recursive=false" in plan_folder.argv
     assert "--date-from-name=false" in plan_folder.argv
     assert "--pause-immich-jobs=false" in plan_folder.argv
-    pause_sources = [e for e in plan_folder.emission_log if e["key"] == "pause-immich-jobs"]
+    pause_sources = [
+        e for e in plan_folder.emission_log if e["key"] == "pause-immich-jobs"
+    ]
     assert pause_sources and pause_sources[0]["source"] == "advanced"
 
     # upload-gp boolean flags explicitly set to False in tab_state & advanced_state
@@ -1680,7 +1853,9 @@ def test_default_true_boolean_emission():
         "takeout-tag": {"enabled": True, "value": False},
         "people-tag": {"enabled": True, "value": False},
     }
-    plan_gp = build_plan_from_state("upload-gp", config_state, tab_state_gp, advanced_state=advanced_gp)
+    plan_gp = build_plan_from_state(
+        "upload-gp", config_state, tab_state_gp, advanced_state=advanced_gp
+    )
     assert "--include-archived=false" in plan_gp.argv
     assert "--include-partner=false" in plan_gp.argv
     assert "--sync-albums=false" in plan_gp.argv
@@ -1704,19 +1879,23 @@ def test_simple_vs_advanced_mode_toggle(gui):
 
 def test_from_dry_run_emitted_for_immich_tabs():
     from core.command_builder import build_plan_from_state
+
     config_state = {"server": "http://localhost:2283", "api_key": "test"}
     tab_state = {
         "from-server": "http://remote:2283",
         "from-api-key": "remote_key",
         "write-to": "/dst",
     }
-    plan = build_plan_from_state("archive-immich", config_state, tab_state, dry_run=True)
+    plan = build_plan_from_state(
+        "archive-immich", config_state, tab_state, dry_run=True
+    )
     assert "--dry-run" in plan.argv
     assert "--from-dry-run" in plan.argv
 
 
 def test_stack_pause_jobs_and_archive_folder_on_errors():
     from core.command_builder import build_plan_from_state
+
     config_state = {"server": "http://localhost:2283", "api_key": "test"}
     plan_stack = build_plan_from_state(
         "stack",
@@ -1737,6 +1916,7 @@ def test_stack_pause_jobs_and_archive_folder_on_errors():
 
 def test_collect_paths_expansion_and_abspath(tmp_path):
     from core.command_builder import collect_paths
+
     rel_path = "./subfolder"
     paths = collect_paths(rel_path)
     assert len(paths) == 1
@@ -1781,9 +1961,15 @@ def test_archive_folder_destination_warnings(gui, tmp_path):
 
 def test_missing_fixtures_not_fully_compatible(tmp_path):
     from core.cli_contract import check_fixtures
-    report = check_fixtures.__wrapped__(str(tmp_path / "missing-fixtures")) if hasattr(check_fixtures, "__wrapped__") else None
+
+    report = (
+        check_fixtures.__wrapped__(str(tmp_path / "missing-fixtures"))
+        if hasattr(check_fixtures, "__wrapped__")
+        else None
+    )
     # Direct unit test against the method
     from core.cli_contract import CompatibilityReport
+
     report_missing = CompatibilityReport(version="0.99.0", supported=False)
     assert report_missing.is_fully_compatible() is False
     report_empty = CompatibilityReport(version="0.99.0", supported=True)
@@ -1799,10 +1985,12 @@ def test_advanced_flag_disabled_not_emitted(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
 
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({
-        "enabled": False,
-        "value": "UTC",
-    })
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {
+            "enabled": False,
+            "value": "UTC",
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" not in plan.argv
@@ -1817,10 +2005,12 @@ def test_advanced_flag_enabled_text_emitted(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
 
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({
-        "enabled": True,
-        "value": "UTC",
-    })
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {
+            "enabled": True,
+            "value": "UTC",
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" in plan.argv
@@ -1835,10 +2025,12 @@ def test_advanced_bool_false_emitted(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
 
-    gui.adv_rows["upload-folder"]["recursive"].set_state({
-        "enabled": True,
-        "value": False,
-    })
+    gui.adv_rows["upload-folder"]["recursive"].set_state(
+        {
+            "enabled": True,
+            "value": False,
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
     assert "--recursive=false" in plan.argv
@@ -1853,10 +2045,12 @@ def test_advanced_bool_true_emitted_as_presence(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-gp"]["path"].setPlainText("/takeout")
 
-    gui.adv_rows["upload-gp"]["include-trashed"].set_state({
-        "enabled": True,
-        "value": True,
-    })
+    gui.adv_rows["upload-gp"]["include-trashed"].set_state(
+        {
+            "enabled": True,
+            "value": True,
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
     assert "--include-trashed" in plan.argv
@@ -1871,10 +2065,12 @@ def test_simple_mode_ignores_advanced_rows(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
 
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({
-        "enabled": True,
-        "value": "UTC",
-    })
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {
+            "enabled": True,
+            "value": "UTC",
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" not in plan.argv
@@ -1882,10 +2078,12 @@ def test_simple_mode_ignores_advanced_rows(gui):
 
 def test_form_state_advanced_rows_persistence(gui):
     """Verify form state serialization and deserialization of advanced flag rows."""
-    gui.adv_rows["upload-folder"]["time-zone"].set_state({
-        "enabled": True,
-        "value": "America/New_York",
-    })
+    gui.adv_rows["upload-folder"]["time-zone"].set_state(
+        {
+            "enabled": True,
+            "value": "America/New_York",
+        }
+    )
 
     state = gui.collect_form_state()
     assert "advanced" in state
@@ -1915,6 +2113,7 @@ def test_advanced_mode_persistence(gui):
 
 def test_validate_server_url():
     from core.validation import validate_server_url
+
     ok, err = validate_server_url("http://localhost:2283")
     assert ok is True
     assert err is None
@@ -1943,6 +2142,7 @@ def test_upload_gp_path_warnings(gui, tmp_path):
 
 def test_secret_copy_success_verification(monkeypatch):
     from core.config_manager import SecretStore
+
     secrets_db = {}
 
     def mock_set(profile, key, val):
@@ -1963,6 +2163,7 @@ def test_secret_copy_success_verification(monkeypatch):
 
 def test_binary_manager_downgrade_prevention():
     from core.binary_manager import BinaryManager
+
     bm = BinaryManager()
     decision = bm.evaluate_update(current_version="0.33.0", latest_version="0.32.0")
     assert decision.allowed is False
@@ -1971,16 +2172,18 @@ def test_binary_manager_downgrade_prevention():
 
 def test_binary_manager_get_release_asset_url(monkeypatch):
     from core.binary_manager import BinaryManager
+
     bm = BinaryManager(os_name="linux", arch="x86_64")
 
     class MockResponse:
         status_code = 200
+
         def json(self):
             return {
                 "assets": [
                     {
                         "name": "immich-go_0.32.0_linux_x86_64.tar.gz",
-                        "browser_download_url": "https://github.com/simulot/immich-go/releases/download/v0.32.0/immich-go_0.32.0_linux_x86_64.tar.gz"
+                        "browser_download_url": "https://github.com/simulot/immich-go/releases/download/v0.32.0/immich-go_0.32.0_linux_x86_64.tar.gz",
                     }
                 ]
             }
@@ -1992,13 +2195,15 @@ def test_binary_manager_get_release_asset_url(monkeypatch):
 
 def test_binary_manager_verify_extracted_binary(tmp_path):
     from core.binary_manager import BinaryManager
+
     bm = BinaryManager()
     # Nonexistent file
     assert bm.verify_extracted_binary(str(tmp_path / "nonexistent")) is False
 
 
 def test_cleanup_stale_temp_dirs(tmp_path, monkeypatch):
-    import tempfile, time
+    import tempfile
+    import time
     from core.terminal_launcher import cleanup_stale_temp_dirs
 
     dummy_dir = tmp_path / "immich-go-run-test"
@@ -2025,6 +2230,7 @@ def test_advanced_keys_match_registry():
 
 def test_upload_gp_has_no_into_album_advanced_key():
     from core.flag_registry import REGISTRY
+
     assert "into-album" not in REGISTRY.advanced_keys("upload-gp")
 
 
@@ -2038,24 +2244,31 @@ def test_from_admin_api_key_advanced_secret_env(gui):
     gui.inputs["upload-immich"]["from-server"].setText("http://old:2283")
     gui.inputs["upload-immich"]["from-api-key"].setText("old-key")
 
-    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state({
-        "enabled": True,
-        "value": "old-admin-secret",
-    })
+    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state(
+        {
+            "enabled": True,
+            "value": "old-admin-secret",
+        }
+    )
 
     plan = gui.build_plan(False)
 
     assert "--from-admin-api-key" not in " ".join(plan.argv)
     assert "old-admin-secret" not in " ".join(plan.argv)
-    assert plan.env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_ADMIN_API_KEY") == "old-admin-secret"
+    assert (
+        plan.env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_ADMIN_API_KEY")
+        == "old-admin-secret"
+    )
 
 
 def test_advanced_secret_value_not_persisted(gui):
     gui.toggle_advanced(True)
-    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state({
-        "enabled": True,
-        "value": "super-secret-admin-key",
-    })
+    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state(
+        {
+            "enabled": True,
+            "value": "super-secret-admin-key",
+        }
+    )
 
     state = gui.collect_form_state()
     saved = state["advanced"]["upload-immich"]["from-admin-api-key"]
@@ -2110,6 +2323,7 @@ def test_gp_simple_mode_checkboxes_omitted_when_checked(gui):
 # ==============================================================================
 # A1 REGRESSION: Simple-mode controls not silently discarded
 # ==============================================================================
+
 
 def test_upload_immich_simple_mode_from_date_range_emitted(gui):
     """A1: from-date-range in upload-immich simple card must produce CLI flag."""
@@ -2187,13 +2401,16 @@ def test_upload_immich_simple_mode_has_no_from_favorite_widget(gui):
 # A2: Duplicate test name lint guard
 # ==============================================================================
 
+
 def test_no_duplicate_test_names():
     """A2: Ensure no duplicate test function names exist in test_app.py."""
     import ast
     import collections
+
     tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
     names = [
-        n.name for n in ast.walk(tree)
+        n.name
+        for n in ast.walk(tree)
         if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")
     ]
     dupes = [n for n, c in collections.Counter(names).items() if c > 1]
@@ -2203,6 +2420,7 @@ def test_no_duplicate_test_names():
 # ==============================================================================
 # A8: ADVANCED_FLAGS ⊆ TAB_ALLOWED_FLAGS
 # ==============================================================================
+
 
 def test_advanced_flags_subset_of_tab_allowed_flags():
     """A8: Every flag in ADVANCED_FLAGS must be in TAB_ALLOWED_FLAGS for its tab.
@@ -2220,7 +2438,9 @@ def test_advanced_flags_subset_of_tab_allowed_flags():
                 # Secret flags emit via env var, not argv — skip allowlist check
                 continue
             if d.flag not in allowed:
-                missing.append(f"'{d.flag}' in ADVANCED_FLAGS['{tab}'] missing from TAB_ALLOWED_FLAGS")
+                missing.append(
+                    f"'{d.flag}' in ADVANCED_FLAGS['{tab}'] missing from TAB_ALLOWED_FLAGS"
+                )
 
     assert not missing, "\n".join(missing)
 
@@ -2229,13 +2449,16 @@ def test_advanced_flags_subset_of_tab_allowed_flags():
 # A3: validate_advanced_state uses full date semantic validation
 # ==============================================================================
 
+
 def test_validate_advanced_state_rejects_invalid_month():
     """A3: validate_advanced_state must reject semantically invalid dates."""
     from core.advanced_flags import validate_advanced_state
+
     # Month 13 is invalid
-    result = validate_advanced_state("upload-folder", {
-        "date-range": {"enabled": True, "value": "2023-13-01,2023-12-31"}
-    })
+    result = validate_advanced_state(
+        "upload-folder",
+        {"date-range": {"enabled": True, "value": "2023-13-01,2023-12-31"}},
+    )
     assert not result.is_valid
     assert any("date" in e.lower() or "invalid" in e.lower() for e in result.errors)
 
@@ -2243,9 +2466,11 @@ def test_validate_advanced_state_rejects_invalid_month():
 def test_validate_advanced_state_rejects_reversed_range():
     """A3: validate_advanced_state must reject start > end date ranges."""
     from core.advanced_flags import validate_advanced_state
-    result = validate_advanced_state("upload-folder", {
-        "date-range": {"enabled": True, "value": "2023-12-31,2023-01-01"}
-    })
+
+    result = validate_advanced_state(
+        "upload-folder",
+        {"date-range": {"enabled": True, "value": "2023-12-31,2023-01-01"}},
+    )
     assert not result.is_valid
     assert result.errors
 
@@ -2253,9 +2478,11 @@ def test_validate_advanced_state_rejects_reversed_range():
 def test_validate_advanced_state_accepts_valid_date_range():
     """A3: validate_advanced_state must accept well-formed date ranges."""
     from core.advanced_flags import validate_advanced_state
-    result = validate_advanced_state("upload-folder", {
-        "date-range": {"enabled": True, "value": "2023-01-01,2023-12-31"}
-    })
+
+    result = validate_advanced_state(
+        "upload-folder",
+        {"date-range": {"enabled": True, "value": "2023-01-01,2023-12-31"}},
+    )
     assert result.is_valid
     assert not result.errors
 
@@ -2263,6 +2490,7 @@ def test_validate_advanced_state_accepts_valid_date_range():
 # ==============================================================================
 # Fix 1.2: Env-Var Secret Contract Verification via Stub Executable
 # ==============================================================================
+
 
 def test_env_var_secret_contract_with_stub(gui):
     """Fix 1.2: Verify subprocess receives secrets via env vars and never in argv."""
@@ -2280,16 +2508,24 @@ def test_env_var_secret_contract_with_stub(gui):
     gui.inputs["config"]["api_key"].setText("target-secret-key-123")
     gui.inputs["upload-immich"]["from-server"].setText("http://source:2283")
     gui.inputs["upload-immich"]["from-api-key"].setText("source-secret-key-456")
-    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state({
-        "enabled": True,
-        "value": "source-admin-secret-789",
-    })
+    gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state(
+        {
+            "enabled": True,
+            "value": "source-admin-secret-789",
+        }
+    )
 
     plan = gui.build_plan(dry_run=False)
 
     # 1. Assert secret values NEVER appear in plan.argv
-    for secret in ("target-secret-key-123", "source-secret-key-456", "source-admin-secret-789"):
-        assert not any(secret in arg for arg in plan.argv), f"Secret '{secret}' leaked into argv!"
+    for secret in (
+        "target-secret-key-123",
+        "source-secret-key-456",
+        "source-admin-secret-789",
+    ):
+        assert not any(
+            secret in arg for arg in plan.argv
+        ), f"Secret '{secret}' leaked into argv!"
 
     # 2. Run the stub process using plan.argv and plan.env
     cmd = [sys.executable, stub_path] + plan.argv
@@ -2305,12 +2541,25 @@ def test_env_var_secret_contract_with_stub(gui):
     # 3. Assert secrets were delivered via env vars
     assert received_env.get("IMMICH_GO_UPLOAD_SERVER") == "http://target:2283"
     assert received_env.get("IMMICH_GO_UPLOAD_API_KEY") == "target-secret-key-123"
-    assert received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_SERVER") == "http://source:2283"
-    assert received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY") == "source-secret-key-456"
-    assert received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_ADMIN_API_KEY") == "source-admin-secret-789"
+    assert (
+        received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_SERVER")
+        == "http://source:2283"
+    )
+    assert (
+        received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY")
+        == "source-secret-key-456"
+    )
+    assert (
+        received_env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_ADMIN_API_KEY")
+        == "source-admin-secret-789"
+    )
 
     # 4. Assert secrets are not in received argv
-    for secret in ("target-secret-key-123", "source-secret-key-456", "source-admin-secret-789"):
+    for secret in (
+        "target-secret-key-123",
+        "source-secret-key-456",
+        "source-admin-secret-789",
+    ):
         assert not any(secret in arg for arg in received_argv)
 
 
@@ -2321,7 +2570,9 @@ def test_binary_manager_download_and_install_cancellation(tmp_path):
     bm = BinaryManager(base_dir=str(tmp_path))
 
     # Mock get_release_asset_url to return a dummy URL
-    with patch.object(bm, "get_release_asset_url", return_value="https://example.com/immich-go.tar.gz"):
+    with patch.object(
+        bm, "get_release_asset_url", return_value="https://example.com/immich-go.tar.gz"
+    ):
         # Mock requests.get to return a streaming dummy response
         mock_res = MagicMock()
         mock_res.headers = {"content-length": "100"}
@@ -2345,6 +2596,7 @@ def test_binary_manager_download_and_install_cancellation(tmp_path):
 def _make_tar_gz_archive(content: bytes = b"#!/bin/sh\necho 0.32.0\n") -> bytes:
     import io
     import tarfile
+
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         data = content
@@ -2370,22 +2622,25 @@ def test_binary_manager_checksum_verification_pass(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), \
-         patch.object(bm, "fetch_checksums", return_value=checksums), \
-         patch("requests.get", return_value=mock_res), \
-         patch.object(bm, "verify_extracted_binary", return_value=True):
+    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
+        bm, "fetch_checksums", return_value=checksums
+    ), patch("requests.get", return_value=mock_res), patch.object(
+        bm, "verify_extracted_binary", return_value=True
+    ):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is True
         assert "Successfully installed" in msg
 
 
 def test_binary_manager_checksum_verification_fail(tmp_path):
-    from core.binary_manager import BinaryManager, calculate_sha256
+    from core.binary_manager import BinaryManager
 
     archive_bytes = _make_tar_gz_archive()
     archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
     url = f"https://example.com/{archive_name}"
-    checksums = {archive_name: "0000000000000000000000000000000000000000000000000000000000000000"}
+    checksums = {
+        archive_name: "0000000000000000000000000000000000000000000000000000000000000000"
+    }
 
     bm = BinaryManager(base_dir=str(tmp_path), os_name="linux", arch="x86_64")
 
@@ -2394,16 +2649,16 @@ def test_binary_manager_checksum_verification_fail(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), \
-         patch.object(bm, "fetch_checksums", return_value=checksums), \
-         patch("requests.get", return_value=mock_res):
+    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
+        bm, "fetch_checksums", return_value=checksums
+    ), patch("requests.get", return_value=mock_res):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksum verification failed" in msg.lower()
 
 
 def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
-    from core.binary_manager import BinaryManager, calculate_sha256
+    from core.binary_manager import BinaryManager
 
     archive_bytes = _make_tar_gz_archive()
     archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
@@ -2416,9 +2671,9 @@ def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), \
-         patch.object(bm, "fetch_checksums", return_value={}), \
-         patch("requests.get", return_value=mock_res):
+    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
+        bm, "fetch_checksums", return_value={}
+    ), patch("requests.get", return_value=mock_res):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksums.txt" in msg.lower()
@@ -2440,9 +2695,9 @@ def test_binary_manager_checksum_tampered_archive(tmp_path):
     mock_res.iter_content.return_value = [tampered_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), \
-         patch.object(bm, "fetch_checksums", return_value=checksums), \
-         patch("requests.get", return_value=mock_res):
+    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
+        bm, "fetch_checksums", return_value=checksums
+    ), patch("requests.get", return_value=mock_res):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksum verification failed" in msg.lower()
@@ -2474,7 +2729,7 @@ def test_windows_bat_heartbeat_generation(tmp_path, monkeypatch):
     # causes 'The batch file cannot be found' after immich-go exits.
     # release_lock() cleans up the .bat sidecar instead.
     assert 'del /f "' + str(lock_file.with_suffix(".bat")) + '"' not in bat_content
-    assert "del /f \"%BAT_FILE%\"" not in bat_content
+    assert 'del /f "%BAT_FILE%"' not in bat_content
 
 
 def test_golden_upload_icloud_simple(gui):
@@ -2487,7 +2742,9 @@ def test_golden_upload_icloud_simple(gui):
     gui.inputs["upload-icloud"]["path"].setText("/photos/icloud")
 
     plan = gui.build_plan(dry_run=False)
-    assert _norm_argv(plan.argv) == _norm_argv(["upload", "from-icloud", "--server=http://localhost:2283", "/photos/icloud"])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        ["upload", "from-icloud", "--server=http://localhost:2283", "/photos/icloud"]
+    )
     assert plan.tab_key == "upload-icloud"
 
 
@@ -2501,7 +2758,9 @@ def test_golden_upload_picasa_simple(gui):
     gui.inputs["upload-picasa"]["path"].setText("/photos/picasa")
 
     plan = gui.build_plan(dry_run=False)
-    assert _norm_argv(plan.argv) == _norm_argv(["upload", "from-picasa", "--server=http://localhost:2283", "/photos/picasa"])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        ["upload", "from-picasa", "--server=http://localhost:2283", "/photos/picasa"]
+    )
     assert plan.tab_key == "upload-picasa"
 
 
@@ -2513,7 +2772,14 @@ def test_golden_archive_gp_simple(gui):
     gui.inputs["archive-gp"]["write-to"].setText("/backup/takeout")
 
     plan = gui.build_plan(dry_run=False)
-    assert _norm_argv(plan.argv) == _norm_argv(["archive", "from-google-photos", "--write-to-folder=/backup/takeout", "/takeout/photos"])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        [
+            "archive",
+            "from-google-photos",
+            "--write-to-folder=/backup/takeout",
+            "/takeout/photos",
+        ]
+    )
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-gp"
 
@@ -2526,7 +2792,9 @@ def test_golden_archive_icloud_simple(gui):
     gui.inputs["archive-icloud"]["write-to"].setText("/backup/icloud")
 
     plan = gui.build_plan(dry_run=False)
-    assert _norm_argv(plan.argv) == _norm_argv(["archive", "from-icloud", "--write-to-folder=/backup/icloud", "/photos/icloud"])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        ["archive", "from-icloud", "--write-to-folder=/backup/icloud", "/photos/icloud"]
+    )
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-icloud"
 
@@ -2539,13 +2807,14 @@ def test_golden_archive_picasa_simple(gui):
     gui.inputs["archive-picasa"]["write-to"].setText("/backup/picasa")
 
     plan = gui.build_plan(dry_run=False)
-    assert _norm_argv(plan.argv) == _norm_argv(["archive", "from-picasa", "--write-to-folder=/backup/picasa", "/photos/picasa"])
+    assert _norm_argv(plan.argv) == _norm_argv(
+        ["archive", "from-picasa", "--write-to-folder=/backup/picasa", "/photos/picasa"]
+    )
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-picasa"
 
 
 def test_serverless_archive_tabs_never_emit_server(gui):
-    from core.cli_schema import SERVERLESS_TABS
     gui.inputs["config"]["server"].setText("http://should-not-emit:2283")
     gui.inputs["config"]["api_key"].setText("secret")
 
@@ -2617,6 +2886,7 @@ class TestWindowsPathParsing:
         'cmd /k "C:\\Users\\John Doe\\...\\run.bat"' correctly without shell=True.
         """
         import subprocess as _sp
+
         p = PureWindowsPath(
             r"C:\Users\John Doe\AppData\Roaming\immich-go-gui\locks\run_abc.bat"
         )
@@ -2630,7 +2900,10 @@ class TestWindowsPathParsing:
     def test_path_without_spaces_list2cmdline(self):
         """Paths without spaces are passed through list2cmdline correctly."""
         import subprocess as _sp
-        p = PureWindowsPath(r"C:\Users\Shsrra\AppData\Roaming\immich-go-gui\locks\run_x.bat")
+
+        p = PureWindowsPath(
+            r"C:\Users\Shsrra\AppData\Roaming\immich-go-gui\locks\run_x.bat"
+        )
         assert " " not in str(p)
         cmdline = _sp.list2cmdline(["cmd", "/k", str(p)])
         assert str(p) in cmdline
@@ -2666,7 +2939,9 @@ class TestWindowsBatFileCreation:
 
         with patch("subprocess.Popen") as mock_popen:
             mock_popen.return_value.pid = 9999
-            res = launch_external_terminal(["immich-go.exe", "upload", "from-folder"], {}, lock_path)
+            res = launch_external_terminal(
+                ["immich-go.exe", "upload", "from-folder"], {}, lock_path
+            )
 
         assert res.ok
         bat = lock_path.with_suffix(".bat")
@@ -2719,9 +2994,13 @@ class TestWindowsBatFileCreation:
         assert str(lock_path.with_suffix(".bat")) == cmd_arg[2]
         # shell=True must NOT be set
         kwargs = call_args[1]
-        assert not kwargs.get("shell"), "shell=True must NOT be used (hides the console window)"
+        assert not kwargs.get(
+            "shell"
+        ), "shell=True must NOT be used (hides the console window)"
         # CREATE_NEW_CONSOLE must be set for visible window
-        assert kwargs.get("creationflags", 0) & 0x00000010, "Expected CREATE_NEW_CONSOLE flag"
+        assert (
+            kwargs.get("creationflags", 0) & 0x00000010
+        ), "Expected CREATE_NEW_CONSOLE flag"
 
     def test_popen_list_form_without_spaces(self, tmp_path, monkeypatch):
         """List form Popen is used consistently regardless of whether path has spaces."""
@@ -2733,7 +3012,9 @@ class TestWindowsBatFileCreation:
 
         with patch("subprocess.Popen") as mock_popen:
             mock_popen.return_value.pid = 5678
-            launch_external_terminal(["immich-go.exe", "upload", "from-folder"], {}, lock_path)
+            launch_external_terminal(
+                ["immich-go.exe", "upload", "from-folder"], {}, lock_path
+            )
 
         cmd_arg = mock_popen.call_args[0][0]
         assert isinstance(cmd_arg, list)
@@ -2770,8 +3051,9 @@ class TestBinaryManagerWindowsPathResolution:
             },
         }
 
-        with patch("core.binary_manager.subprocess.run") as mock_run, \
-             patch("core.binary_manager.load_binary_metadata", return_value=meta):
+        with patch("core.binary_manager.subprocess.run") as mock_run, patch(
+            "core.binary_manager.load_binary_metadata", return_value=meta
+        ):
             mock_result = MagicMock()
             mock_result.stdout = "v0.32.0"
             mock_result.stderr = ""
@@ -2782,9 +3064,9 @@ class TestBinaryManagerWindowsPathResolution:
         assert mock_run.called
         call_args = mock_run.call_args[0][0]
         # First element of the subprocess list must be a resolved absolute path
-        assert os.path.isabs(call_args[0]), (
-            f"Expected absolute resolved path in subprocess call, got: {call_args[0]!r}"
-        )
+        assert os.path.isabs(
+            call_args[0]
+        ), f"Expected absolute resolved path in subprocess call, got: {call_args[0]!r}"
 
     def test_verify_extracted_binary_uses_resolved_path(self, tmp_path):
         """Fix #66: verify_extracted_binary resolves path before subprocess.run."""
@@ -2804,9 +3086,9 @@ class TestBinaryManagerWindowsPathResolution:
 
         assert result is True
         call_args = mock_run.call_args[0][0]
-        assert os.path.isabs(call_args[0]), (
-            f"Expected absolute resolved path, got: {call_args[0]!r}"
-        )
+        assert os.path.isabs(
+            call_args[0]
+        ), f"Expected absolute resolved path, got: {call_args[0]!r}"
 
 
 # ==============================================================================
@@ -2818,6 +3100,7 @@ from core.command_builder import build_plan_from_state as _build_plan
 
 def _pause_flag_args(argv):
     from core.command_builder import FlagEmitter
+
     emitter = FlagEmitter("upload-folder")
     return [a for a in argv if emitter._flag_name_from_arg(a) == "pause-immich-jobs"]
 
@@ -2838,12 +3121,12 @@ class TestPauseJobsAutoDisable:
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
-        assert "--pause-immich-jobs=false" in plan.argv, (
-            "Expected --pause-immich-jobs=false when no admin key is set"
-        )
-        assert any("Admin API Key" in w for w in plan.warnings), (
-            f"Expected a warning about Admin API Key; got: {plan.warnings}"
-        )
+        assert (
+            "--pause-immich-jobs=false" in plan.argv
+        ), "Expected --pause-immich-jobs=false when no admin key is set"
+        assert any(
+            "Admin API Key" in w for w in plan.warnings
+        ), f"Expected a warning about Admin API Key; got: {plan.warnings}"
 
     def test_pause_not_disabled_when_admin_key_present(self):
         """When admin key is set, do not auto-disable pausing."""
@@ -2853,9 +3136,9 @@ class TestPauseJobsAutoDisable:
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
-        assert "--pause-immich-jobs=false" not in plan.argv, (
-            "Should not auto-disable when admin key is provided"
-        )
+        assert (
+            "--pause-immich-jobs=false" not in plan.argv
+        ), "Should not auto-disable when admin key is provided"
         assert not any("Admin API Key" in w for w in plan.warnings)
 
     def test_explicit_pause_false_no_admin_key(self):
@@ -2868,7 +3151,9 @@ class TestPauseJobsAutoDisable:
             binary_path="./immich-go",
         )
         pause_flags = _pause_flag_args(plan.argv)
-        assert len(pause_flags) == 1, f"Expected exactly one pause flag; got: {pause_flags}"
+        assert (
+            len(pause_flags) == 1
+        ), f"Expected exactly one pause flag; got: {pause_flags}"
         assert pause_flags[0] == "--pause-immich-jobs=false"
         # No warning because user explicitly disabled it
         assert not any("Admin API Key" in w for w in plan.warnings)
@@ -2887,6 +3172,7 @@ class TestPauseJobsAutoDisable:
     def test_pause_auto_disable_on_all_upload_tabs(self):
         """Auto-disable applies to all upload tabs."""
         from core.cli_schema import UPLOAD_TABS
+
         tab_paths = {
             "upload-folder": {"path": "/photos"},
             "upload-gp": {"path": "/takeout.zip"},
@@ -2895,7 +3181,10 @@ class TestPauseJobsAutoDisable:
         }
         for tab_key in UPLOAD_TABS:
             if tab_key == "upload-immich":
-                tab_state = {"from-server": "http://old:2283", "from-api-key": "old-key"}
+                tab_state = {
+                    "from-server": "http://old:2283",
+                    "from-api-key": "old-key",
+                }
             else:
                 tab_state = tab_paths.get(tab_key, {"path": "/photos"})
 
@@ -2905,9 +3194,9 @@ class TestPauseJobsAutoDisable:
                 tab_state=tab_state,
                 binary_path="./immich-go",
             )
-            assert "--pause-immich-jobs=false" in plan.argv, (
-                f"Expected auto-disable on tab '{tab_key}'; argv={plan.argv}"
-            )
+            assert (
+                "--pause-immich-jobs=false" in plan.argv
+            ), f"Expected auto-disable on tab '{tab_key}'; argv={plan.argv}"
 
     def test_from_pause_does_not_suppress_dest_pause_safety(self):
         """from-pause-immich-jobs must not block destination pause safety injection."""
@@ -2930,15 +3219,19 @@ class TestPauseJobsAutoDisable:
             binary_path="./immich-go",
         )
         pause_flags = _pause_flag_args(plan.argv)
-        assert len(pause_flags) == 1, f"Expected exactly one pause flag; got: {pause_flags}"
+        assert (
+            len(pause_flags) == 1
+        ), f"Expected exactly one pause flag; got: {pause_flags}"
 
 
 # ==============================================================================
 # Phase 2–6 hardening coverage
 # ==============================================================================
 
+
 def test_flag_emitter_allows_repeat_options():
     from core.command_builder import FlagEmitter
+
     emitter = FlagEmitter("upload-folder", strict=False)
     assert emitter.add_option("tag", "a") is True
     assert emitter.add_option("tag", "b") is True
@@ -2947,6 +3240,7 @@ def test_flag_emitter_allows_repeat_options():
 
 def test_emission_log_populated():
     from core.command_builder import build_plan_from_state
+
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "key",
@@ -2979,17 +3273,13 @@ def test_overwrite_warn_values(gui):
     assert any("Overwrite mode" in w for w in plan.warnings)
 
 
-def test_from_dry_run_advanced_row_no_duplicate(gui):
-    """Advanced from-dry-run row + dry_run=True → only one --from-dry-run."""
-    gui.toggle_advanced(True)
+def test_from_dry_run_button_only_one_flag(gui):
+    """Dry Run button on archive-immich emits a single --from-dry-run."""
     gui.stacked_widget.setCurrentIndex(2)
     gui.archive_tabs.setCurrentIndex(4)
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["archive-immich"]["write-to"].setText("/backup")
-    gui.adv_rows["archive-immich"]["from-dry-run"].set_state(
-        {"enabled": True, "value": True}
-    )
     plan = gui.build_plan(dry_run=True)
     count = sum(1 for a in plan.argv if a == "--from-dry-run")
     assert count == 1
@@ -2997,7 +3287,9 @@ def test_from_dry_run_advanced_row_no_duplicate(gui):
 
 def test_secret_status_label_keyring(gui, monkeypatch):
     gui.app_config.secrets_provider = "keyring"
-    monkeypatch.setattr(SecretStore, "get_secret", staticmethod(lambda *_: "secret-key"))
+    monkeypatch.setattr(
+        SecretStore, "get_secret", staticmethod(lambda *_: "secret-key")
+    )
     monkeypatch.setattr(gui, "_secrets_file_has_key", lambda: False)
     gui._update_secret_status()
     assert "keyring" in gui.lbl_secret_status.text().lower()
@@ -3013,7 +3305,6 @@ def test_secret_status_label_file_fallback(gui, monkeypatch):
 
 def test_keyring_probe_warning(monkeypatch):
     """Probe failure during init should surface a warning when keyring is selected."""
-    from PySide6.QtWidgets import QMessageBox
 
     warn = MagicMock()
     monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.warning", warn)
@@ -3027,6 +3318,8 @@ def test_keyring_probe_warning(monkeypatch):
 
 
 def test_about_dialog_version_dynamic(gui, monkeypatch):
+    from core.binary_manager import TESTED_IMMICH_GO_VERSION
+
     captured = {}
 
     def fake_about(parent, title, text):
@@ -3036,7 +3329,7 @@ def test_about_dialog_version_dynamic(gui, monkeypatch):
     monkeypatch.setattr("app._gui_version", lambda: "9.9.9-test")
     gui.show_about_dialog()
     assert "9.9.9-test" in captured["text"]
-    assert "1.0.1" not in captured["text"]
+    assert f"v{TESTED_IMMICH_GO_VERSION}" in captured["text"]
 
 
 def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
@@ -3059,6 +3352,7 @@ def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
 
 def test_profile_index_cached(tmp_path, monkeypatch):
     from core import profile_manager as pm
+
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     pm.clear_profiles_cache()
     (tmp_path / "profiles.toml").write_text(
@@ -3091,7 +3385,11 @@ def test_close_event_save_prompt(gui, monkeypatch):
         return QMessageBox.StandardButton.Save
 
     monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", fake_question)
-    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1))
+    monkeypatch.setattr(
+        gui,
+        "save_configuration",
+        lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1),
+    )
     monkeypatch.setattr("app.scan_locks", lambda: [])
     event = QCloseEvent()
     gui.closeEvent(event)
@@ -3107,7 +3405,11 @@ def test_close_event_cancel_ignores(gui, monkeypatch):
         "PySide6.QtWidgets.QMessageBox.question",
         lambda *a, **k: QMessageBox.StandardButton.Cancel,
     )
-    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: (_ for _ in ()).throw(AssertionError("save")))
+    monkeypatch.setattr(
+        gui,
+        "save_configuration",
+        lambda show_popup=True: (_ for _ in ()).throw(AssertionError("save")),
+    )
     monkeypatch.setattr("app.scan_locks", lambda: [])
     event = QCloseEvent()
     gui.closeEvent(event)
@@ -3124,7 +3426,11 @@ def test_close_event_discard_no_save(gui, monkeypatch):
         "PySide6.QtWidgets.QMessageBox.question",
         lambda *a, **k: QMessageBox.StandardButton.Discard,
     )
-    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1))
+    monkeypatch.setattr(
+        gui,
+        "save_configuration",
+        lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1),
+    )
     monkeypatch.setattr("app.scan_locks", lambda: [])
     event = QCloseEvent()
     gui.closeEvent(event)
@@ -3165,7 +3471,12 @@ def test_log_file_created_and_masked(tmp_path, monkeypatch):
         env={"IMMICH_GO_UPLOAD_API_KEY": "super-secret"},
         display_argv=["immich-go", "upload", "from-folder", "--server=http://x"],
     )
-    log.info("Launching: tab=%s argv=%s env_keys=%s", plan.tab_key, plan.display_argv, sorted(plan.env.keys()))
+    log.info(
+        "Launching: tab=%s argv=%s env_keys=%s",
+        plan.tab_key,
+        plan.display_argv,
+        sorted(plan.env.keys()),
+    )
     for h in log.handlers:
         h.flush()
     text = (tmp_path / "logs" / "immich-go-gui.log").read_text(encoding="utf-8")
@@ -3181,8 +3492,12 @@ def test_upload_icloud_advanced_flag_emission(gui):
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-icloud"]["path"].setText("/icloud")
-    gui.adv_rows["upload-icloud"]["recursive"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-icloud"]["api-trace"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-icloud"]["recursive"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-icloud"]["api-trace"].set_state(
+        {"enabled": True, "value": True}
+    )
     plan = gui.build_plan(dry_run=False)
     assert "--recursive=false" in plan.argv
     assert "--api-trace" in plan.argv
@@ -3195,8 +3510,12 @@ def test_upload_picasa_advanced_flag_emission(gui):
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-picasa"]["path"].setText("/picasa")
-    gui.adv_rows["upload-picasa"]["recursive"].set_state({"enabled": True, "value": False})
-    gui.adv_rows["upload-picasa"]["album-picasa"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-picasa"]["recursive"].set_state(
+        {"enabled": True, "value": False}
+    )
+    gui.adv_rows["upload-picasa"]["album-picasa"].set_state(
+        {"enabled": True, "value": True}
+    )
     plan = gui.build_plan(dry_run=False)
     assert "--recursive=false" in plan.argv
     assert "--album-picasa" in plan.argv
@@ -3217,6 +3536,7 @@ def test_theme_switch_light_dark_system(gui, monkeypatch):
 
 def test_upload_folder_log_level_is_advanced_mode():
     from core.flag_registry import REGISTRY
+
     defs = {d.key: d for d in REGISTRY.flags["upload-folder"]}
     assert defs["log-level"].mode == "advanced"
 
@@ -3230,8 +3550,12 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
         return actions[-1]
 
     monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", fake_question)
-    monkeypatch.setattr(gui, "save_configuration", lambda show_popup=True: actions.append("saved"))
-    monkeypatch.setattr("app.set_active_profile_name", lambda name: actions.append(f"active:{name}"))
+    monkeypatch.setattr(
+        gui, "save_configuration", lambda show_popup=True: actions.append("saved")
+    )
+    monkeypatch.setattr(
+        "app.set_active_profile_name", lambda name: actions.append(f"active:{name}")
+    )
     monkeypatch.setattr(gui, "load_configuration", lambda: actions.append("loaded"))
     monkeypatch.setattr(gui, "update_profiles_menu", lambda: None)
     monkeypatch.setattr(gui, "update_window_title", lambda: None)

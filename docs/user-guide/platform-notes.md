@@ -51,7 +51,7 @@ See [Troubleshooting](troubleshooting.md#windows-antivirus-false-positives).
 
 ### Paths
 
-Config: `%APPDATA%\immich-go-gui\`  
+Config: `%APPDATA%\immich-go-gui\`
 immich-go binary: `%USERPROFILE%\.immich-go-gui\bin\`
 
 ---
@@ -70,7 +70,7 @@ Uses Terminal.app (or another terminal available on PATH). Keep Terminal permiss
 
 ### Paths
 
-Config: `~/Library/Application Support/immich-go-gui/`  
+Config: `~/Library/Application Support/immich-go-gui/`
 immich-go binary: `~/.immich-go-gui/bin/`
 
 ### Architecture note
@@ -143,7 +143,7 @@ Some compositors restrict DnD into Qt apps. Use the file picker buttons if drops
 
 ### Paths
 
-Config: `~/.config/immich-go-gui/` (or `$XDG_CONFIG_HOME/immich-go-gui/`)  
+Config: `~/.config/immich-go-gui/` (or `$XDG_CONFIG_HOME/immich-go-gui/`)
 immich-go binary: `~/.immich-go-gui/bin/`
 
 ---

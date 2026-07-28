@@ -4,7 +4,7 @@ Now delegates to the unified flag registry (core/flag_registry.py).
 MUST NOT import PySide6 or Qt.
 """
 
-from .flag_registry import REGISTRY, FlagDef  # re-export FlagDef for compat
+from .flag_registry import REGISTRY  # re-export FlagDef for compat
 
 TAB_KEYS = REGISTRY.tab_keys
 TAB_COMMANDS = REGISTRY.tab_commands
@@ -32,7 +32,9 @@ def flag_allowed_for_tab(tab_key: str, flag_name: str) -> bool:
 def assert_flag_allowed(tab_key: str, flag_name: str) -> None:
     """Raises ValueError if flag_name is not allowed for tab_key."""
     if not flag_allowed_for_tab(tab_key, flag_name):
-        raise ValueError(f"Flag '--{flag_name.lstrip('-')}' is not allowed for tab '{tab_key}'.")
+        raise ValueError(
+            f"Flag '--{flag_name.lstrip('-')}' is not allowed for tab '{tab_key}'."
+        )
 
 
 # Future compatibility metadata.

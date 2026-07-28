@@ -123,5 +123,5 @@ Implemented in 1.4.0. The `emission` field was removed from `flags.toml`.
 
 - `_norm_argv()` for all path comparisons in argv assertions.
 - Golden JSON fixtures in `tests/fixtures/command_states/`.
-- CLI help fixtures in `tests/fixtures/cli_help/0.32.0/`.
+- CLI help fixtures in `core/fixtures/cli_help/0.32.0/`.
 - Run: `uv run pytest` (Linux headless: `QT_QPA_PLATFORM=offscreen xvfb-run uv run pytest`).

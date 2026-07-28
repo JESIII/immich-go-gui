@@ -5,7 +5,6 @@ evaluations, and archive extractions without any PySide6 or Qt dependencies.
 """
 
 import hashlib
-import io
 import json
 import os
 import platform
@@ -14,6 +13,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -35,9 +35,11 @@ METADATA_PATH = os.path.join(BINARY_BASE_DIR, "metadata.json")
 RECOMMENDED_IMMICH_GO_VERSION = "0.32.0"
 TESTED_IMMICH_GO_VERSION = RECOMMENDED_IMMICH_GO_VERSION
 
-TESTED_IMMICH_GO_VERSIONS = frozenset({
-    "0.32.0",
-})
+TESTED_IMMICH_GO_VERSIONS = frozenset(
+    {
+        "0.32.0",
+    }
+)
 
 MIN_SUPPORTED_IMMICH_GO_VERSION = "0.32.0"
 MAX_KNOWN_COMPATIBLE_IMMICH_GO_VERSION = "0.32.0"
@@ -175,7 +177,7 @@ def get_binary_path(meta: dict | None = None, base_dir: str = BINARY_BASE_DIR) -
         meta = load_binary_metadata()
 
     manual = meta.get("manual_path", "").strip()
-    if manual and os.path.exists(manual):
+    if manual and os.path.isfile(manual):
         return manual
 
     selected = meta.get("selected_version", "")
@@ -183,7 +185,7 @@ def get_binary_path(meta: dict | None = None, base_dir: str = BINARY_BASE_DIR) -
         v_record = meta["versions"][selected]
         if isinstance(v_record, dict) and "path" in v_record:
             path = v_record["path"]
-            if os.path.exists(path):
+            if os.path.isfile(path):
                 return path
 
     binary_filename = "immich-go.exe" if sys.platform.startswith("win") else "immich-go"
@@ -191,12 +193,12 @@ def get_binary_path(meta: dict | None = None, base_dir: str = BINARY_BASE_DIR) -
     # Check selected version directory fallback
     if selected:
         version_path = os.path.join(base_dir, selected, binary_filename)
-        if os.path.exists(version_path):
+        if os.path.isfile(version_path):
             return version_path
 
     # Check legacy base directory
     legacy = os.path.join(base_dir, binary_filename)
-    if os.path.exists(legacy):
+    if os.path.isfile(legacy):
         return legacy
 
     return ""
@@ -213,7 +215,9 @@ class BinaryManager:
         arch: str | None = None,
     ):
         self.base_dir = base_dir or BINARY_BASE_DIR
-        self.metadata_path = metadata_path or os.path.join(self.base_dir, "metadata.json")
+        self.metadata_path = metadata_path or os.path.join(
+            self.base_dir, "metadata.json"
+        )
         self.os_name = os_name or sys.platform
         self.arch = arch or platform.machine().lower()
 
@@ -281,7 +285,9 @@ class BinaryManager:
                 card_text=f"Binary: {version_text} (tested)",
                 version_text=version_text,
                 support=support,
-                message=VERSION_NOTES.get(version_text, "Tested and supported version."),
+                message=VERSION_NOTES.get(
+                    version_text, "Tested and supported version."
+                ),
             )
         elif support == VersionSupport.UNTESTED_BUT_MAY_WORK:
             return BinaryStatus(
@@ -388,7 +394,11 @@ class BinaryManager:
         current_clean = clean_version(current_version)
 
         try:
-            if current_clean and latest_clean and Version(current_clean) > Version(latest_clean):
+            if (
+                current_clean
+                and latest_clean
+                and Version(current_clean) > Version(latest_clean)
+            ):
                 return UpdateDecision(
                     allowed=False,
                     requires_confirmation=False,
@@ -411,7 +421,9 @@ class BinaryManager:
                 current_version=current_clean,
             )
 
-        has_breaking = bool(_BREAKING_RE.search(release_notes)) if release_notes else False
+        has_breaking = (
+            bool(_BREAKING_RE.search(release_notes)) if release_notes else False
+        )
 
         # 2. If latest_version is newer than tested
         if not allow_untested:
@@ -540,7 +552,12 @@ class BinaryManager:
             for asset in data.get("assets", []):
                 name = asset.get("name", "").lower()
                 download_url = asset.get("browser_download_url", "")
-                if target_os in name and target_arch in name and name.endswith(ext) and download_url:
+                if (
+                    target_os in name
+                    and target_arch in name
+                    and name.endswith(ext)
+                    and download_url
+                ):
                     return download_url
 
         return self.get_download_url(version)
@@ -586,7 +603,9 @@ class BinaryManager:
         version_dir = os.path.join(self.base_dir, clean_v)
         os.makedirs(version_dir, exist_ok=True)
 
-        binary_filename = "immich-go.exe" if self.os_name.startswith("win") else "immich-go"
+        binary_filename = (
+            "immich-go.exe" if self.os_name.startswith("win") else "immich-go"
+        )
         binary_path = os.path.join(version_dir, binary_filename)
         temp_archive = os.path.join(version_dir, "download.tmp")
         temp_bin = binary_path + ".tmp"
@@ -612,7 +631,10 @@ class BinaryManager:
             archive_name = os.path.basename(url.split("?")[0])
             checksums = self.fetch_checksums(clean_v)
             if not checksums:
-                return False, "Release checksums.txt not found — install aborted for safety"
+                return (
+                    False,
+                    "Release checksums.txt not found — install aborted for safety",
+                )
 
             expected_hash = checksums.get(archive_name)
             if not expected_hash:
@@ -630,7 +652,9 @@ class BinaryManager:
                     for filename in z.namelist():
                         base = os.path.basename(filename)
                         if base in ("immich-go", "immich-go.exe"):
-                            with z.open(filename) as source, open(temp_bin, "wb") as target:
+                            with z.open(filename) as source, open(
+                                temp_bin, "wb"
+                            ) as target:
                                 target.write(source.read())
                             found = True
                             break
@@ -670,69 +694,6 @@ class BinaryManager:
                     except OSError:
                         pass
 
-    def download_archive(
-        self,
-        url: str,
-        progress_cb: Optional[Callable[[int], None]] = None,
-    ) -> bytes:
-        """Downloads the binary archive and returns raw bytes."""
-        response = requests.get(url, stream=True, timeout=60)
-        response.raise_for_status()
-
-        total_size = int(response.headers.get("content-length", 0))
-        block_size = 1024
-        downloaded_size = 0
-        content = io.BytesIO()
-
-        for data in response.iter_content(block_size):
-            downloaded_size += len(data)
-            content.write(data)
-            if total_size > 0 and progress_cb:
-                progress = int((downloaded_size / total_size) * 100)
-                progress_cb(progress)
-
-        return content.getvalue()
-
-    def extract_binary(
-        self,
-        archive_bytes: bytes,
-        download_url: str,
-        version: str,
-    ) -> str:
-        """Extracts immich-go binary from archive bytes into version directory."""
-        v_clean = clean_version(version)
-        target_dir = os.path.join(self.base_dir, v_clean)
-        os.makedirs(target_dir, exist_ok=True)
-
-        binary_filename = "immich-go.exe" if self.os_name.startswith("win") else "immich-go"
-        binary_path = os.path.join(target_dir, binary_filename)
-
-        if download_url.endswith(".zip"):
-            with zipfile.ZipFile(io.BytesIO(archive_bytes)) as z:
-                for filename in z.namelist():
-                    base = os.path.basename(filename)
-                    if base in ("immich-go", "immich-go.exe"):
-                        with z.open(filename) as source, open(binary_path, "wb") as target:
-                            target.write(source.read())
-                        break
-        elif download_url.endswith(".tar.gz") or download_url.endswith(".tgz"):
-            with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tar:
-                for member in tar.getmembers():
-                    base = os.path.basename(member.name)
-                    if base in ("immich-go", "immich-go.exe"):
-                        source = tar.extractfile(member)
-                        if source:
-                            with open(binary_path, "wb") as target:
-                                target.write(source.read())
-                        break
-        else:
-            raise ValueError(f"Unsupported archive extension in URL: {download_url}")
-
-        if not self.os_name.startswith("win") and os.path.exists(binary_path):
-            os.chmod(binary_path, 0o755)
-
-        return binary_path
-
     def select_version(
         self,
         version: str,
@@ -757,11 +718,12 @@ class BinaryManager:
 
         meta["versions"][v_clean] = {
             "path": binary_path,
-            "downloaded_at": meta["versions"].get(v_clean, {}).get("downloaded_at", ""),
+            "downloaded_at": datetime.now(timezone.utc).isoformat(),
             "gui_tested": v_clean in TESTED_IMMICH_GO_VERSIONS,
             "support_status": get_version_support(v_clean).value,
             "sha256": sha256,
-            "release_url": release_url or f"https://github.com/simulot/immich-go/releases/tag/v{v_clean}",
+            "release_url": release_url
+            or f"https://github.com/simulot/immich-go/releases/tag/v{v_clean}",
         }
 
         self.save_metadata(meta)

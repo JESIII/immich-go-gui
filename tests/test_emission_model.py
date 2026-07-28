@@ -24,7 +24,9 @@ def test_advanced_mode_enabled_row_emits(gui):
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["on-errors"].set_state({"enabled": True, "value": "continue"})
+    gui.adv_rows["upload-folder"]["on-errors"].set_state(
+        {"enabled": True, "value": "continue"}
+    )
     opts = gui.build_command(dry_run=False)
     assert "--on-errors=continue" in opts
 
@@ -36,7 +38,9 @@ def test_advanced_mode_disabled_row_skips(gui):
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["on-errors"].set_state({"enabled": False, "value": "continue"})
+    gui.adv_rows["upload-folder"]["on-errors"].set_state(
+        {"enabled": False, "value": "continue"}
+    )
     opts = gui.build_command(dry_run=False)
     assert not any("--on-errors" in o for o in opts)
 
@@ -48,7 +52,9 @@ def test_advanced_mode_client_timeout_emits(gui):
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["client-timeout"].set_state({"enabled": True, "value": 60})
+    gui.adv_rows["upload-folder"]["client-timeout"].set_state(
+        {"enabled": True, "value": 60}
+    )
     opts = gui.build_command(dry_run=False)
     assert "--client-timeout=60m" in opts
 
@@ -60,7 +66,9 @@ def test_advanced_mode_log_level_row_emits(gui):
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["log-level"].set_state({"enabled": True, "value": "DEBUG"})
+    gui.adv_rows["upload-folder"]["log-level"].set_state(
+        {"enabled": True, "value": "DEBUG"}
+    )
     opts = gui.build_command(dry_run=False)
     assert "--log-level=DEBUG" in opts
 
@@ -73,13 +81,14 @@ def test_advanced_mode_pause_jobs_row_emits(gui):
     gui.inputs["config"]["api_key"].setText("key")
     gui.inputs["config"]["admin_api_key"].setText("admin")
     gui.inputs["upload-folder"]["path"].setText("/photos")
-    gui.adv_rows["upload-folder"]["pause-jobs"].set_state({"enabled": True, "value": True})
+    gui.adv_rows["upload-folder"]["pause-jobs"].set_state(
+        {"enabled": True, "value": True}
+    )
     opts = gui.build_command(dry_run=False)
     from core.command_builder import FlagEmitter
+
     emitter = FlagEmitter("upload-folder")
-    assert any(
-        emitter._flag_name_from_arg(o) == "pause-immich-jobs" for o in opts
-    )
+    assert any(emitter._flag_name_from_arg(o) == "pause-immich-jobs" for o in opts)
 
 
 def test_advanced_mode_picasa_folder_album_emitted(gui):

@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import sys
 
 try:
     import tomllib
@@ -63,7 +62,9 @@ def sanitize_profile_name(name: str) -> str:
     return name.strip()
 
 
-def validate_profile_name(name: str, existing_names: list[str] | None = None) -> tuple[bool, str | None]:
+def validate_profile_name(
+    name: str, existing_names: list[str] | None = None
+) -> tuple[bool, str | None]:
     """Validate profile name format and uniqueness.
 
     Returns (is_valid, error_message).
@@ -105,7 +106,20 @@ def _load_profiles_index() -> dict:
     try:
         content = idx_path.read_text(encoding="utf-8")
         _profiles_cache = tomllib.loads(content)
-    except Exception:
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Failed to parse profiles index %s: %s",
+            idx_path,
+            exc,
+        )
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        try:
+            corrupt_path = idx_path.with_suffix(idx_path.suffix + f".corrupt-{stamp}")
+            idx_path.rename(corrupt_path)
+        except OSError:
+            pass
         _profiles_cache = {}
     _profiles_cache_path = idx_path
     return _profiles_cache
@@ -309,27 +323,57 @@ def rename_profile(old_name: str, new_name: str) -> None:
 
     old_p_dir = profile_dir(clean_old)
     new_p_dir = profile_dir(clean_new)
+    renamed_dir = False
+    secrets_copied = False
+    index_updated = False
 
-    if old_p_dir.exists():
-        old_p_dir.rename(new_p_dir)
+    try:
+        if not SecretStore.copy_secrets(clean_old, clean_new):
+            raise RuntimeError("Failed to copy secrets to renamed profile.")
+        secrets_copied = True
 
-    # Migrate keyring secrets
-    if not SecretStore.copy_secrets(clean_old, clean_new):
-        raise RuntimeError("Failed to copy secrets to renamed profile.")
-    SecretStore.clear_secret(clean_old, "api_key")
-    SecretStore.clear_secret(clean_old, "admin_api_key")
+        if old_p_dir.exists():
+            if new_p_dir.exists():
+                raise RuntimeError(f"Profile directory '{clean_new}' already exists.")
+            old_p_dir.rename(new_p_dir)
+            renamed_dir = True
 
-    idx_data = _load_profiles_index()
-    if idx_data.get("active_profile") == clean_old:
-        idx_data["active_profile"] = clean_new
+        idx_data = _load_profiles_index()
+        if idx_data.get("active_profile") == clean_old:
+            idx_data["active_profile"] = clean_new
 
-    p_list = idx_data.get("profiles", [])
-    for item in p_list:
-        if isinstance(item, dict) and item.get("name") == clean_old:
-            item["name"] = clean_new
+        p_list = idx_data.get("profiles", [])
+        for item in p_list:
+            if isinstance(item, dict) and item.get("name") == clean_old:
+                item["name"] = clean_new
 
-    idx_data["profiles"] = p_list
-    _save_profiles_index(idx_data)
+        idx_data["profiles"] = p_list
+        _save_profiles_index(idx_data)
+        index_updated = True
+
+        SecretStore.clear_secret(clean_old, "api_key")
+        SecretStore.clear_secret(clean_old, "admin_api_key")
+    except Exception:
+        if index_updated:
+            try:
+                idx_data = _load_profiles_index()
+                for item in idx_data.get("profiles", []):
+                    if isinstance(item, dict) and item.get("name") == clean_new:
+                        item["name"] = clean_old
+                if idx_data.get("active_profile") == clean_new:
+                    idx_data["active_profile"] = clean_old
+                _save_profiles_index(idx_data)
+            except Exception:
+                pass
+        if renamed_dir and new_p_dir.exists() and not old_p_dir.exists():
+            try:
+                new_p_dir.rename(old_p_dir)
+            except OSError:
+                pass
+        if secrets_copied:
+            SecretStore.clear_secret(clean_new, "api_key")
+            SecretStore.clear_secret(clean_new, "admin_api_key")
+        raise
 
 
 def delete_profile(name: str) -> None:
@@ -357,5 +401,7 @@ def delete_profile(name: str) -> None:
 
     idx_data = _load_profiles_index()
     p_list = idx_data.get("profiles", [])
-    idx_data["profiles"] = [p for p in p_list if isinstance(p, dict) and p.get("name") != clean_name]
+    idx_data["profiles"] = [
+        p for p in p_list if isinstance(p, dict) and p.get("name") != clean_name
+    ]
     _save_profiles_index(idx_data)

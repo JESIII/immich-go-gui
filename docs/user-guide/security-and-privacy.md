@@ -78,7 +78,7 @@ Paths can still be sensitive (home directory layout, album names). Share preview
 
 !!! danger "SSL Verification Warning"
     When **Skip SSL verification** is enabled:
-    
+
     - The Config tab shows a prominent warning banner.
     - Command plans add a warning indicator before execution.
     - Traffic can be inspected by any device on the network path — only use this in trusted local lab environments.

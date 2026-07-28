@@ -7,14 +7,14 @@
   },
   "advanced_state": {
     "date-range": { "enabled": true, "value": "2024" },
-    "include-type": { "enabled": true, "value": "image" }
+    "include-type": { "enabled": true, "value": "IMAGE" }
   },
   "expected_argv": [
     "archive",
     "from-folder",
     "--write-to-folder=/backup/dest",
     "--date-range=2024",
-    "--include-type=image",
+    "--include-type=IMAGE",
     "/source/photos"
   ]
 }

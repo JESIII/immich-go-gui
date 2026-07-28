@@ -9,63 +9,113 @@ THEME_SYSTEM = "System"
 THEME_LIGHT = "Light"
 THEME_DARK = "Dark"
 
+
 def normalize_theme_mode(mode):
     m = str(mode).strip().lower()
-    if m == "system": return THEME_SYSTEM
-    if m == "light": return THEME_LIGHT
-    if m == "dark": return THEME_DARK
+    if m == "system":
+        return THEME_SYSTEM
+    if m == "light":
+        return THEME_LIGHT
+    if m == "dark":
+        return THEME_DARK
     return THEME_SYSTEM
+
 
 def set_fusion_style():
     app = QApplication.instance()
-    if not app: return
+    if not app:
+        return
     style = QStyleFactory.create("Fusion")
-    if style: app.setStyle(style)
+    if style:
+        app.setStyle(style)
+
 
 def detect_system_theme() -> str:
     try:
         hints = QGuiApplication.styleHints()
         if hasattr(hints, "colorScheme"):
             scheme = hints.colorScheme()
-            if scheme == Qt.ColorScheme.Dark: return "dark"
-            if scheme == Qt.ColorScheme.Light: return "light"
-    except Exception: pass
+            if scheme == Qt.ColorScheme.Dark:
+                return "dark"
+            if scheme == Qt.ColorScheme.Light:
+                return "light"
+    except Exception:
+        pass
 
     app = QApplication.instance()
-    if app is None: return "dark"
+    if app is None:
+        return "dark"
     pal = app.palette()
     bg = pal.color(QPalette.ColorRole.Window)
     fg = pal.color(QPalette.ColorRole.WindowText)
     return "dark" if fg.lightness() > bg.lightness() else "light"
 
+
 @lru_cache(maxsize=8)
 def theme_tokens(theme: str) -> dict:
     if theme == "dark":
         return {
-            "bg": "#0E1113", "sidebar": "#121619", "surface": "#151A1E", "surface_alt": "#1B2126",
-            "input_bg": "#1B2126", "input_focus_bg": "#20272D", "border": "#262D34", "border_strong": "#343C43",
-            "text": "#E8ECEF", "text_muted": "#97A1AA", "text_faint": "#6B757D",
-            "accent": "#4FB3A4", "accent_hover": "#6FD6C5", "accent_subtle": "#17332F",
-            "primary": "#E1512E", "primary_hover": "#F1603D", "primary_subtle": "#3A1D15", "on_primary": "#FFFFFF",
+            "bg": "#0E1113",
+            "sidebar": "#121619",
+            "surface": "#151A1E",
+            "surface_alt": "#1B2126",
+            "input_bg": "#1B2126",
+            "input_focus_bg": "#20272D",
+            "border": "#262D34",
+            "border_strong": "#343C43",
+            "text": "#E8ECEF",
+            "text_muted": "#97A1AA",
+            "text_faint": "#6B757D",
+            "accent": "#4FB3A4",
+            "accent_hover": "#6FD6C5",
+            "accent_subtle": "#17332F",
+            "primary": "#E1512E",
+            "primary_hover": "#F1603D",
+            "primary_subtle": "#3A1D15",
+            "on_primary": "#FFFFFF",
             "warning": "#E5C07B",
-            "button_bg": "#20262B", "button_hover": "#2A3238", "scrollbar": "#0E1113", "scrollbar_handle": "#3A434B",
-            "terminal_bg": "#0B0D0E", "terminal_text": "#ECE7DD",
+            "button_bg": "#20262B",
+            "button_hover": "#2A3238",
+            "scrollbar": "#0E1113",
+            "scrollbar_handle": "#3A434B",
+            "terminal_bg": "#0B0D0E",
+            "terminal_text": "#ECE7DD",
         }
     return {
-        "bg": "#F5F7F9", "sidebar": "#FFFFFF", "surface": "#FFFFFF", "surface_alt": "#F8FAFC",
-        "input_bg": "#F8FAFC", "input_focus_bg": "#FFFFFF", "border": "#D8DEE4", "border_strong": "#C7CED6",
-        "text": "#18222C", "text_muted": "#5D6B7A", "text_faint": "#7C8794",
-        "accent": "#0F766E", "accent_hover": "#14B8A6", "accent_subtle": "#E4F5F2",
-        "primary": "#C2410C", "primary_hover": "#EA580C", "primary_subtle": "#FFEDD5", "on_primary": "#FFFFFF",
+        "bg": "#F5F7F9",
+        "sidebar": "#FFFFFF",
+        "surface": "#FFFFFF",
+        "surface_alt": "#F8FAFC",
+        "input_bg": "#F8FAFC",
+        "input_focus_bg": "#FFFFFF",
+        "border": "#D8DEE4",
+        "border_strong": "#C7CED6",
+        "text": "#18222C",
+        "text_muted": "#5D6B7A",
+        "text_faint": "#7C8794",
+        "accent": "#0F766E",
+        "accent_hover": "#14B8A6",
+        "accent_subtle": "#E4F5F2",
+        "primary": "#C2410C",
+        "primary_hover": "#EA580C",
+        "primary_subtle": "#FFEDD5",
+        "on_primary": "#FFFFFF",
         "warning": "#B45309",
-        "button_bg": "#EEF1F4", "button_hover": "#E2E7EC", "scrollbar": "#EEF1F4", "scrollbar_handle": "#AEB8C2",
-        "terminal_bg": "#111827", "terminal_text": "#F9FAFB",
+        "button_bg": "#EEF1F4",
+        "button_hover": "#E2E7EC",
+        "scrollbar": "#EEF1F4",
+        "scrollbar_handle": "#AEB8C2",
+        "terminal_bg": "#111827",
+        "terminal_text": "#F9FAFB",
     }
+
 
 @lru_cache(maxsize=8)
 def build_stylesheet(theme: str) -> str:
     t = theme_tokens(theme)
-    check_icon = os.path.join(os.path.dirname(__file__), "assets", "icons", "check.svg").replace("\\", "/")
+    check_icon = os.path.join(
+        os.path.dirname(__file__), "assets", "icons", "check.svg"
+    ).replace("\\", "/")
     return f"""
         QMainWindow, QDialog {{
             background-color: {t['bg']};
@@ -606,9 +656,11 @@ QMenu::item:selected {{
 }}
 """
 
+
 def apply_base_palette(theme: str):
     app = QApplication.instance()
-    if app is None: return
+    if app is None:
+        return
     t = theme_tokens(theme)
     pal = QPalette()
     pal.setColor(QPalette.ColorRole.Window, QColor(t["bg"]))
@@ -625,20 +677,33 @@ def apply_base_palette(theme: str):
     pal.setColor(QPalette.ColorRole.Link, QColor(t["accent"]))
     pal.setColor(QPalette.ColorRole.LinkVisited, QColor(t["accent"]))
     pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(t["text_faint"]))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(t["text_faint"]))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor(t["text_faint"]))
-    pal.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(t["text_faint"]))
+    pal.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(t["text_faint"])
+    )
+    pal.setColor(
+        QPalette.ColorGroup.Disabled,
+        QPalette.ColorRole.WindowText,
+        QColor(t["text_faint"]),
+    )
+    pal.setColor(
+        QPalette.ColorGroup.Disabled,
+        QPalette.ColorRole.ButtonText,
+        QColor(t["text_faint"]),
+    )
     app.setPalette(pal)
+
 
 def apply_application_theme(mode: str) -> str:
     mode = normalize_theme_mode(mode)
     resolved = detect_system_theme() if mode == THEME_SYSTEM else mode.lower()
     app = QApplication.instance()
-    if app is None: return resolved
+    if app is None:
+        return resolved
     app.setProperty("theme", resolved)
     apply_base_palette(resolved)
     app.setStyleSheet(build_stylesheet(resolved))
     return resolved
+
 
 def connect_system_theme_changes(callback):
     try:
@@ -646,10 +711,13 @@ def connect_system_theme_changes(callback):
         if hasattr(hints, "colorSchemeChanged"):
             hints.colorSchemeChanged.connect(lambda *_: callback())
             return True
-    except Exception: pass
+    except Exception:
+        pass
     return False
 
+
 _ICON_CACHE: dict[tuple[str, str], QIcon] = {}
+
 
 def load_themed_icon(icon_name: str, theme: str) -> QIcon:
     """Loads an SVG icon from assets/icons and colors it based on the theme."""
@@ -661,32 +729,35 @@ def load_themed_icon(icon_name: str, theme: str) -> QIcon:
     t = theme_tokens(theme)
     # Using text_muted for a subtle unselected look in sidebar
     color = t["text_muted"]
-    
-    svg_path = os.path.join(os.path.dirname(__file__), "assets", "icons", f"{icon_name}.svg")
-    
+
+    svg_path = os.path.join(
+        os.path.dirname(__file__), "assets", "icons", f"{icon_name}.svg"
+    )
+
     if not os.path.exists(svg_path):
         icon = QIcon()
         _ICON_CACHE[key] = icon
         return icon
-        
+
     with open(svg_path, "r", encoding="utf-8") as f:
         svg_content = f.read()
-        
-    svg_content = svg_content.replace('currentColor', color)
-    
+
+    svg_content = svg_content.replace("currentColor", color)
+
     renderer = QSvgRenderer(QByteArray(svg_content.encode("utf-8")))
     pixmap = QPixmap(20, 20)
     pixmap.fill(Qt.GlobalColor.transparent)
-    
+
     painter = QPainter(pixmap)
     # Improve rendering quality
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     renderer.render(painter)
     painter.end()
-    
+
     icon = QIcon(pixmap)
     _ICON_CACHE[key] = icon
     return icon
+
 
 def clear_icon_cache() -> None:
     _ICON_CACHE.clear()

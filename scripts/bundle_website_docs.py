@@ -15,7 +15,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_TEXT_EXTENSIONS = {".md", ".css", ".js", ".html", ".svg", ".yml", ".yaml", ".json", ".txt"}
+_TEXT_EXTENSIONS = {
+    ".md",
+    ".css",
+    ".js",
+    ".html",
+    ".svg",
+    ".yml",
+    ".yaml",
+    ".json",
+    ".txt",
+}
 
 
 def _collect_files(repo_root: Path) -> list[Path]:
@@ -48,7 +58,13 @@ def _collect_files(repo_root: Path) -> list[Path]:
     # Stable order: root configs → overrides → docs tree
     def sort_key(p: Path) -> tuple:
         rel = p.relative_to(repo_root).as_posix()
-        if rel in {"README.md", "CHANGELOG.md", "CONTRIBUTING.md", "mkdocs.yml", "pyproject.toml"}:
+        if rel in {
+            "README.md",
+            "CHANGELOG.md",
+            "CONTRIBUTING.md",
+            "mkdocs.yml",
+            "pyproject.toml",
+        }:
             return (0, rel)
         if rel.startswith(".github/"):
             return (1, rel)
@@ -113,5 +129,9 @@ def bundle_website(output_path: Path) -> None:
 
 if __name__ == "__main__":
     repo_root = Path(__file__).resolve().parent.parent
-    out_file = Path(sys.argv[1]) if len(sys.argv) > 1 else repo_root / "immichgo_website_bundle.txt"
+    out_file = (
+        Path(sys.argv[1])
+        if len(sys.argv) > 1
+        else repo_root / "immichgo_website_bundle.txt"
+    )
     bundle_website(out_file)
