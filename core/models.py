@@ -28,6 +28,7 @@ class ValidationResult:
 
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    field_errors: dict[str, str] = field(default_factory=dict)
 
     @property
     def is_valid(self) -> bool:

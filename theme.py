@@ -716,18 +716,40 @@ def connect_system_theme_changes(callback):
     return False
 
 
-_ICON_CACHE: dict[tuple[str, str], QIcon] = {}
+_ICON_CACHE: dict[tuple[str, str, float], QIcon] = {}
+
+
+def _primary_device_pixel_ratio() -> float:
+    try:
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            return float(screen.devicePixelRatio())
+    except Exception:
+        pass
+    return 1.0
+
+
+def _render_themed_pixmap(svg_content: str, logical_size: int, dpr: float) -> QPixmap:
+    pixmap = QPixmap(int(logical_size * dpr), int(logical_size * dpr))
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer = QSvgRenderer(QByteArray(svg_content.encode("utf-8")))
+    renderer.render(painter)
+    painter.end()
+    pixmap.setDevicePixelRatio(dpr)
+    return pixmap
 
 
 def load_themed_icon(icon_name: str, theme: str) -> QIcon:
     """Loads an SVG icon from assets/icons and colors it based on the theme."""
-    key = (icon_name, theme)
+    dpr = _primary_device_pixel_ratio()
+    key = (icon_name, theme, round(dpr, 2))
     cached = _ICON_CACHE.get(key)
     if cached is not None:
         return cached
 
     t = theme_tokens(theme)
-    # Using text_muted for a subtle unselected look in sidebar
     color = t["text_muted"]
 
     svg_path = os.path.join(
@@ -740,23 +762,29 @@ def load_themed_icon(icon_name: str, theme: str) -> QIcon:
         return icon
 
     with open(svg_path, "r", encoding="utf-8") as f:
-        svg_content = f.read()
+        svg_content = f.read().replace("currentColor", color)
 
-    svg_content = svg_content.replace("currentColor", color)
+    icon = QIcon()
+    ratios = sorted({1.0, 2.0, dpr})
+    for ratio in ratios:
+        pixmap = _render_themed_pixmap(svg_content, 20, ratio)
+        icon.addPixmap(pixmap)
 
-    renderer = QSvgRenderer(QByteArray(svg_content.encode("utf-8")))
-    pixmap = QPixmap(20, 20)
-    pixmap.fill(Qt.GlobalColor.transparent)
-
-    painter = QPainter(pixmap)
-    # Improve rendering quality
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    renderer.render(painter)
-    painter.end()
-
-    icon = QIcon(pixmap)
     _ICON_CACHE[key] = icon
     return icon
+
+
+def connect_screen_changes(callback) -> bool:
+    """Connect a callback when display DPI / screen geometry changes."""
+    try:
+        app = QGuiApplication.instance()
+        if app is None:
+            return False
+        for screen in app.screens():
+            screen.devicePixelRatioChanged.connect(lambda *_: callback())
+        return True
+    except Exception:
+        return False
 
 
 def clear_icon_cache() -> None:
