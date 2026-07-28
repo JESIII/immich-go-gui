@@ -206,7 +206,9 @@ def launch_external_terminal(
             "\n"
             'echo ""\n'
             'echo "immich-go exited with code $code"\n'
-            "exec bash\n"
+            'if [ -z "${IMMICH_GO_GUI_HEADLESS:-}" ]; then\n'
+            "  exec bash\n"
+            "fi\n"
         )
 
         run_sh_content = run_sh_content.rstrip() + "\n"

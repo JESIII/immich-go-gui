@@ -60,6 +60,8 @@ def test_posix_run_sh_sources_immich_go_env(tmp_path, monkeypatch):
     assert 'rm -f "$ENV_FILE"' in run_content
     assert "trap cleanup EXIT INT TERM HUP" in run_content
     assert "secret_key_123" not in run_content
+    assert "IMMICH_GO_GUI_HEADLESS" in run_content
+    assert "exec bash" in run_content
 
 
 @pytest.mark.skipif(
