@@ -448,8 +448,8 @@ class BinaryManager:
             current_version=current_clean,
         )
 
-    def get_release_asset_url(self, version: str) -> str | None:
-        """Fetch release metadata from GitHub API and discover asset URL for current OS/arch."""
+    def _fetch_release_json(self, version: str) -> dict | None:
+        """Fetch GitHub release metadata JSON for a version tag."""
         clean_v = clean_version(version)
         if not clean_v:
             return None
@@ -458,6 +458,62 @@ class BinaryManager:
             f"https://api.github.com/repos/simulot/immich-go/releases/tags/v{clean_v}",
             f"https://api.github.com/repos/simulot/immich-go/releases/tags/{clean_v}",
         ]
+        for u in urls:
+            try:
+                res = requests.get(u, timeout=10)
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
+        return None
+
+    def get_checksums_url(self, version: str) -> str | None:
+        """Return browser_download_url for checksums.txt on a GitHub release."""
+        data = self._fetch_release_json(version)
+        if not data:
+            return None
+        for asset in data.get("assets", []):
+            name = asset.get("name", "")
+            if name.lower() == "checksums.txt":
+                return asset.get("browser_download_url", "") or None
+        return None
+
+    def fetch_checksums(self, version: str) -> dict[str, str]:
+        """Fetch and parse checksums.txt for a release version."""
+        url = self.get_checksums_url(version)
+        if not url:
+            return {}
+        try:
+            res = requests.get(url, timeout=15)
+            res.raise_for_status()
+            checksums: dict[str, str] = {}
+            for line in res.text.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    checksums[parts[-1]] = parts[0]
+            return checksums
+        except Exception:
+            return {}
+
+    def verify_archive_checksum(self, archive_path: str, expected_hash: str) -> bool:
+        """Verify SHA256 of an archive file against an expected hex digest."""
+        if not expected_hash:
+            return False
+        try:
+            with open(archive_path, "rb") as f:
+                actual = calculate_sha256(f.read())
+        except OSError:
+            return False
+        return actual.lower() == expected_hash.lower()
+
+    def get_release_asset_url(self, version: str) -> str | None:
+        """Fetch release metadata from GitHub API and discover asset URL for current OS/arch."""
+        clean_v = clean_version(version)
+        if not clean_v:
+            return None
 
         if self.os_name.startswith("win"):
             target_os = "windows"
@@ -479,19 +535,13 @@ class BinaryManager:
         }
         target_arch = arch_map.get(self.arch, "x86_64")
 
-        for u in urls:
-            try:
-                res = requests.get(u, timeout=10)
-                if res.status_code == 200:
-                    data = res.json()
-                    assets = data.get("assets", [])
-                    for asset in assets:
-                        name = asset.get("name", "").lower()
-                        download_url = asset.get("browser_download_url", "")
-                        if target_os in name and target_arch in name and name.endswith(ext) and download_url:
-                            return download_url
-            except Exception:
-                pass
+        data = self._fetch_release_json(clean_v)
+        if data:
+            for asset in data.get("assets", []):
+                name = asset.get("name", "").lower()
+                download_url = asset.get("browser_download_url", "")
+                if target_os in name and target_arch in name and name.endswith(ext) and download_url:
+                    return download_url
 
         return self.get_download_url(version)
 
@@ -558,6 +608,21 @@ class BinaryManager:
                         f.write(chunk)
                         if total > 0 and progress_cb:
                             progress_cb(int(downloaded * 100 / total))
+
+            archive_name = os.path.basename(url.split("?")[0])
+            checksums = self.fetch_checksums(clean_v)
+            if not checksums:
+                return False, "Release checksums.txt not found — install aborted for safety"
+
+            expected_hash = checksums.get(archive_name)
+            if not expected_hash:
+                return (
+                    False,
+                    f"No checksum entry for {archive_name} in checksums.txt — install aborted",
+                )
+
+            if not self.verify_archive_checksum(temp_archive, expected_hash):
+                return False, "Archive checksum verification failed — install aborted"
 
             if url.endswith(".zip"):
                 with zipfile.ZipFile(temp_archive) as z:

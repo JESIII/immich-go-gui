@@ -8,7 +8,12 @@ from pathlib import Path
 import subprocess
 
 from .binary_manager import TESTED_IMMICH_GO_VERSION
-from .cli_help import load_help_fixture, parse_help_flags, help_name_for_tab
+from .cli_help import (
+    load_help_fixture,
+    parse_help_bool_defaults,
+    parse_help_flags,
+    help_name_for_tab,
+)
 from .cli_schema import TAB_ALLOWED_FLAGS, TAB_KEYS, COMPATIBILITY_MATRIX
 
 
@@ -58,27 +63,42 @@ def check_fixtures(version: str = TESTED_IMMICH_GO_VERSION) -> CompatibilityRepo
     return report
 
 
+_TAB_SUBCOMMANDS: dict[str, list[str]] = {
+    "upload-folder": ["upload", "from-folder"],
+    "upload-gp": ["upload", "from-google-photos"],
+    "upload-icloud": ["upload", "from-icloud"],
+    "upload-picasa": ["upload", "from-picasa"],
+    "upload-immich": ["upload", "from-immich"],
+    "archive-folder": ["archive", "from-folder"],
+    "archive-gp": ["archive", "from-google-photos"],
+    "archive-icloud": ["archive", "from-icloud"],
+    "archive-picasa": ["archive", "from-picasa"],
+    "archive-immich": ["archive", "from-immich"],
+    "stack": ["stack"],
+}
+
+
+def collect_bool_defaults_from_binary(binary_path: Path) -> dict[str, dict[str, bool]]:
+    """Run --help on each tab subcommand and parse bool flag defaults."""
+    result: dict[str, dict[str, bool]] = {}
+    for tab_key, args in _TAB_SUBCOMMANDS.items():
+        cmd = [str(binary_path)] + args + ["--help"]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            text = res.stdout if res.stdout else res.stderr
+            result[tab_key] = parse_help_bool_defaults(text)
+        except Exception:
+            result[tab_key] = {}
+    return result
+
+
 def check_binary_help(binary_path: Path, version: str = TESTED_IMMICH_GO_VERSION) -> CompatibilityReport:
     """Runs --help on target subcommands of live binary and compares against GUI allowlists."""
     report = CompatibilityReport(version=version)
     matrix_entry = COMPATIBILITY_MATRIX.get(version, {})
     report.notes = matrix_entry.get("notes", "")
 
-    subcommands = {
-        "upload-folder": ["upload", "from-folder"],
-        "upload-gp": ["upload", "from-google-photos"],
-        "upload-icloud": ["upload", "from-icloud"],
-        "upload-picasa": ["upload", "from-picasa"],
-        "upload-immich": ["upload", "from-immich"],
-        "archive-folder": ["archive", "from-folder"],
-        "archive-gp": ["archive", "from-google-photos"],
-        "archive-icloud": ["archive", "from-icloud"],
-        "archive-picasa": ["archive", "from-picasa"],
-        "archive-immich": ["archive", "from-immich"],
-        "stack": ["stack"],
-    }
-
-    for tab_key, args in subcommands.items():
+    for tab_key, args in _TAB_SUBCOMMANDS.items():
         gui_allowed = TAB_ALLOWED_FLAGS.get(tab_key, set())
         cmd = [str(binary_path)] + args + ["--help"]
         try:

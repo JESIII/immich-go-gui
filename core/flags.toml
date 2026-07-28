@@ -923,7 +923,7 @@ kind = "bool"
 default = false
 mode = "advanced"
 # ── upload-picasa (31 flags) ──────────────────────────────────
-# Fix §1.1: folder-album and into-album are mode="both"
+# upload-picasa: folder-album and into-album are mode="simple" (see below)
 
 [[flags.upload-picasa]]
 key = "path"
@@ -1030,7 +1030,7 @@ key = "album-picasa"
 flag = "album-picasa"
 label = "Use Picasa album name found in .picasa.ini file"
 kind = "bool"
-default = false
+default = true
 mode = "advanced"
 
 [[flags.upload-picasa]]
@@ -2055,7 +2055,7 @@ key = "album-picasa"
 flag = "album-picasa"
 label = "Use Picasa album name found in .picasa.ini file"
 kind = "bool"
-default = false
+default = true
 mode = "advanced"
 
 [[flags.archive-picasa]]

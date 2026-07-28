@@ -561,7 +561,10 @@ def build_plan_from_state(
 
     # ── 6. Safety: pause-jobs without admin key ────────────────
     if tab_key in UPLOAD_TABS or tab_key == "stack":
-        has_pause = any("pause-immich-jobs" in o for o in emitter.opts)
+        has_pause = any(
+            emitter._flag_name_from_arg(o) == "pause-immich-jobs"
+            for o in emitter.opts
+        )
         if not has_pause and not admin_api_key:
             emitter.add_bool_val("pause-immich-jobs", False, source="safety")
             plan.warnings.append(

@@ -75,7 +75,11 @@ def test_advanced_mode_pause_jobs_row_emits(gui):
     gui.inputs["upload-folder"]["path"].setText("/photos")
     gui.adv_rows["upload-folder"]["pause-jobs"].set_state({"enabled": True, "value": True})
     opts = gui.build_command(dry_run=False)
-    assert any("--pause-immich-jobs" in o for o in opts)
+    from core.command_builder import FlagEmitter
+    emitter = FlagEmitter("upload-folder")
+    assert any(
+        emitter._flag_name_from_arg(o) == "pause-immich-jobs" for o in opts
+    )
 
 
 def test_advanced_mode_picasa_folder_album_emitted(gui):

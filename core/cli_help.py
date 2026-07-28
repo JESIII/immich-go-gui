@@ -7,6 +7,10 @@ from pathlib import Path
 import re
 
 _FLAG_PATTERN = re.compile(r"(?:^|\s)--([a-zA-Z0-9-]+)(?:[=[\s]|$)")
+_BOOL_DEFAULT_PATTERN = re.compile(
+    r"--([a-zA-Z0-9-]+).*?\(default (true|false)\)",
+    re.IGNORECASE,
+)
 
 
 def parse_help_flags(help_text: str) -> set[str]:
@@ -22,6 +26,19 @@ def parse_help_flags(help_text: str) -> set[str]:
             if flag and flag != "help":
                 flags.add(flag)
     return flags
+
+
+def parse_help_bool_defaults(help_text: str) -> dict[str, bool]:
+    """Extract bool flag defaults from immich-go CLI --help text.
+
+    Parses lines like ``--recursive  Scan subdirectories (default true)``.
+  """
+    defaults: dict[str, bool] = {}
+    for line in help_text.splitlines():
+        match = _BOOL_DEFAULT_PATTERN.search(line)
+        if match:
+            defaults[match.group(1)] = match.group(2).lower() == "true"
+    return defaults
 
 
 def help_name_for_tab(tab_key: str) -> str:

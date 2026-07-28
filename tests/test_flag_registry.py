@@ -1,4 +1,6 @@
 """Tests for unified flag registry (core/flags.toml and core/flag_registry.py)."""
+import pytest
+
 from core.flag_registry import REGISTRY
 
 
@@ -64,3 +66,52 @@ def test_picasa_simple_keys_are_not_advanced_only():
     assert "folder-album" not in REGISTRY.advanced_keys("upload-picasa")
     assert "into-album" not in REGISTRY.advanced_keys("upload-picasa")
     assert "recursive" in REGISTRY.advanced_keys("upload-picasa")
+
+
+def test_bool_defaults_match_live_cli():
+    """Bool flag defaults in flags.toml must match live immich-go --help output."""
+    import subprocess
+    from pathlib import Path
+
+    from core.binary_manager import (
+        get_binary_path,
+        load_binary_metadata,
+        parse_version_output,
+        TESTED_IMMICH_GO_VERSION,
+    )
+    from core.cli_contract import collect_bool_defaults_from_binary
+
+    meta = load_binary_metadata()
+    binary_path = get_binary_path(meta)
+    if not binary_path or not Path(binary_path).exists():
+        pytest.skip("immich-go binary not installed")
+
+    try:
+        res = subprocess.run(
+            [binary_path, "version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        version = parse_version_output(res.stdout or res.stderr)
+    except Exception:
+        pytest.skip("immich-go binary not runnable")
+
+    if version != TESTED_IMMICH_GO_VERSION:
+        pytest.skip(
+            f"immich-go version {version} != tested version {TESTED_IMMICH_GO_VERSION}"
+        )
+
+    cli_defaults = collect_bool_defaults_from_binary(Path(binary_path))
+
+    for tab_key, flag_defs in REGISTRY.flags.items():
+        tab_defaults = cli_defaults.get(tab_key, {})
+        for flag_def in flag_defs:
+            if flag_def.kind != "bool" or not flag_def.flag:
+                continue
+            if flag_def.flag not in tab_defaults:
+                continue
+            assert flag_def.default == tab_defaults[flag_def.flag], (
+                f"Tab {tab_key}: flag {flag_def.flag} default "
+                f"{flag_def.default!r} != CLI {tab_defaults[flag_def.flag]!r}"
+            )

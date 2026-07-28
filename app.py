@@ -536,9 +536,6 @@ class ImmichGoGUI(QMainWindow):
         "stack",
     ]
 
-    # FIX Phase 2 #11/#12: define upload-only tab set for flag scoping
-    UPLOAD_TABS = {"upload-folder", "upload-gp", "upload-immich"}
-
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Immich Go GUI")

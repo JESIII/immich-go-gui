@@ -1330,7 +1330,8 @@ def test_load_help_fixture():
 
 
 def test_all_tab_allowed_flags_exist_in_help_fixtures():
-    tabs = ["upload-folder", "upload-gp", "upload-immich", "archive-folder", "archive-immich", "stack"]
+    from core.flag_registry import REGISTRY
+    tabs = list(REGISTRY.tabs.keys())
     for tab_key in tabs:
         fixture_name = help_name_for_tab(tab_key)
         fixture_flags = load_help_fixture("0.32.0", fixture_name)
@@ -1546,7 +1547,8 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     seeing terminal_pid dead, and the fresh heartbeat file returned True forever.
     """
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
-    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr("core.process_tracker.sys.platform", "win32")
+    monkeypatch.setattr("core.process_tracker._is_process_alive", lambda pid: False)
     from core.process_tracker import create_lock, update_lock, is_lock_active, release_lock
 
     l_path = create_lock("upload-folder", "upload", "./immich-go")
@@ -1572,6 +1574,36 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     )
 
     release_lock(l_path)
+
+
+def test_is_process_alive_win32_still_active(monkeypatch):
+    """Cover win32 ctypes OpenProcess / GetExitCodeProcess path in _is_process_alive."""
+    monkeypatch.setattr("core.process_tracker.sys.platform", "win32")
+
+    class FakeKernel32:
+        STILL_ACTIVE = 259
+
+        def OpenProcess(self, access, inherit, pid):
+            return 42 if pid == 1234 else 0
+
+        def GetExitCodeProcess(self, handle, exit_code_ref):
+            exit_code_ref._obj.value = self.STILL_ACTIVE
+            return 1
+
+        def CloseHandle(self, handle):
+            return 1
+
+    fake_kernel32 = FakeKernel32()
+    import ctypes
+    fake_windll = type("windll", (), {})()
+    fake_windll.kernel32 = fake_kernel32
+    monkeypatch.setattr(ctypes, "windll", fake_windll, raising=False)
+
+    from core.process_tracker import _is_process_alive
+
+    assert _is_process_alive(1234) is True
+    assert _is_process_alive(9999) is False
+    assert _is_process_alive(None) is False
 
 
 def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
@@ -2310,6 +2342,112 @@ def test_binary_manager_download_and_install_cancellation(tmp_path):
     assert not (v_dir / "immich-go.tmp").exists()
 
 
+def _make_tar_gz_archive(content: bytes = b"#!/bin/sh\necho 0.32.0\n") -> bytes:
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = content
+        info = tarfile.TarInfo(name="immich-go")
+        info.size = len(data)
+        info.mode = 0o755
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_binary_manager_checksum_verification_pass(tmp_path):
+    from core.binary_manager import BinaryManager, calculate_sha256
+
+    archive_bytes = _make_tar_gz_archive()
+    archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
+    url = f"https://example.com/{archive_name}"
+    checksums = {archive_name: calculate_sha256(archive_bytes)}
+
+    bm = BinaryManager(base_dir=str(tmp_path), os_name="linux", arch="x86_64")
+
+    mock_res = MagicMock()
+    mock_res.headers = {"content-length": str(len(archive_bytes))}
+    mock_res.iter_content.return_value = [archive_bytes]
+    mock_res.__enter__.return_value = mock_res
+
+    with patch.object(bm, "get_release_asset_url", return_value=url), \
+         patch.object(bm, "fetch_checksums", return_value=checksums), \
+         patch("requests.get", return_value=mock_res), \
+         patch.object(bm, "verify_extracted_binary", return_value=True):
+        success, msg = bm.download_and_install(version="0.32.0")
+        assert success is True
+        assert "Successfully installed" in msg
+
+
+def test_binary_manager_checksum_verification_fail(tmp_path):
+    from core.binary_manager import BinaryManager, calculate_sha256
+
+    archive_bytes = _make_tar_gz_archive()
+    archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
+    url = f"https://example.com/{archive_name}"
+    checksums = {archive_name: "0000000000000000000000000000000000000000000000000000000000000000"}
+
+    bm = BinaryManager(base_dir=str(tmp_path), os_name="linux", arch="x86_64")
+
+    mock_res = MagicMock()
+    mock_res.headers = {"content-length": str(len(archive_bytes))}
+    mock_res.iter_content.return_value = [archive_bytes]
+    mock_res.__enter__.return_value = mock_res
+
+    with patch.object(bm, "get_release_asset_url", return_value=url), \
+         patch.object(bm, "fetch_checksums", return_value=checksums), \
+         patch("requests.get", return_value=mock_res):
+        success, msg = bm.download_and_install(version="0.32.0")
+        assert success is False
+        assert "checksum verification failed" in msg.lower()
+
+
+def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
+    from core.binary_manager import BinaryManager, calculate_sha256
+
+    archive_bytes = _make_tar_gz_archive()
+    archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
+    url = f"https://example.com/{archive_name}"
+
+    bm = BinaryManager(base_dir=str(tmp_path), os_name="linux", arch="x86_64")
+
+    mock_res = MagicMock()
+    mock_res.headers = {"content-length": str(len(archive_bytes))}
+    mock_res.iter_content.return_value = [archive_bytes]
+    mock_res.__enter__.return_value = mock_res
+
+    with patch.object(bm, "get_release_asset_url", return_value=url), \
+         patch.object(bm, "fetch_checksums", return_value={}), \
+         patch("requests.get", return_value=mock_res):
+        success, msg = bm.download_and_install(version="0.32.0")
+        assert success is False
+        assert "checksums.txt" in msg.lower()
+
+
+def test_binary_manager_checksum_tampered_archive(tmp_path):
+    from core.binary_manager import BinaryManager, calculate_sha256
+
+    good_bytes = _make_tar_gz_archive(b"good binary")
+    tampered_bytes = _make_tar_gz_archive(b"tampered binary")
+    archive_name = "immich-go_0.32.0_linux_x86_64.tar.gz"
+    url = f"https://example.com/{archive_name}"
+    checksums = {archive_name: calculate_sha256(good_bytes)}
+
+    bm = BinaryManager(base_dir=str(tmp_path), os_name="linux", arch="x86_64")
+
+    mock_res = MagicMock()
+    mock_res.headers = {"content-length": str(len(tampered_bytes))}
+    mock_res.iter_content.return_value = [tampered_bytes]
+    mock_res.__enter__.return_value = mock_res
+
+    with patch.object(bm, "get_release_asset_url", return_value=url), \
+         patch.object(bm, "fetch_checksums", return_value=checksums), \
+         patch("requests.get", return_value=mock_res):
+        success, msg = bm.download_and_install(version="0.32.0")
+        assert success is False
+        assert "checksum verification failed" in msg.lower()
+
+
 def test_windows_bat_heartbeat_generation(tmp_path, monkeypatch):
     """Fix 1.4: Windows terminal launch generates a .bat file with background heartbeat loop."""
     from core.terminal_launcher import launch_external_terminal
@@ -2678,6 +2816,12 @@ class TestBinaryManagerWindowsPathResolution:
 from core.command_builder import build_plan_from_state as _build_plan
 
 
+def _pause_flag_args(argv):
+    from core.command_builder import FlagEmitter
+    emitter = FlagEmitter("upload-folder")
+    return [a for a in argv if emitter._flag_name_from_arg(a) == "pause-immich-jobs"]
+
+
 class TestPauseJobsAutoDisable:
     """Regression tests for Bug #64: --pause-immich-jobs + no admin key = 403."""
 
@@ -2723,7 +2867,7 @@ class TestPauseJobsAutoDisable:
             advanced_state={"pause-jobs": {"enabled": True, "value": False}},
             binary_path="./immich-go",
         )
-        pause_flags = [a for a in plan.argv if "pause-immich-jobs" in a]
+        pause_flags = _pause_flag_args(plan.argv)
         assert len(pause_flags) == 1, f"Expected exactly one pause flag; got: {pause_flags}"
         assert pause_flags[0] == "--pause-immich-jobs=false"
         # No warning because user explicitly disabled it
@@ -2765,6 +2909,17 @@ class TestPauseJobsAutoDisable:
                 f"Expected auto-disable on tab '{tab_key}'; argv={plan.argv}"
             )
 
+    def test_from_pause_does_not_suppress_dest_pause_safety(self):
+        """from-pause-immich-jobs must not block destination pause safety injection."""
+        plan = _build_plan(
+            tab_key="upload-immich",
+            config_state={**self._BASE_CONFIG, "admin_api_key": ""},
+            tab_state={"from-server": "http://old:2283", "from-api-key": "old-key"},
+            advanced_state={"from-pause-jobs": {"enabled": True, "value": True}},
+            binary_path="./immich-go",
+        )
+        assert "--pause-immich-jobs=false" in plan.argv
+
     def test_no_double_pause_flag_injection(self):
         """When admin key is absent AND pause=False via advanced row, only one flag is emitted."""
         plan = _build_plan(
@@ -2774,8 +2929,9 @@ class TestPauseJobsAutoDisable:
             advanced_state={"pause-jobs": {"enabled": True, "value": False}},
             binary_path="./immich-go",
         )
-        pause_flags = [a for a in plan.argv if "pause-immich-jobs" in a]
+        pause_flags = _pause_flag_args(plan.argv)
         assert len(pause_flags) == 1, f"Expected exactly one pause flag; got: {pause_flags}"
+
 
 # ==============================================================================
 # Phase 2–6 hardening coverage
