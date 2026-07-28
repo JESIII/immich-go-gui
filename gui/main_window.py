@@ -26,15 +26,20 @@ from core.process_tracker import (
 from core.profile_manager import active_profile_name
 from gui.browse_dialogs import BrowseDialogsMixin
 from gui.mixins.binary_ui import BinaryUIMixin
+from gui.mixins.confirm_dialog import ConfirmDialogMixin
 from gui.mixins.connection import ConnectionMixin
 from gui.mixins.diagnostics import DiagnosticsMixin
 from gui.mixins.execution import ExecutionMixin
+from gui.mixins.form_helpers import FormHelpersMixin
+from gui.mixins.form_state import FormStateMixin
 from gui.mixins.layout import LayoutMixin
 from gui.mixins.menu import MenuMixin
 from gui.mixins.persistence import PersistenceMixin
 from gui.mixins.profiles_ui import ProfilesUIMixin
 from gui.mixins.status import StatusMixin
 from gui.mixins.theme_mixin import ThemeMixin
+from gui.tabs.config_tab import build_config_tab
+from gui.tabs.stack_tab import build_stack_tab
 from theme import (
     THEME_SYSTEM,
     apply_application_theme,
@@ -46,12 +51,15 @@ from theme import (
 
 class ImmichGoGUI(
     QMainWindow,
+    FormHelpersMixin,
     LayoutMixin,
     MenuMixin,
     ThemeMixin,
     StatusMixin,
+    ConfirmDialogMixin,
     ExecutionMixin,
     BinaryUIMixin,
+    FormStateMixin,
     PersistenceMixin,
     ProfilesUIMixin,
     ConnectionMixin,
@@ -116,10 +124,10 @@ class ImmichGoGUI(
         self._build_content_area()
         self.create_menu_bar()
 
-        self.config_tab = self._build_config_tab()
+        self.config_tab = build_config_tab(self)
         self.upload_page = self._build_upload_page()
         self.archive_page = self._build_archive_page()
-        self.stack_tab = self._build_stack_tab()
+        self.stack_tab = build_stack_tab(self)
 
         self.stacked_widget.addWidget(self.config_tab)
         self.stacked_widget.addWidget(self.upload_page)
