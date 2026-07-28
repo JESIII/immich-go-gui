@@ -103,6 +103,7 @@ jobs:
             --include-data-files=core/flags.toml=core/flags.toml \
             --include-data-dir=assets=assets \
             --include-data-dir=core/fixtures=core/fixtures \
+            --include-data-dir=gui=gui \
             --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico \
             --company-name="Shitan198u" --product-name="Immich-Go GUI" \
             --file-version="${NUMERIC_VERSION}.0" --product-version="${NUMERIC_VERSION}.0" app.py

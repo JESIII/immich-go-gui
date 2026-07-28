@@ -1,12 +1,13 @@
 """Tests for POSIX terminal environment propagation via env.sh."""
 
 import tempfile
+from datetime import UTC
 from pathlib import Path
 
 import pytest
 
 from core.process_tracker import create_lock
-from core.terminal_launcher import launch_external_terminal, _quote_sh_env_val
+from core.terminal_launcher import _quote_sh_env_val, launch_external_terminal
 
 
 @pytest.mark.skipif(
@@ -55,8 +56,8 @@ def test_posix_run_sh_sources_immich_go_env(tmp_path, monkeypatch):
     assert "IMMICH_GO_GUI" not in env_content  # non IMMICH_GO_* vars excluded
 
     run_content = run_sh.read_text(encoding="utf-8")
-    assert "source \"$ENV_FILE\"" in run_content
-    assert "rm -f \"$ENV_FILE\"" in run_content
+    assert 'source "$ENV_FILE"' in run_content
+    assert 'rm -f "$ENV_FILE"' in run_content
     assert "trap cleanup EXIT INT TERM HUP" in run_content
     assert "secret_key_123" not in run_content
 
@@ -67,13 +68,14 @@ def test_posix_run_sh_sources_immich_go_env(tmp_path, monkeypatch):
 )
 def test_posix_stale_lock_dead_shell_pid(tmp_path, monkeypatch):
     """Dead shell PID should not keep lock active via orphan heartbeat."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta
+
     from core.process_tracker import is_lock_active, update_lock
 
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     lock_path = create_lock("upload-folder", "upload", "./immich-go")
 
-    stale_start = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+    stale_start = (datetime.now(UTC) - timedelta(seconds=120)).isoformat()
     update_lock(lock_path, started_at=stale_start, shell_pid=999999)
 
     pid_file = lock_path.with_suffix(".pid")

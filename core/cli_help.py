@@ -3,8 +3,8 @@
 Pure Python module, Qt-free.
 """
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 _FLAG_PATTERN = re.compile(r"(?:^|\s)--([a-zA-Z0-9-]+)(?:[=[\s]|$)")
 _BOOL_DEFAULT_PATTERN = re.compile(

@@ -4,61 +4,6 @@ This package contains data models, CLI schemas, configuration persistence,
 binary management, and command building routines.
 """
 
-from .models import (
-    AppConfig,
-    BinaryStatus,
-    CommandPlan,
-    UpdateDecision,
-    UpdateSeverity,
-    ValidationResult,
-    VersionSupport,
-)
-from .flag_registry import (
-    REGISTRY,
-    FlagDef,
-    Registry,
-)
-from .cli_schema import (
-    ARCHIVE_TABS,
-    COMPATIBILITY_MATRIX,
-    ENV_KEY_MAP,
-    SECRET_FLAGS,
-    SERVER_REQUIRED_TABS,
-    SERVERLESS_TABS,
-    TAB_COMMANDS,
-    TAB_KEYS,
-    UPLOAD_TABS,
-    TAB_ALLOWED_FLAGS,
-    flag_allowed_for_tab,
-    assert_flag_allowed,
-)
-from .cli_help import (
-    parse_help_flags,
-    load_help_fixture,
-    help_name_for_tab,
-)
-from .cli_contract import (
-    CompatibilityReport,
-    check_fixtures,
-    check_binary_help,
-)
-from .config_manager import (
-    SecretStore,
-    SecretSaveResult,
-    clear_api_key,
-    default_config_dir,
-    default_config_path,
-    default_secrets_path,
-    get_api_key,
-    get_config_load_warning,
-    get_secret_with_fallback,
-    load_config,
-    load_secrets,
-    save_config,
-    save_secrets,
-    save_secret_with_fallback,
-    set_api_key,
-)
 from .binary_manager import (
     BINARY_BASE_DIR,
     METADATA_PATH,
@@ -73,6 +18,30 @@ from .binary_manager import (
     parse_version_output,
     save_binary_metadata,
 )
+from .cli_contract import (
+    CompatibilityReport,
+    check_binary_help,
+    check_fixtures,
+)
+from .cli_help import (
+    help_name_for_tab,
+    load_help_fixture,
+    parse_help_flags,
+)
+from .cli_schema import (
+    ARCHIVE_TABS,
+    COMPATIBILITY_MATRIX,
+    ENV_KEY_MAP,
+    SECRET_FLAGS,
+    SERVER_REQUIRED_TABS,
+    SERVERLESS_TABS,
+    TAB_ALLOWED_FLAGS,
+    TAB_COMMANDS,
+    TAB_KEYS,
+    UPLOAD_TABS,
+    assert_flag_allowed,
+    flag_allowed_for_tab,
+)
 from .command_builder import (
     build_environment,
     build_plan_from_state,
@@ -83,7 +52,49 @@ from .command_builder import (
     validate_state,
     validate_state_light,
 )
+from .config_manager import (
+    SecretSaveResult,
+    SecretStore,
+    clear_api_key,
+    default_config_dir,
+    default_config_path,
+    default_secrets_path,
+    get_api_key,
+    get_config_load_warning,
+    get_secret_with_fallback,
+    load_config,
+    load_secrets,
+    save_config,
+    save_secret_with_fallback,
+    save_secrets,
+    set_api_key,
+)
+from .flag_registry import (
+    REGISTRY,
+    FlagDef,
+    Registry,
+)
+from .models import (
+    AppConfig,
+    BinaryStatus,
+    CommandPlan,
+    UpdateDecision,
+    UpdateSeverity,
+    ValidationResult,
+    VersionSupport,
+)
 from .network import normalize_server_url
+from .process_tracker import (
+    RunLock,
+    cleanup_stale_locks,
+    create_lock,
+    is_lock_active,
+    lock_dir,
+    read_lock,
+    release_lock,
+    reset_all_locks,
+    scan_locks,
+)
 from .profile_manager import (
     ProfileInfo,
     active_profile_name,
@@ -95,17 +106,6 @@ from .profile_manager import (
     rename_profile,
     set_active_profile_name,
     validate_profile_name,
-)
-from .process_tracker import (
-    RunLock,
-    cleanup_stale_locks,
-    create_lock,
-    is_lock_active,
-    lock_dir,
-    read_lock,
-    release_lock,
-    reset_all_locks,
-    scan_locks,
 )
 from .terminal_launcher import LaunchResult, launch_external_terminal
 
@@ -122,6 +122,14 @@ __all__ = [
     "UpdateSeverity",
     "ValidationResult",
     "VersionSupport",
+    # cli_contract
+    "CompatibilityReport",
+    "check_binary_help",
+    "check_fixtures",
+    # cli_help
+    "help_name_for_tab",
+    "load_help_fixture",
+    "parse_help_flags",
     # cli_schema
     "ARCHIVE_TABS",
     "COMPATIBILITY_MATRIX",
@@ -129,10 +137,14 @@ __all__ = [
     "SECRET_FLAGS",
     "SERVER_REQUIRED_TABS",
     "SERVERLESS_TABS",
+    "TAB_ALLOWED_FLAGS",
     "TAB_COMMANDS",
     "TAB_KEYS",
     "UPLOAD_TABS",
+    "assert_flag_allowed",
+    "flag_allowed_for_tab",
     # config_manager
+    "SecretSaveResult",
     "SecretStore",
     "clear_api_key",
     "default_config_dir",
@@ -140,9 +152,11 @@ __all__ = [
     "default_secrets_path",
     "get_api_key",
     "get_config_load_warning",
+    "get_secret_with_fallback",
     "load_config",
     "load_secrets",
     "save_config",
+    "save_secret_with_fallback",
     "save_secrets",
     "set_api_key",
     # binary_manager
@@ -168,4 +182,28 @@ __all__ = [
     "validate_date_range",
     "validate_state",
     "validate_state_light",
+    # process_tracker
+    "RunLock",
+    "cleanup_stale_locks",
+    "create_lock",
+    "is_lock_active",
+    "lock_dir",
+    "read_lock",
+    "release_lock",
+    "reset_all_locks",
+    "scan_locks",
+    # profile_manager
+    "ProfileInfo",
+    "active_profile_name",
+    "create_profile",
+    "delete_profile",
+    "duplicate_profile",
+    "ensure_default_profile",
+    "list_profiles",
+    "rename_profile",
+    "set_active_profile_name",
+    "validate_profile_name",
+    # terminal_launcher
+    "LaunchResult",
+    "launch_external_terminal",
 ]

@@ -8,15 +8,15 @@ from .status_card import StatusCard
 from .switch_button import SwitchButton
 
 __all__ = [
+    "AdvancedFlagRow",
+    "BasePage",
+    "Card",
     "DroppableLineEdit",
     "DroppablePlainTextEdit",
-    "SwitchButton",
-    "AdvancedFlagRow",
-    "Card",
-    "FormSection",
     "ElidingLabel",
-    "BasePage",
-    "NavItem",
+    "FormSection",
     "NavGroup",
+    "NavItem",
     "StatusCard",
+    "SwitchButton",
 ]

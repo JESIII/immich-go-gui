@@ -8,6 +8,22 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from app import ImmichGoGUI
 
 
+def _norm_argv(argv):
+    normed = []
+    for arg in argv:
+        clean = str(arg).replace("\\", "/")
+        if "=" in clean:
+            key, val = clean.split("=", 1)
+            if len(val) >= 2 and val[1] == ":" and val[0].isalpha():
+                val = val[2:]
+            clean = f"{key}={val}"
+        else:
+            if len(clean) >= 2 and clean[1] == ":" and clean[0].isalpha():
+                clean = clean[2:]
+        normed.append(clean)
+    return normed
+
+
 @pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance()
@@ -23,13 +39,15 @@ def gui(qapp):
     Session teardown must not show Save/Discard dialogs: function-scoped
     monkeypatches are already gone when this fixture exits. Use _force_close.
     """
-    with patch.object(ImmichGoGUI, "check_binary_version"), patch.object(
-        ImmichGoGUI, "load_configuration"
-    ), patch.object(ImmichGoGUI, "_probe_keyring", return_value=True), patch(
-        "PySide6.QtWidgets.QMessageBox.warning"
-    ), patch(
-        "PySide6.QtWidgets.QMessageBox.question",
-        return_value=QMessageBox.StandardButton.Discard,
+    with (
+        patch.object(ImmichGoGUI, "check_binary_version"),
+        patch.object(ImmichGoGUI, "load_configuration"),
+        patch.object(ImmichGoGUI, "_probe_keyring", return_value=True),
+        patch("PySide6.QtWidgets.QMessageBox.warning"),
+        patch(
+            "PySide6.QtWidgets.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Discard,
+        ),
     ):
         g = ImmichGoGUI()
         g.binary_path = "./immich-go"

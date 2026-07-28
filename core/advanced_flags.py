@@ -6,12 +6,15 @@ Qt-free module.
 
 from typing import Any
 
-from .flag_registry import REGISTRY, FlagDef as AdvancedFlagDef  # alias for compat
+from .flag_registry import REGISTRY  # alias for compat
+from .flag_registry import FlagDef as AdvancedFlagDef
 from .models import CommandPlan, ValidationResult
 from .validation import (
     clean_date_range,
     normalize_extensions_csv,
     normalize_list_csv,
+)
+from .validation import (
     validate_date_range as _validate_date_range,
 )
 

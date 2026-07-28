@@ -4,12 +4,12 @@ This module handles user-level TOML configuration files and secret providers (OS
 and plaintext secrets.toml) without PySide6 or Qt dependencies.
 """
 
-from dataclasses import dataclass
 import logging
 import os
-from datetime import datetime, timezone
-from pathlib import Path
 import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 try:
     import tomllib
@@ -196,7 +196,7 @@ def _quarantine_corrupt_file(path: Path) -> None:
     """Rename a corrupt file with a timestamp suffix for later inspection."""
     if not path.exists():
         return
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     corrupt_path = path.with_suffix(path.suffix + f".corrupt-{stamp}")
     try:
         path.rename(corrupt_path)

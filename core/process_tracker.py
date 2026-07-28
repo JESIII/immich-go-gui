@@ -3,13 +3,13 @@
 Pure Python module, Qt-free.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import sys
 import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 from .config_manager import default_config_dir
 
@@ -44,7 +44,7 @@ def create_lock(
     run_id = uuid.uuid4().hex[:8]
     l_path = lock_dir() / f"run_{run_id}.lock"
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     data = {
         "run_id": run_id,
         "gui_pid": os.getpid(),
@@ -71,7 +71,7 @@ def update_lock(lock_path: Path, **fields) -> None:
         data = json.loads(p.read_text(encoding="utf-8"))
         for k, v in fields.items():
             data[k] = v
-        data["last_seen"] = datetime.now(timezone.utc).isoformat()
+        data["last_seen"] = datetime.now(UTC).isoformat()
         p.write_text(json.dumps(data, indent=2), encoding="utf-8")
     except Exception:
         pass
@@ -171,7 +171,7 @@ def is_lock_active(lock_path: Path) -> bool:
         if lock.started_at:
             try:
                 start_dt = datetime.fromisoformat(lock.started_at)
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if (now - start_dt).total_seconds() < 60:
                     return True
             except ValueError:
@@ -207,7 +207,7 @@ def is_lock_active(lock_path: Path) -> bool:
     if lock.started_at:
         try:
             start_dt = datetime.fromisoformat(lock.started_at)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if (now - start_dt).total_seconds() < 60:
                 return True
         except ValueError:

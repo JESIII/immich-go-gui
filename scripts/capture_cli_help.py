@@ -5,11 +5,11 @@ Pure Python, Qt-free script.
 """
 
 import argparse
-from datetime import datetime, timezone
 import json
-from pathlib import Path
 import subprocess
 import sys
+from datetime import UTC, datetime
+from pathlib import Path
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -17,11 +17,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.binary_manager import (
+    TESTED_IMMICH_GO_VERSION,
     get_binary_path,
     load_binary_metadata,
-    TESTED_IMMICH_GO_VERSION,
 )
-
 
 TARGET_COMMANDS = {
     "root": [],
@@ -59,7 +58,7 @@ def capture_help_for_version(binary_path: Path, version: str, out_dir: Path) -> 
 
     manifest = {
         "version": version,
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "binary_path": str(binary_path),
         "commands": manifest_commands,
     }

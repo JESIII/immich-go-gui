@@ -22,9 +22,7 @@ def build_upload_folder_tab(host) -> QWidget:
     form = FormSection()
 
     host.source_path_edit = DroppableLineEdit()
-    host.source_path_edit.setPlaceholderText(
-        "/path/to/files or /path/to/archive.zip"
-    )
+    host.source_path_edit.setPlaceholderText("/path/to/files or /path/to/archive.zip")
     host.inputs["upload-folder"]["path"] = host.source_path_edit
 
     btn_folder = QPushButton("Select Folder…")
@@ -81,9 +79,7 @@ def build_upload_folder_tab(host) -> QWidget:
     form.add_row("Burst Photos", c_burst)
 
     c_raw = QComboBox()
-    c_raw.addItems(
-        ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
-    )
+    c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
     host.inputs["upload-folder"]["manage-raw-jpeg"] = c_raw
     form.add_row("RAW + JPEG Pairs", c_raw)
 

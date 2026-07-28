@@ -2,7 +2,14 @@ import os
 import sys
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtWidgets import QDialog, QLabel, QMessageBox, QProgressBar, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (
+    QDialog,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from core import (
     BINARY_BASE_DIR,

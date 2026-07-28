@@ -3,15 +3,15 @@
 Pure Python module, Qt-free.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 from .process_tracker import update_lock
 
@@ -25,7 +25,7 @@ class LaunchResult:
 def cleanup_stale_temp_dirs(max_age_hours: int = 24) -> int:
     """Removes abandoned temporary run directories older than max_age_hours."""
     temp_root = Path(tempfile.gettempdir())
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     threshold = now - (max_age_hours * 3600)
     cleaned_count = 0
 
@@ -138,7 +138,7 @@ def launch_external_terminal(
             )
         except Exception as e:
             return LaunchResult(
-                ok=False, message=f"Failed to launch Windows terminal: {str(e)}"
+                ok=False, message=f"Failed to launch Windows terminal: {e!s}"
             )
 
     # Linux / macOS POSIX execution
@@ -287,4 +287,4 @@ def launch_external_terminal(
         return LaunchResult(ok=True, message="Terminal launched successfully.")
 
     except Exception as e:
-        return LaunchResult(ok=False, message=f"Terminal launch failed: {str(e)}")
+        return LaunchResult(ok=False, message=f"Terminal launch failed: {e!s}")

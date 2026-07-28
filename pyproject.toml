@@ -40,6 +40,6 @@ pythonpath = ["."]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
-include = ["core"]
+include = ["core", "gui"]
 reportMissingImports = "warning"
 reportAttributeAccessIssue = "warning"

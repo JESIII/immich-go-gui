@@ -64,9 +64,7 @@ def build_upload_icloud_tab(host) -> QWidget:
     form.add_row("Burst Photos", c_burst)
 
     c_raw = QComboBox()
-    c_raw.addItems(
-        ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
-    )
+    c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
     host.inputs["upload-icloud"]["manage-raw-jpeg"] = c_raw
     form.add_row("RAW + JPEG Pairs", c_raw)
 

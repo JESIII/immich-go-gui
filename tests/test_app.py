@@ -1,24 +1,24 @@
-import pytest
 import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+from PySide6.QtGui import QDropEvent
 
 from app import (
+    CommandPlan,
+    DroppablePlainTextEdit,
     ImmichGoGUI,
+    SecretStore,
+    build_environment,
     collect_paths,
     mask_command_for_display,
-    build_environment,
-    SecretStore,
-    DroppablePlainTextEdit,
-    CommandPlan,
     normalize_server_url,
     validate_date_range,
 )
-from PySide6.QtCore import QUrl, Qt, QMimeData, QPointF
-from PySide6.QtGui import QDropEvent
-
 
 # ==============================================================================
 # 1. PURE LOGIC TESTS (Decoupled from GUI - Fast & Reliable)
@@ -1019,16 +1019,19 @@ def test_config_roundtrip(tmp_path, monkeypatch):
 # ==============================================================================
 
 import requests
+
+from core.network import test_immich_connection as run_test_immich_connection
 from core.validation import (
     clean_date_range,
-    validate_date_range as validate_date_range_core,
+    expand_source_paths,
+    has_glob_pattern,
     normalize_extensions_csv,
     normalize_list_csv,
-    has_glob_pattern,
-    expand_source_paths,
     validate_destination_folder,
 )
-from core.network import test_immich_connection as run_test_immich_connection
+from core.validation import (
+    validate_date_range as validate_date_range_core,
+)
 
 
 def test_clean_date_range():
@@ -1186,8 +1189,9 @@ def test_status_card_reflects_connection_test_failure(gui):
     gui.inputs["config"]["server"].setText("http://localhost:2283")
     gui.inputs["config"]["api_key"].setText("key")
 
-    with patch("requests.get", side_effect=requests.exceptions.ConnectionError), patch(
-        "PySide6.QtWidgets.QMessageBox.warning"
+    with (
+        patch("requests.get", side_effect=requests.exceptions.ConnectionError),
+        patch("PySide6.QtWidgets.QMessageBox.warning"),
     ):
         gui.on_test_connection_clicked()
         assert gui._last_conn_test_ok is False
@@ -1328,13 +1332,13 @@ def test_admin_api_key_environment_passing():
 # ==============================================================================
 
 from core.profile_manager import (
-    list_profiles,
     active_profile_name,
-    set_active_profile_name,
     create_profile,
-    rename_profile,
-    duplicate_profile,
     delete_profile,
+    duplicate_profile,
+    list_profiles,
+    rename_profile,
+    set_active_profile_name,
     validate_profile_name,
 )
 
@@ -1397,9 +1401,9 @@ def test_collect_form_state_excludes_secrets(gui):
 
 from core.process_tracker import (
     create_lock,
-    release_lock,
-    read_lock,
     is_lock_active,
+    read_lock,
+    release_lock,
     scan_locks,
 )
 from core.terminal_launcher import launch_external_terminal
@@ -1448,7 +1452,7 @@ def test_terminal_launcher_posix_script_creation(tmp_path, monkeypatch):
 # SECTION 3: CLI CORRECTNESS & COMPATIBILITY TESTS (MILESTONE 1)
 # ==============================================================================
 
-from core.cli_help import parse_help_flags, load_help_fixture, help_name_for_tab
+from core.cli_help import help_name_for_tab, load_help_fixture, parse_help_flags
 from core.cli_schema import (
     TAB_ALLOWED_FLAGS,
 )
@@ -1707,9 +1711,9 @@ def test_stale_lock_detection_with_pid_and_heartbeat(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     from core.process_tracker import (
         create_lock,
-        update_lock,
         is_lock_active,
         release_lock,
+        update_lock,
     )
 
     l_path = create_lock("upload-folder", "upload", "./immich-go")
@@ -1738,9 +1742,9 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     monkeypatch.setattr("core.process_tracker._is_process_alive", lambda pid: False)
     from core.process_tracker import (
         create_lock,
-        update_lock,
         is_lock_active,
         release_lock,
+        update_lock,
     )
 
     l_path = create_lock("upload-folder", "upload", "./immich-go")
@@ -1811,8 +1815,9 @@ def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
         "OTHER_VAR": "ignored",
     }
 
-    with patch("subprocess.Popen") as mock_popen, patch(
-        "shutil.which", return_value="/usr/bin/gnome-terminal"
+    with (
+        patch("subprocess.Popen") as mock_popen,
+        patch("shutil.which", return_value="/usr/bin/gnome-terminal"),
     ):
         launch_external_terminal(
             command=["./immich-go", "archive", "from-immich"],
@@ -2235,6 +2240,7 @@ def test_binary_manager_verify_extracted_binary(tmp_path):
 def test_cleanup_stale_temp_dirs(tmp_path, monkeypatch):
     import tempfile
     import time
+
     from core.terminal_launcher import cleanup_stale_temp_dirs
 
     dummy_dir = tmp_path / "immich-go-run-test"
@@ -2653,10 +2659,11 @@ def test_binary_manager_checksum_verification_pass(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
-        bm, "fetch_checksums", return_value=checksums
-    ), patch("requests.get", return_value=mock_res), patch.object(
-        bm, "verify_extracted_binary", return_value=True
+    with (
+        patch.object(bm, "get_release_asset_url", return_value=url),
+        patch.object(bm, "fetch_checksums", return_value=checksums),
+        patch("requests.get", return_value=mock_res),
+        patch.object(bm, "verify_extracted_binary", return_value=True),
     ):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is True
@@ -2680,9 +2687,11 @@ def test_binary_manager_checksum_verification_fail(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
-        bm, "fetch_checksums", return_value=checksums
-    ), patch("requests.get", return_value=mock_res):
+    with (
+        patch.object(bm, "get_release_asset_url", return_value=url),
+        patch.object(bm, "fetch_checksums", return_value=checksums),
+        patch("requests.get", return_value=mock_res),
+    ):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksum verification failed" in msg.lower()
@@ -2702,9 +2711,11 @@ def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
     mock_res.iter_content.return_value = [archive_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
-        bm, "fetch_checksums", return_value={}
-    ), patch("requests.get", return_value=mock_res):
+    with (
+        patch.object(bm, "get_release_asset_url", return_value=url),
+        patch.object(bm, "fetch_checksums", return_value={}),
+        patch("requests.get", return_value=mock_res),
+    ):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksums.txt" in msg.lower()
@@ -2726,9 +2737,11 @@ def test_binary_manager_checksum_tampered_archive(tmp_path):
     mock_res.iter_content.return_value = [tampered_bytes]
     mock_res.__enter__.return_value = mock_res
 
-    with patch.object(bm, "get_release_asset_url", return_value=url), patch.object(
-        bm, "fetch_checksums", return_value=checksums
-    ), patch("requests.get", return_value=mock_res):
+    with (
+        patch.object(bm, "get_release_asset_url", return_value=url),
+        patch.object(bm, "fetch_checksums", return_value=checksums),
+        patch("requests.get", return_value=mock_res),
+    ):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksum verification failed" in msg.lower()
@@ -3082,8 +3095,9 @@ class TestBinaryManagerWindowsPathResolution:
             },
         }
 
-        with patch("core.binary_manager.subprocess.run") as mock_run, patch(
-            "core.binary_manager.load_binary_metadata", return_value=meta
+        with (
+            patch("core.binary_manager.subprocess.run") as mock_run,
+            patch("core.binary_manager.load_binary_metadata", return_value=meta),
         ):
             mock_result = MagicMock()
             mock_result.stdout = "v0.32.0"
@@ -3357,7 +3371,7 @@ def test_about_dialog_version_dynamic(gui, monkeypatch):
         captured["text"] = text
 
     monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.about", fake_about)
-    monkeypatch.setattr("app._gui_version", lambda: "9.9.9-test")
+    monkeypatch.setattr("gui.mixins.menu._gui_version", lambda: "9.9.9-test")
     gui.show_about_dialog()
     assert "9.9.9-test" in captured["text"]
     assert f"v{TESTED_IMMICH_GO_VERSION}" in captured["text"]
@@ -3407,8 +3421,8 @@ def test_profile_index_cached(tmp_path, monkeypatch):
 
 
 def test_close_event_save_prompt(gui, monkeypatch):
-    from PySide6.QtWidgets import QMessageBox
     from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     calls = {"save": 0}
 
@@ -3421,7 +3435,7 @@ def test_close_event_save_prompt(gui, monkeypatch):
         "save_configuration",
         lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1),
     )
-    monkeypatch.setattr("app.scan_locks", lambda: [])
+    monkeypatch.setattr("gui.main_window.scan_locks", list)
     event = QCloseEvent()
     gui.closeEvent(event)
     assert calls["save"] == 1
@@ -3429,8 +3443,8 @@ def test_close_event_save_prompt(gui, monkeypatch):
 
 
 def test_close_event_cancel_ignores(gui, monkeypatch):
-    from PySide6.QtWidgets import QMessageBox
     from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(
         "PySide6.QtWidgets.QMessageBox.question",
@@ -3441,15 +3455,15 @@ def test_close_event_cancel_ignores(gui, monkeypatch):
         "save_configuration",
         lambda show_popup=True: (_ for _ in ()).throw(AssertionError("save")),
     )
-    monkeypatch.setattr("app.scan_locks", lambda: [])
+    monkeypatch.setattr("gui.main_window.scan_locks", list)
     event = QCloseEvent()
     gui.closeEvent(event)
     assert not event.isAccepted()
 
 
 def test_close_event_discard_no_save(gui, monkeypatch):
-    from PySide6.QtWidgets import QMessageBox
     from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
 
     calls = {"save": 0}
 
@@ -3462,7 +3476,7 @@ def test_close_event_discard_no_save(gui, monkeypatch):
         "save_configuration",
         lambda show_popup=True: calls.__setitem__("save", calls["save"] + 1),
     )
-    monkeypatch.setattr("app.scan_locks", lambda: [])
+    monkeypatch.setattr("gui.main_window.scan_locks", list)
     event = QCloseEvent()
     gui.closeEvent(event)
     assert calls["save"] == 0
@@ -3475,8 +3489,10 @@ def test_icon_cache_cleared_on_theme_switch(gui, monkeypatch):
     def fake_clear():
         cleared["n"] += 1
 
-    monkeypatch.setattr("app.clear_icon_cache", fake_clear)
-    monkeypatch.setattr("app.apply_application_theme", lambda mode: "dark")
+    monkeypatch.setattr("gui.mixins.theme_mixin.clear_icon_cache", fake_clear)
+    monkeypatch.setattr(
+        "gui.mixins.theme_mixin.apply_application_theme", lambda mode: "dark"
+    )
     monkeypatch.setattr(gui, "findChildren", lambda *a, **k: [])
     monkeypatch.setattr(gui, "refresh_sidebar_icons", lambda *_: None)
     gui.apply_theme("Dark")
@@ -3484,9 +3500,10 @@ def test_icon_cache_cleared_on_theme_switch(gui, monkeypatch):
 
 
 def test_log_file_created_and_masked(tmp_path, monkeypatch):
+    import logging
+
     from core.logging_config import setup_logging
     from core.models import CommandPlan
-    import logging
 
     monkeypatch.setattr(
         "core.logging_config.default_config_dir",
@@ -3554,7 +3571,9 @@ def test_upload_picasa_advanced_flag_emission(gui):
 
 def test_theme_switch_light_dark_system(gui, monkeypatch):
     # Avoid full QSS re-apply / widget walk — this test only checks mode state.
-    monkeypatch.setattr("app.apply_application_theme", lambda mode: "dark")
+    monkeypatch.setattr(
+        "gui.mixins.theme_mixin.apply_application_theme", lambda mode: "dark"
+    )
     monkeypatch.setattr(gui, "findChildren", lambda *a, **k: [])
     monkeypatch.setattr(gui, "refresh_sidebar_icons", lambda *_: None)
     gui.apply_theme("Light")
@@ -3585,12 +3604,13 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
         gui, "save_configuration", lambda show_popup=True: actions.append("saved")
     )
     monkeypatch.setattr(
-        "app.set_active_profile_name", lambda name: actions.append(f"active:{name}")
+        "gui.mixins.profiles_ui.set_active_profile_name",
+        lambda name: actions.append(f"active:{name}"),
     )
     monkeypatch.setattr(gui, "load_configuration", lambda: actions.append("loaded"))
     monkeypatch.setattr(gui, "update_profiles_menu", lambda: None)
     monkeypatch.setattr(gui, "update_window_title", lambda: None)
-    monkeypatch.setattr("app.active_profile_name", lambda: "default")
+    monkeypatch.setattr("gui.mixins.profiles_ui.active_profile_name", lambda: "default")
 
     actions.append(QMessageBox.StandardButton.Cancel)
     gui.switch_profile("work")

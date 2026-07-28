@@ -1,6 +1,12 @@
-from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QMessageBox, QPlainTextEdit, QSpinBox
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QSpinBox,
+)
 
-from theme import THEME_SYSTEM, normalize_theme_mode
 from core import (
     AppConfig,
     SecretStore,
@@ -12,6 +18,7 @@ from core import (
     save_secret_with_fallback,
     set_api_key,
 )
+from theme import THEME_SYSTEM, normalize_theme_mode
 
 
 class PersistenceMixin:
@@ -233,13 +240,7 @@ class PersistenceMixin:
                 "include-archived": get_bool("include-archived", True),
             }
 
-        elif tab_key == "archive-icloud":
-            return {
-                "path": get_text("path"),
-                "write-to": get_text("write-to"),
-            }
-
-        elif tab_key == "archive-picasa":
+        elif tab_key == "archive-icloud" or tab_key == "archive-picasa":
             return {
                 "path": get_text("path"),
                 "write-to": get_text("write-to"),

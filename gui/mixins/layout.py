@@ -15,6 +15,11 @@ from PySide6.QtWidgets import (
 )
 
 from core.advanced_flags import ADVANCED_FLAGS
+from gui.tabs.archive.folder import build_archive_folder_tab
+from gui.tabs.archive.google_photos import build_archive_gp_tab
+from gui.tabs.archive.icloud import build_archive_icloud_tab
+from gui.tabs.archive.immich import build_archive_immich_tab
+from gui.tabs.archive.picasa import build_archive_picasa_tab
 from gui.tabs.config_tab import build_config_tab
 from gui.tabs.stack_tab import build_stack_tab
 from gui.tabs.upload.folder import build_upload_folder_tab
@@ -22,11 +27,6 @@ from gui.tabs.upload.google_photos import build_upload_gp_tab
 from gui.tabs.upload.icloud import build_upload_icloud_tab
 from gui.tabs.upload.immich import build_upload_immich_tab
 from gui.tabs.upload.picasa import build_upload_picasa_tab
-from gui.tabs.archive.folder import build_archive_folder_tab
-from gui.tabs.archive.google_photos import build_archive_gp_tab
-from gui.tabs.archive.icloud import build_archive_icloud_tab
-from gui.tabs.archive.immich import build_archive_immich_tab
-from gui.tabs.archive.picasa import build_archive_picasa_tab
 from gui.widgets import (
     AdvancedFlagRow,
     BasePage,
@@ -88,9 +88,7 @@ class LayoutMixin:
     ) -> None:
         field_errors = field_errors or {}
         for (label_tab, field_key), lbl in self._field_error_labels.items():
-            if field_key in ("server", "api_key"):
-                msg = field_errors.get(field_key, "")
-            elif label_tab == tab_key:
+            if field_key in ("server", "api_key") or label_tab == tab_key:
                 msg = field_errors.get(field_key, "")
             else:
                 msg = ""

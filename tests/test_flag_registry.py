@@ -92,10 +92,10 @@ def test_bool_defaults_match_live_cli():
     from pathlib import Path
 
     from core.binary_manager import (
+        TESTED_IMMICH_GO_VERSION,
         get_binary_path,
         load_binary_metadata,
         parse_version_output,
-        TESTED_IMMICH_GO_VERSION,
     )
     from core.cli_contract import collect_bool_defaults_from_binary
 

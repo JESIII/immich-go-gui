@@ -8,7 +8,6 @@ import glob
 import os
 from typing import Any
 
-from .models import CommandPlan, ValidationResult
 from .cli_schema import (
     ENV_KEY_MAP,
     SECRET_FLAGS,
@@ -18,15 +17,18 @@ from .cli_schema import (
     UPLOAD_TABS,
     flag_allowed_for_tab,
 )
+from .models import CommandPlan, ValidationResult
+from .network import normalize_server_url
 from .validation import (
     clean_date_range,
-    normalize_list_csv,
-    validate_date_range as validate_date_range_func,
-    validate_server_url,
     expand_source_paths,
+    normalize_list_csv,
     validate_destination_folder,
+    validate_server_url,
 )
-from .network import normalize_server_url
+from .validation import (
+    validate_date_range as validate_date_range_func,
+)
 
 
 def _add_error(res: ValidationResult, message: str, field: str | None = None) -> None:
@@ -691,9 +693,6 @@ def build_plan_from_state(
 
     # ── 6. Safety: pause-jobs without admin key ────────────────
     if tab_key in UPLOAD_TABS or tab_key == "stack":
-        has_pause = any(
-            emitter._flag_name_from_arg(o) == "pause-immich-jobs" for o in emitter.opts
-        )
         if not admin_api_key:
             pause_opts = [
                 o

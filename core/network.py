@@ -4,6 +4,7 @@ Pure Python module, Qt-free.
 """
 
 from dataclasses import dataclass
+
 import requests
 
 
@@ -111,7 +112,7 @@ def test_immich_connection(
     except Exception as e:
         return ConnectionTestResult(
             ok=False,
-            message=f"Unexpected connection error: {str(e)}",
+            message=f"Unexpected connection error: {e!s}",
         )
 
 

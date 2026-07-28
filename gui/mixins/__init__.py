@@ -11,8 +11,8 @@ from gui.mixins.status import StatusMixin
 from gui.mixins.theme_mixin import ThemeMixin
 
 __all__ = [
-    "BrowseDialogsMixin",
     "BinaryUIMixin",
+    "BrowseDialogsMixin",
     "ConnectionMixin",
     "DiagnosticsMixin",
     "ExecutionMixin",

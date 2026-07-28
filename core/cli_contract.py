@@ -3,19 +3,18 @@
 Pure Python, Qt-free module.
 """
 
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-import subprocess
 
 from .binary_manager import TESTED_IMMICH_GO_VERSION
 from .cli_help import (
+    help_name_for_tab,
     load_help_fixture,
     parse_help_bool_defaults,
     parse_help_flags,
-    help_name_for_tab,
 )
-from .cli_schema import TAB_ALLOWED_FLAGS, COMPATIBILITY_MATRIX
-
+from .cli_schema import COMPATIBILITY_MATRIX, TAB_ALLOWED_FLAGS
 
 IGNORED_UPSTREAM_FLAGS = frozenset(
     {

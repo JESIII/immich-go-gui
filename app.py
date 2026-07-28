@@ -29,19 +29,19 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core import default_config_dir
-from core.command_builder import build_plan_from_state
-from core.logging_config import setup_logging
 from core.command_builder import (
     build_environment,
+    build_plan_from_state,
     collect_paths,
     mask_command_for_display,
     validate_date_range,
 )
 from core.config_manager import SecretStore
+from core.logging_config import setup_logging
 from core.models import CommandPlan
 from core.network import normalize_server_url
 from core.process_tracker import scan_locks
-from core.profile_manager import set_active_profile_name
+from core.profile_manager import active_profile_name, set_active_profile_name
 from gui import ImmichGoGUI
 from gui.mixins.diagnostics import _gui_version
 from gui.widgets import DroppablePlainTextEdit

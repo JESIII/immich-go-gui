@@ -3,12 +3,12 @@
 Pure Python module, Qt-free.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import os
-from pathlib import Path
 import re
 import shutil
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 try:
     import tomllib
@@ -114,7 +114,7 @@ def _load_profiles_index() -> dict:
             idx_path,
             exc,
         )
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         try:
             corrupt_path = idx_path.with_suffix(idx_path.suffix + f".corrupt-{stamp}")
             idx_path.rename(corrupt_path)
@@ -173,7 +173,7 @@ def migrate_single_config_to_default() -> None:
             except Exception:
                 pass
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         index_data = {
             "schema_version": 1,
             "active_profile": "default",
@@ -196,7 +196,7 @@ def ensure_default_profile() -> None:
 
     has_default = any(p.get("name") == "default" for p in p_list if isinstance(p, dict))
     if not has_default:
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         p_list.append({"name": "default", "created_at": now_iso})
         idx_data["profiles"] = p_list
 
@@ -280,7 +280,7 @@ def create_profile(name: str, copy_from: str | None = None) -> ProfileInfo:
                 shutil.copy2(src_sec, profile_secrets_path(clean_name))
             SecretStore.copy_secrets(copy_from, clean_name)
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     idx_data = _load_profiles_index()
     p_list = idx_data.get("profiles", [])
     p_list.append({"name": clean_name, "created_at": now_iso})

@@ -1,8 +1,6 @@
 """Unit tests for configuration loading and quarantine behavior."""
 
-from pathlib import Path
-
-from core.config_manager import load_config, get_config_load_warning
+from core.config_manager import get_config_load_warning, load_config
 
 
 def test_corrupt_config_quarantined_and_defaults_loaded(tmp_path, monkeypatch):

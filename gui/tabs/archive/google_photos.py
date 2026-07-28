@@ -22,9 +22,7 @@ def build_archive_gp_tab(host) -> QWidget:
 
     host.archive_gp_path_edit = DroppablePlainTextEdit()
     host.archive_gp_path_edit.setPlaceholderText(
-        "/path/to/takeout-*.zip\n"
-        "/path/to/takeout-001.zip\n"
-        "…or an extracted folder path"
+        "/path/to/takeout-*.zip\n/path/to/takeout-001.zip\n…or an extracted folder path"
     )
     host.archive_gp_path_edit.setMaximumHeight(100)
     host.inputs["archive-gp"]["path"] = host.archive_gp_path_edit

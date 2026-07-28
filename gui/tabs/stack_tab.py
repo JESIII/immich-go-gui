@@ -28,9 +28,7 @@ def build_stack_tab(host) -> QWidget:
     form.add_row("Manage Bursts", c_burst)
 
     c_raw = QComboBox()
-    c_raw.addItems(
-        ["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"]
-    )
+    c_raw.addItems(["NoStack", "KeepRaw", "KeepJPG", "StackCoverRaw", "StackCoverJPG"])
     host.inputs["stack"]["manage-raw-jpeg"] = c_raw
     form.add_row("Manage RAW+JPEG", c_raw)
 

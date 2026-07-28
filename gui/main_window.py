@@ -1,5 +1,3 @@
-import sys
-
 from PySide6.QtCore import QSettings, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,

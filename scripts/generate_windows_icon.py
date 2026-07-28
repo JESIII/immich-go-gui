@@ -16,7 +16,9 @@ except ImportError as exc:  # pragma: no cover - dev-only script
 DEFAULT_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
-def generate_icon(png_path: Path, ico_path: Path, sizes: tuple[int, ...] = DEFAULT_SIZES) -> None:
+def generate_icon(
+    png_path: Path, ico_path: Path, sizes: tuple[int, ...] = DEFAULT_SIZES
+) -> None:
     with Image.open(png_path) as img:
         rgba = img.convert("RGBA")
         rgba.save(

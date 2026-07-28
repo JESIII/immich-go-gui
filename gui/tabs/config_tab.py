@@ -10,9 +10,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from theme import THEME_DARK, THEME_LIGHT, THEME_SYSTEM
 from core import default_secrets_path, load_binary_metadata
-from gui.widgets import Card, ElidingLabel, FormSection, BasePage
+from gui.widgets import BasePage, Card, ElidingLabel, FormSection
+from theme import THEME_DARK, THEME_LIGHT, THEME_SYSTEM
 
 
 def build_config_tab(host) -> QWidget:
@@ -46,9 +46,7 @@ def build_config_tab(host) -> QWidget:
     host._conn_test_debounce.timeout.connect(host._auto_test_connection)
     host.server_url_edit.textChanged.connect(host._reset_conn_test_state)
     host.api_key_edit.textChanged.connect(host._reset_conn_test_state)
-    host.server_url_edit.textChanged.connect(
-        lambda: host._conn_test_debounce.start()
-    )
+    host.server_url_edit.textChanged.connect(lambda: host._conn_test_debounce.start())
     host.api_key_edit.textChanged.connect(lambda: host._conn_test_debounce.start())
 
     host._add_ssl_skip_row(form, host.inputs["config"])
@@ -87,9 +85,7 @@ def build_config_tab(host) -> QWidget:
         "Required for administrative operations like partner shared albums or user management.",
     )
 
-    host.lbl_secrets_path_hint = QLabel(
-        f"Local secrets path: {default_secrets_path()}"
-    )
+    host.lbl_secrets_path_hint = QLabel(f"Local secrets path: {default_secrets_path()}")
     host.lbl_secrets_path_hint.setObjectName("Hint")
     sec_form.add_row("", host.lbl_secrets_path_hint)
 

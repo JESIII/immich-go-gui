@@ -13,9 +13,9 @@ import subprocess
 import sys
 import tarfile
 import zipfile
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable, Optional
 
 import requests
 from packaging.version import InvalidVersion, Version
@@ -26,7 +26,6 @@ from .models import (
     UpdateSeverity,
     VersionSupport,
 )
-
 
 BINARY_BASE_DIR = os.path.join(os.path.expanduser("~"), ".immich-go-gui", "bin")
 METADATA_PATH = os.path.join(BINARY_BASE_DIR, "metadata.json")
@@ -588,8 +587,8 @@ class BinaryManager:
     def download_and_install(
         self,
         version: str,
-        progress_cb: Optional[Callable[[int], None]] = None,
-        cancel_check: Optional[Callable[[], bool]] = None,
+        progress_cb: Callable[[int], None] | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> tuple[bool, str]:
         """Downloads, extracts, verifies, and selects an immich-go binary version.
 
@@ -652,9 +651,10 @@ class BinaryManager:
                     for filename in z.namelist():
                         base = os.path.basename(filename)
                         if base in ("immich-go", "immich-go.exe"):
-                            with z.open(filename) as source, open(
-                                temp_bin, "wb"
-                            ) as target:
+                            with (
+                                z.open(filename) as source,
+                                open(temp_bin, "wb") as target,
+                            ):
                                 target.write(source.read())
                             found = True
                             break
@@ -718,7 +718,7 @@ class BinaryManager:
 
         meta["versions"][v_clean] = {
             "path": binary_path,
-            "downloaded_at": datetime.now(timezone.utc).isoformat(),
+            "downloaded_at": datetime.now(UTC).isoformat(),
             "gui_tested": v_clean in TESTED_IMMICH_GO_VERSIONS,
             "support_status": get_version_support(v_clean).value,
             "sha256": sha256,

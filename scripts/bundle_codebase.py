@@ -200,6 +200,7 @@ def collect_project_files(repo_root: Path, full: bool = False) -> list[Path]:
 
     glob_patterns = (
         "core/**/*",
+        "gui/**/*",
         "tests/**/*",
         "scripts/**/*",
         "packaging/**/*",
@@ -230,6 +231,8 @@ def collect_project_files(repo_root: Path, full: bool = False) -> list[Path]:
             rank = 0
         elif rel.startswith("core/"):
             rank = 10
+        elif rel.startswith("gui/"):
+            rank = 15
         elif rel.startswith("assets/"):
             rank = 20
         elif rel.startswith("tests/"):
