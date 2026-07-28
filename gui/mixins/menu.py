@@ -36,6 +36,22 @@ class MenuMixin:
         reset_adv_action.triggered.connect(self._confirm_reset_advanced_flags)
         file_menu.addAction(reset_adv_action)
 
+        file_menu.addSeparator()
+
+        open_config_action = QAction("Open Config Folder", self)
+        open_config_action.triggered.connect(self.open_config_folder)
+        file_menu.addAction(open_config_action)
+
+        open_log_action = QAction("Open Log Folder", self)
+        open_log_action.triggered.connect(self.open_log_folder)
+        file_menu.addAction(open_log_action)
+
+        export_diag_action = QAction("Export Diagnostics…", self)
+        export_diag_action.triggered.connect(self.export_diagnostics)
+        file_menu.addAction(export_diag_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
@@ -57,20 +73,6 @@ class MenuMixin:
         gui_repo_action = QAction("Immich-Go GUI GitHub", self)
         gui_repo_action.triggered.connect(self.open_immich_go_gui_link)
         help_menu.addAction(gui_repo_action)
-
-        help_menu.addSeparator()
-
-        open_config_action = QAction("Open Config Folder", self)
-        open_config_action.triggered.connect(self.open_config_folder)
-        help_menu.addAction(open_config_action)
-
-        open_log_action = QAction("Open Log Folder", self)
-        open_log_action.triggered.connect(self.open_log_folder)
-        help_menu.addAction(open_log_action)
-
-        export_diag_action = QAction("Export Diagnostics…", self)
-        export_diag_action.triggered.connect(self.export_diagnostics)
-        help_menu.addAction(export_diag_action)
 
         help_menu.addSeparator()
 
