@@ -29,6 +29,12 @@ from .validation import (
 from .network import normalize_server_url
 
 
+def _add_error(res: ValidationResult, message: str, field: str | None = None) -> None:
+    res.errors.append(message)
+    if field:
+        res.field_errors[field] = message
+
+
 STRUCTURAL_KEYS = frozenset({"server", "skip-ssl", "dry-run"})
 POSITIONAL_OWNED_KEYS = frozenset(
     {"from-server", "from-date-range", "from-albums", "write-to"}
@@ -308,31 +314,39 @@ def validate_state(
         key = config_state.get("api_key", "").strip()
         if not srv:
             if tab_key == "archive-immich":
-                res.errors.append(
-                    "Source server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Source server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
             elif tab_key == "stack":
-                res.errors.append(
-                    "Immich server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Immich server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
             else:
-                res.errors.append(
-                    "Server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
         else:
             ok, err = validate_server_url(normalize_server_url(srv))
             if not ok and err:
-                res.errors.append(err)
+                _add_error(res, err, "server")
 
         if not key:
-            res.errors.append(
-                "API Key is required. Configure it in the Configuration tab."
+            _add_error(
+                res,
+                "API Key is required. Configure it in the Configuration tab.",
+                "api_key",
             )
 
     if tab_key == "upload-folder":
         p = tab_state.get("path", "").strip()
         if not p:
-            res.errors.append("Source folder path is required.")
+            _add_error(res, "Source folder path is required.", "path")
         else:
             _, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -340,7 +354,7 @@ def validate_state(
     elif tab_key == "upload-gp":
         p = tab_state.get("path", "").strip()
         if not p:
-            res.errors.append("Google Photos takeout source path is required.")
+            _add_error(res, "Google Photos takeout source path is required.", "path")
         else:
             _, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -349,18 +363,18 @@ def validate_state(
         fs = tab_state.get("from-server", "").strip()
         fk = tab_state.get("from-api-key", "").strip()
         if not fs:
-            res.errors.append("Source Immich Server URL is required.")
+            _add_error(res, "Source Immich Server URL is required.", "from-server")
         else:
             ok, err = validate_server_url(fs)
             if not ok and err:
-                res.errors.append(f"Source {err}")
+                _add_error(res, f"Source {err}", "from-server")
         if not fk:
-            res.errors.append("Source Immich API Key is required.")
+            _add_error(res, "Source Immich API Key is required.", "from-api-key")
 
     elif tab_key == "upload-icloud":
         p = tab_state.get("path", "").strip()
         if not p:
-            res.errors.append("iCloud export path is required.")
+            _add_error(res, "iCloud export path is required.", "path")
         else:
             _, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -368,7 +382,7 @@ def validate_state(
     elif tab_key == "upload-picasa":
         p = tab_state.get("path", "").strip()
         if not p:
-            res.errors.append("Picasa collection path is required.")
+            _add_error(res, "Picasa collection path is required.", "path")
         else:
             _, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -377,9 +391,9 @@ def validate_state(
         p = tab_state.get("path", "").strip()
         w = tab_state.get("write-to", "").strip()
         if not p:
-            res.errors.append("Source folder path is required.")
+            _add_error(res, "Source folder path is required.", "path")
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
         if p and w:
             expanded_sources, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -389,9 +403,9 @@ def validate_state(
         p = tab_state.get("path", "").strip()
         w = tab_state.get("write-to", "").strip()
         if not p:
-            res.errors.append("Google Photos takeout source path is required.")
+            _add_error(res, "Google Photos takeout source path is required.", "path")
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
         if p and w:
             expanded_sources, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -401,9 +415,9 @@ def validate_state(
         p = tab_state.get("path", "").strip()
         w = tab_state.get("write-to", "").strip()
         if not p:
-            res.errors.append("iCloud export path is required.")
+            _add_error(res, "iCloud export path is required.", "path")
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
         if p and w:
             expanded_sources, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -413,9 +427,9 @@ def validate_state(
         p = tab_state.get("path", "").strip()
         w = tab_state.get("write-to", "").strip()
         if not p:
-            res.errors.append("Picasa collection path is required.")
+            _add_error(res, "Picasa collection path is required.", "path")
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
         if p and w:
             expanded_sources, path_warns = expand_source_paths(p)
             res.warnings.extend(path_warns)
@@ -424,7 +438,7 @@ def validate_state(
     elif tab_key == "archive-immich":
         w = tab_state.get("write-to", "").strip()
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
         else:
             res.warnings.extend(validate_destination_folder(w, []))
 
@@ -433,7 +447,7 @@ def validate_state(
         if key in tab_state and tab_state[key].strip():
             valid, err = validate_date_range_func(tab_state[key])
             if not valid:
-                res.errors.append(f"Invalid date range format: {err}")
+                _add_error(res, f"Invalid date range format: {err}", key)
 
     return res
 
@@ -451,54 +465,62 @@ def validate_state_light(
         key = config_state.get("api_key", "").strip()
         if not srv:
             if tab_key == "archive-immich":
-                res.errors.append(
-                    "Source server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Source server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
             elif tab_key == "stack":
-                res.errors.append(
-                    "Immich server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Immich server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
             else:
-                res.errors.append(
-                    "Server URL is required. Configure it in the Configuration tab."
+                _add_error(
+                    res,
+                    "Server URL is required. Configure it in the Configuration tab.",
+                    "server",
                 )
         else:
             ok, err = validate_server_url(normalize_server_url(srv))
             if not ok and err:
-                res.errors.append(err)
+                _add_error(res, err, "server")
 
         if not key:
-            res.errors.append(
-                "API Key is required. Configure it in the Configuration tab."
+            _add_error(
+                res,
+                "API Key is required. Configure it in the Configuration tab.",
+                "api_key",
             )
 
     if tab_key == "upload-folder":
         if not tab_state.get("path", "").strip():
-            res.errors.append("Source folder path is required.")
+            _add_error(res, "Source folder path is required.", "path")
 
     elif tab_key == "upload-gp":
         if not tab_state.get("path", "").strip():
-            res.errors.append("Google Photos takeout source path is required.")
+            _add_error(res, "Google Photos takeout source path is required.", "path")
 
     elif tab_key == "upload-immich":
         fs = tab_state.get("from-server", "").strip()
         fk = tab_state.get("from-api-key", "").strip()
         if not fs:
-            res.errors.append("Source Immich Server URL is required.")
+            _add_error(res, "Source Immich Server URL is required.", "from-server")
         else:
             ok, err = validate_server_url(normalize_server_url(fs))
             if not ok and err:
-                res.errors.append(f"Source {err}")
+                _add_error(res, f"Source {err}", "from-server")
         if not fk:
-            res.errors.append("Source Immich API Key is required.")
+            _add_error(res, "Source Immich API Key is required.", "from-api-key")
 
     elif tab_key == "upload-icloud":
         if not tab_state.get("path", "").strip():
-            res.errors.append("iCloud export path is required.")
+            _add_error(res, "iCloud export path is required.", "path")
 
     elif tab_key == "upload-picasa":
         if not tab_state.get("path", "").strip():
-            res.errors.append("Picasa collection path is required.")
+            _add_error(res, "Picasa collection path is required.", "path")
 
     elif tab_key in (
         "archive-folder",
@@ -509,29 +531,28 @@ def validate_state_light(
         p = tab_state.get("path", "").strip()
         w = tab_state.get("write-to", "").strip()
         if not p:
-            label = tab_key.replace("archive-", "").replace(
-                "gp", "Google Photos takeout"
-            )
             if tab_key == "archive-folder":
-                res.errors.append("Source folder path is required.")
+                _add_error(res, "Source folder path is required.", "path")
             elif tab_key == "archive-gp":
-                res.errors.append("Google Photos takeout source path is required.")
+                _add_error(
+                    res, "Google Photos takeout source path is required.", "path"
+                )
             elif tab_key == "archive-icloud":
-                res.errors.append("iCloud export path is required.")
+                _add_error(res, "iCloud export path is required.", "path")
             else:
-                res.errors.append("Picasa collection path is required.")
+                _add_error(res, "Picasa collection path is required.", "path")
         if not w:
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
 
     elif tab_key == "archive-immich":
         if not tab_state.get("write-to", "").strip():
-            res.errors.append("Destination folder is required.")
+            _add_error(res, "Destination folder is required.", "write-to")
 
     for key in ("date-range", "from-date-range"):
         if key in tab_state and tab_state[key].strip():
             valid, err = validate_date_range_func(tab_state[key])
             if not valid:
-                res.errors.append(f"Invalid date range format: {err}")
+                _add_error(res, f"Invalid date range format: {err}", key)
 
     return res
 
@@ -611,7 +632,7 @@ def build_plan_from_state(
     )
 
     # ── 1. Structural flags ──────────────────────────────────
-    if tab_key == "archive-immich" and config_state.get("skip-ssl"):
+    if tab_key in ("archive-immich", "upload-immich") and config_state.get("skip-ssl"):
         emitter.add_flag("from-skip-verify-ssl", source="always")
         plan.warnings.append(
             "Source SSL verification is disabled. "
