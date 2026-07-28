@@ -1,127 +1,275 @@
-# Immich-Go GUI Project Knowledge & Design Guidelines
+# Immich-Go GUI — Agent Guide
 
-## 1. Work Workflow & Execution Philosophy
-- **Step-by-Step Slow Approach**: Take a careful, deliberate, step-by-step approach. Always plan, document, and inspect authoritative source files before writing or modifying code. Never guess code logic or file structures.
-- **Frequent Commits**: Keep committing progress in logical, well-demarcated chunks as work progresses so changes are easily tracked and reversible.
-- **Reference Project Documentation**: When documentation files or specs are referenced or provided by the user, read and strictly adhere to their guidelines and constraints without deviation.
+Authoritative context for AI agents working in this repository. When user-provided docs or specs conflict with this file, prefer the user’s latest instruction — then update this file if the change is permanent.
 
-## 2. Environment & Tooling Rules
-- **Python Package Manager (`uv`)**: Always use `uv` for running Python scripts and tests (e.g. `uv run pytest`, `uv run python app.py`, `uv sync --dev`). Never use system `pip` or raw `python`.
-- **GitHub CLI (`gh`)**: Always use standard user authentication for local `gh` commands (e.g. `gh pr list`, `gh run view`, `gh workflow run`). Do NOT pass `env -u GITHUB_TOKEN` or `GH_TOKEN` environment variables when running commands locally.
-- **Git Branching Policy**:
-  - `master`: Production branch (only updated via GitHub Release / PR merges).
-  - `staging`: Active development and integration branch.
-  - Pull Requests must target `master` from `staging`.
-  - **Squash Merges Required for Release Please**: Merges from `staging` into `master` MUST use squash merging (`gh pr merge --squash` or repository squash settings). Non-squash merges pull all historical staging commits into `master`, breaking Release Please commit scanning and pulling old/unreleased history into release PRs.
+---
 
-## 3. Architecture & CLI Parity (11/11 Sub-commands)
-- **11 GUI Sub-Tabs**:
-  - **Upload**: `upload-folder`, `upload-gp`, `upload-icloud`, `upload-picasa`, `upload-immich`
-  - **Archive**: `archive-folder`, `archive-gp`, `archive-icloud`, `archive-picasa`, `archive-immich`
-  - **Stack**: `stack`
-- **Serverless Tab Rule**: `archive-folder`, `archive-gp`, `archive-icloud`, and `archive-picasa` are strictly classified as `SERVERLESS_TABS`. They must NEVER emit `--server`, `--api-key`, or `--client-timeout` flags.
-- **Simple vs. Advanced Control Policy**: Simple mode shows high-frequency inputs only. Advanced mode dynamically generates flag rows from `core/flags.toml` via `core/flag_registry.py` (`mode = "simple"` or `mode = "advanced"`).
+## 1. Workflow & Execution Philosophy
 
-## 4. Security & Secret Isolation
-- **In-Memory Secret Delivery**: Sensitive API keys (`IMMICH_GO_UPLOAD_API_KEY`, `IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY`, etc.) are passed strictly through process memory environment dictionaries (`posix_env` / `win_env`) in `subprocess.Popen`. NEVER write secret environment variables or credentials to disk shell scripts (such as `env.sh`).
-- **OS Keychain Integration**: Secret API keys are stored via `keyring` (macOS Keychain, Windows Credential Manager, Linux Secret Service) and omitted from plain TOML or form state persistence.
-- **Redaction**: Previews and log outputs must sanitize all API key strings.
-- **SSL Bypass Warning Banners**: Display explicit inline warnings when `--skip-verify-ssl` is checked.
+- **Step-by-step, source-first**: Read authoritative files (`core/flags.toml`, `core/command_builder.py`, tests) before editing. Do not guess flag names or CLI behavior.
+- **Frequent logical commits**: Small, reviewable commits with Conventional Commit prefixes (`fix:`, `feat:`, `chore:`, `test:`, `docs:`, `ci:`).
+- **Minimal scope**: Match existing patterns. Avoid drive-by refactors — especially splitting `app.py` unless explicitly requested.
 
-## 5. Terminal Launcher & Process Lock Lifecycle
-- **POSIX Safe CWD**: POSIX launchers execute inside temporary run directories with a safe `$HOME` fallback directory change to prevent current-working-directory deletion errors.
-- **Windows Heartbeat Loop**: Windows `.bat` launchers run a background heartbeat process (`.heartbeat`) to ensure process lock files (`.lock`) are reliably cleaned up even if the command prompt window is killed abruptly.
+---
 
-## 6. Testing & Cross-Platform Assertions
-- **Windows Path Normalization**: All test cases in `tests/test_app.py` comparing CLI `argv` vectors MUST pass through `_norm_argv(...)` to strip Windows drive letters (`C:`, `D:`) and normalize backslashes (`\`) to forward slashes (`/`).
-- **Headless Terminal Mocks**: Launcher unit tests must mock `sys.platform` and `shutil.which` (`patch("shutil.which", return_value="/usr/bin/gnome-terminal")`) so headless CI environments don't fail.
-- **Headless Qt Execution**: Headless Linux test runs require `QT_QPA_PLATFORM=offscreen` and `xvfb-run`.
+## 2. Environment & Tooling
 
-## 7. CI/CD & Build Packaging Rules
-- **App Icon Resource**: `immich-go-gui.ico` is committed in the root workspace directory. Do NOT add build-time `PIL` image conversion scripts.
-- **Inno Setup Output Relocation**: `packaging/windows/installer.iss` uses `OutputDir=..\..\`. Windows build steps in `.github/workflows/release.yml` must move compiled `.exe` files from parent directories back into the root workspace folder before `upload-artifact`.
-- **AppImageTool**: Linux AppImage packaging uses the `continuous` release of `appimagetool` (`https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage`) with `--appimage-extract-and-run`.
-- **Artifact Naming Convention**: All output packages MUST include both Version and Architecture: `Immich-Go-GUI-${VERSION}-${OS}-${ARCH}.${ext}` (e.g. `Immich-Go-GUI-1.1.0-Windows-x86_64-Setup.exe`).
-- **Release Please Config Location**: Configuration files belong in `.github/release-please-config.json` and `.github/.release-please-manifest.json`.
-- **Release Please Manifest Sync**: `.github/.release-please-manifest.json` must be explicitly updated whenever performing manual version bumps or hotfix releases so Release Please tracks the correct baseline version.
+| Tool | Rule |
+|------|------|
+| **uv** | Always `uv run …`, `uv sync --dev`. Never system `pip` or bare `python`. |
+| **gh** | Use normal user auth locally. Do not pass `GITHUB_TOKEN` / `GH_TOKEN` overrides unless CI context requires it. |
+| **pytest** | `uv run pytest` (Linux headless: `QT_QPA_PLATFORM=offscreen xvfb-run uv run pytest`) |
+| **Self-test** | `uv run python app.py --self-test` — loads registry, builds a plan, checks config dir |
 
+### Git branching
 
+| Branch | Purpose |
+|--------|---------|
+| `master` | Production; Release Please merges only |
+| `staging` | Active integration |
+| Feature/fix branches | Target `staging` via PR |
 
-# Immich-Go GUI — Project Context Brief
+**Squash merges required** when merging `staging` → `master` so Release Please commit scanning stays clean.
 
-## What It Is
+---
 
-A **PySide6 desktop GUI** wrapping the [immich-go](https://github.com/simulot/immich-go) CLI (v0.32.0). Users configure upload/archive/stack jobs via forms, preview the exact CLI command, and launch it in an external terminal. **11 workflow tabs** cover every immich-go subcommand.
+## 3. What This Project Is
 
-## Architecture (Non-Negotiable Rules)
+A **PySide6 desktop GUI** for [immich-go](https://github.com/simulot/immich-go) (CLI target **v0.32.0**). Users configure upload/archive/stack jobs, preview the exact command (secrets redacted), and launch **immich-go in an external terminal**.
 
-- **`core/` is Qt-free.** All business logic, testable headlessly.
-- **Secrets never go in argv.** API keys travel via environment variables (`IMMICH_GO_*`), stored in OS keyring.
+**11 workflow tabs** — one per immich-go subcommand:
+
+| Group | Tab keys |
+|-------|----------|
+| Upload | `upload-folder`, `upload-gp`, `upload-icloud`, `upload-picasa`, `upload-immich` |
+| Archive | `archive-folder`, `archive-gp`, `archive-icloud`, `archive-picasa`, `archive-immich` |
+| Stack | `stack` |
+
+---
+
+## 4. Architecture (Non-Negotiable)
+
+```text
+app.py (Qt UI)  →  core/* (Qt-free business logic)  →  immich-go (external binary)
+```
+
+- **`core/` is Qt-free.** All command building, validation, secrets, binary management, and terminal launch logic must stay testable without PySide6.
+- **`core/flags.toml` is the single source of truth** for tab metadata and flag definitions. Loaded at import by `core/flag_registry.py` → `REGISTRY`.
+- **`cli_schema.py` and `advanced_flags.py`** are thin shims over the registry — do not duplicate flag lists elsewhere.
+- **Secrets never go in argv.** API keys are injected as `IMMICH_GO_*` environment variables via `build_environment()` in `core/command_builder.py`.
 - **Serverless archive tabs** (`archive-folder`, `archive-gp`, `archive-icloud`, `archive-picasa`) must **never** emit `--server`, `--api-key`, or `--client-timeout`.
-- **`core/flags.toml`** is the single source of truth for all flag definitions, loaded by `core/flag_registry.py`. `cli_schema.py` and `advanced_flags.py` are thin delegation shims.
 
-## Key Files
+### Key modules
 
-| File | Role |
-|---|---|
-| `app.py` (~3575 lines) | Qt UI: tabs, widgets, events, run/save/load |
-| `theme.py` | Theming, palettes, SVG icons |
-| `core/flags.toml` (~2809 lines) | **Single source of truth** for all tabs + flags |
-| `core/flag_registry.py` | Loads flags.toml → `REGISTRY` singleton |
-| `core/command_builder.py` | `build_plan_from_state()` → `CommandPlan` (argv + env) |
-| `core/advanced_flags.py` | `advanced_flag_args()`, `apply_advanced_flags_to_plan()` |
-| `core/cli_schema.py` | Re-exports from registry (TAB_COMMANDS, TAB_ALLOWED_FLAGS, etc.) |
-| `core/config_manager.py` | TOML config + keyring secrets |
-| `core/binary_manager.py` | immich-go download/verify/version |
-| `core/terminal_launcher.py` | Cross-platform external terminal launch |
-| `core/process_tracker.py` | Run lock files |
-| `tests/test_app.py` (~3151 lines) | Main test suite |
-| `tests/test_flag_registry.py` | Registry validation tests |
-| `tests/test_emission_model.py` | Emission model tests |
+| Module | Role |
+|--------|------|
+| `app.py` (~4100 lines) | Qt UI: tabs, widgets, status, run/save/load, menus, diagnostics |
+| `theme.py` | Palettes, QSS, DPR-aware SVG icons (`load_themed_icon`) |
+| `core/flags.toml` (~2600 lines) | All tabs + flags (simple/advanced, secrets, defaults) |
+| `core/flag_registry.py` | Parses flags.toml → `REGISTRY` singleton |
+| `core/command_builder.py` | `build_plan_from_state()`, `validate_state()`, `validate_state_light()` |
+| `core/advanced_flags.py` | Advanced row emission; respects `hidden` flags |
+| `core/cli_help.py` | Loads CLI help fixtures from `core/fixtures/cli_help/{version}/` |
+| `core/cli_contract.py` | Compatibility checker; `IGNORED_UPSTREAM_FLAGS` for intentional omissions |
+| `core/config_manager.py` | TOML config, keyring `SecretStore`, corrupt-file quarantine |
+| `core/profile_manager.py` | Multi-profile dirs + transactional rename |
+| `core/binary_manager.py` | Download, SHA256 verify, version policy |
+| `core/terminal_launcher.py` | Cross-platform external terminal + POSIX `run.sh` |
+| `core/process_tracker.py` | Lock files, heartbeat, stale-lock detection |
+| `core/network.py` | `normalize_server_url()`, connection preflight |
+| `core/logging_config.py` | Rotating log under `{config_dir}/logs/` |
 
-## Current Flag Model (1.4.0 emission model)
+### Runtime data files (must ship in Nuitka builds)
 
-Implemented in 1.4.0. The `emission` field was removed from `flags.toml`.
+```
+core/flags.toml
+core/fixtures/cli_help/{version}/*
+assets/icons/*
+immich-go-gui.png
+immich-go-gui.ico          # Windows only; multi-size 16–256px
+```
 
-### The One Rule
+Nuitka directives live at the top of `app.py`. All release workflow invocations must include `--include-data-files=core/flags.toml=core/flags.toml` and `--include-data-dir=core/fixtures=core/fixtures`.
+
+---
+
+## 5. Flag Emission Model (1.4.0+)
+
 > **A flag reaches the CLI if and only if the user explicitly asked for it.** immich-go applies its own defaults for anything not passed.
 
-### Model
-- **`mode` is the only behavioral field:** `simple` | `advanced`
-- **Simple mode:** Only `mode=simple` widgets visible. Emit if value ≠ TOML/CLI default.
-- **Advanced mode:** Advanced rows shown, **all disabled by default**. Emit **only** if user checks the enable box. Row value pre-populated from saved config (takes precedence) or CLI default.
-- **Config tab:** server URL, API key, admin key, skip-SSL, secret provider, theme, binary mgmt, allow-untested, preferred-terminal. No per-flag widgets for `client-timeout`, `concurrent-tasks`, `device-uuid`, `on-errors`, or `pause-immich-jobs` — those are per-tab advanced rows.
-- **pause-jobs safety:** Post-check after all flags emitted — if upload/stack tab + no admin key + no explicit pause flag in argv → emit `--pause-immich-jobs=false` + warning (`source="safety"` in emission log).
+### Modes
 
-### Config Persistence for Advanced Rows
-- **Values persist** in `form_state.advanced.{tab}.{key}.value`
-- **Enabled state persists** in `form_state.advanced.{tab}.{key}.enabled`
-- On fresh install / "Reset Advanced Flags": all disabled, values = CLI defaults
-- Saved config value takes precedence over flags.toml default for **display only**. Emission still requires the checkbox.
+- **`mode = "simple"`** — visible in simple UI; emit when value ≠ TOML/CLI default.
+- **`mode = "advanced"`** — row shown in advanced panel; emit **only** when enable checkbox is checked.
+- **`hidden = true`** — not shown in UI; used for structural flags like `from-dry-run` (emitted by Dry Run button only).
 
-### Emission Logic
-1. Structural flags (server, skip-ssl, dry-run) — always when applicable
-2. Simple widgets — emit if value ≠ default
-3. Advanced rows — emit ONLY if enabled
-4. Positional args (paths)
-5. Safety post-check (pause-jobs)
+### Emission order (`build_plan_from_state`)
 
-## Tech Stack
+1. Build `IMMICH_GO_*` env via `build_environment()`
+2. Structural flags: server, skip-ssl, positional-owned keys
+3. **Global skip-SSL mapping:**
+   - Server-required tabs → `--skip-verify-ssl`
+   - `upload-immich` / `archive-immich` → also `--from-skip-verify-ssl` (source server)
+4. Simple-mode widgets (non-default values)
+5. Positional-owned flags (`from-server`, `write-to`, etc.)
+6. Advanced rows (enabled only)
+7. Dry-run button → `--dry-run` (+ `--from-dry-run` for immich-to-immich tabs)
+8. Path positional suffix
+9. **Safety:** upload/stack tabs without admin key → force `--pause-immich-jobs=false` + warning (unless user explicitly set false)
 
-- Python 3.13 (`>=3.13.0, <3.14`), PySide6, `uv` package manager
-- TOML config (`tomllib`/`tomli` + `tomli_w`), `keyring`, `requests`, `packaging`
-- pytest + pytest-qt, Nuitka for release builds
-- MkDocs Material for docs site
+### Config persistence
 
-## Branching & Releases
+- Simple values: `form_state.{tab}.{key}`
+- Advanced: `form_state.advanced.{tab}.{key}.enabled` + `.value`
+- Secrets: keyring (preferred) or `profiles/{name}/secrets.toml` — never in `form_state`
 
-- PRs target **`staging`**, never `master` directly.
-- Release Please with Conventional Commits.
-- Multi-platform builds: Windows (exe/zip), macOS (dmg), Linux (AppImage/deb/rpm/tar).
+### Validation
 
-## Testing Conventions
+| Function | When used | Glob expansion |
+|----------|-----------|----------------|
+| `validate_state()` | Preview / Run | Yes |
+| `validate_state_light()` | Status bar updates | No |
+| `ValidationResult.field_errors` | Inline red labels under fields | — |
 
-- `_norm_argv()` for all path comparisons in argv assertions.
-- Golden JSON fixtures in `tests/fixtures/command_states/`.
-- CLI help fixtures in `core/fixtures/cli_help/0.32.0/`.
-- Run: `uv run pytest` (Linux headless: `QT_QPA_PLATFORM=offscreen xvfb-run uv run pytest`).
+Always **normalize server URL before validating** (`normalize_server_url` → `validate_server_url`).
+
+---
+
+## 6. Security & Secret Handling
+
+| Concern | Mitigation |
+|---------|------------|
+| Keys in argv / preview | Env vars only; `mask_command_for_display()` |
+| Keys in config files | OS keyring default; `0600` secrets.toml fallback |
+| Keys in launch scripts | Windows `.bat` has no secrets; POSIX `run.sh` has no secrets in argv |
+| POSIX secret delivery | `IMMICH_GO_*` written to `env.sh` (`0600`) in temp dir (`0700`), sourced then deleted at start of `run.sh` — required because Terminal.app / some emulators drop parent env |
+| Windows secret delivery | Full `env` dict passed to `subprocess.Popen` on `cmd.exe` |
+| SSL bypass | Warning in plan + UI banner; global skip propagates to source flags on immich-to-immich tabs |
+| Overlapping runs | Lock files under `{config_dir}/locks/`; GUI tracks `active_lock_paths` set |
+
+**Redaction rule:** Logs and previews show env var **names**, never values.
+
+---
+
+## 7. Terminal Launcher & Process Locks
+
+### POSIX (`core/terminal_launcher.py`)
+
+- Temp dir `immich-go-run-*` with `run.sh`, optional `env.sh`, PID/heartbeat sidecars
+- `cd "$HOME"` before executing (prevents CWD-deletion races)
+- `trap cleanup EXIT INT TERM HUP`
+- Binary path resolved to absolute before launch
+- Stale lock: dead shell PID → lock inactive (unless startup grace period)
+
+### Windows
+
+- `.bat` launcher with background heartbeat loop
+- `CREATE_NEW_CONSOLE` + `cmd /k` (no `shell=True`)
+- Dead terminal PID clears lock immediately
+
+### Connection-test gating
+
+Failed config-tab connection test disables Run **only** on `SERVER_REQUIRED_TABS` — serverless archive tabs remain runnable.
+
+---
+
+## 8. Testing
+
+### Test modules
+
+| File | Focus |
+|------|-------|
+| `tests/test_app.py` | GUI integration, command building, locks, profiles |
+| `tests/test_emission_model.py` | Emission rules / golden fixtures |
+| `tests/test_flag_registry.py` | flags.toml schema integrity |
+| `tests/test_config_manager.py` | Config load, corrupt-file quarantine |
+| `tests/test_terminal_launcher_env.py` | POSIX env.sh, stale-lock, binary resolve |
+
+### Conventions
+
+- **Windows path normalization:** pass argv through `_norm_argv(...)` before comparing paths.
+- **Headless launcher mocks:** `patch("shutil.which", return_value="/usr/bin/gnome-terminal")` + platform patches.
+- **Golden fixtures:** `tests/fixtures/command_states/*.json`
+- **CLI help fixtures (runtime + tests):** `core/fixtures/cli_help/0.32.0/` — regenerate via `uv run python scripts/capture_cli_help.py`
+- **Stub binary:** `tests/stub_immich_go.py` for launcher integration tests
+
+Target: **~217 tests**, coverage gate **80%** on `core` + `app` (Linux CI).
+
+---
+
+## 9. CI/CD & Packaging
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | Push to `master` | Pyright (`core/`), pre-commit, multi-OS pytest + coverage, `--self-test` |
+| `pr-fast-feedback.yml` | PR | Tests, pip-audit (fails on vulns), CodeQL |
+| `release.yml` | Tag `v*` | **pytest gate** → Nuitka builds → SHA256SUMS → GitHub Release |
+| `release-please.yml` | Push to `master` | Version bump PR |
+
+### Build artifacts
+
+Naming: `Immich-Go-GUI-{VERSION}-{OS}-{ARCH}.{ext}`
+
+| Platform | Outputs |
+|----------|---------|
+| Windows | Setup.exe (Inno Setup), portable zip |
+| macOS | DMG (arch detected: arm64 / x86_64) |
+| Linux | AppImage, tar.gz, deb, rpm |
+
+### Packaging rules
+
+- **Windows icon:** `immich-go-gui.ico` — multi-resolution (16–256px). Regenerate: `uv run python scripts/generate_windows_icon.py` (Pillow is dev-only).
+- **Inno Setup:** `packaging/windows/installer.iss` outputs to `..\..\` — release workflow relocates `.exe` before artifact upload.
+- **AppImage:** uses `appimagetool` continuous release with `--appimage-extract-and-run` (not pinned — known trade-off).
+- **Release Please:** config in `.github/release-please-config.json` + `.github/.release-please-manifest.json` — keep manifest in sync on manual version bumps.
+
+### Code signing
+
+CI builds are **unsigned**. Windows SmartScreen / macOS Gatekeeper warnings are expected for distributed binaries.
+
+---
+
+## 10. UI Features Agents Should Know
+
+- **Status card** — debounced updates use `validate_state_light()` (no `build_plan` on every keystroke).
+- **Inline field errors** — `ValidationResult.field_errors` → red `FieldError` labels per tab widget.
+- **Help menu** — Open Config Folder, Open Log Folder, Export Diagnostics (secrets redacted).
+- **Exception hook** — `_install_exception_hook()` logs tracebacks + shows non-blocking error dialog.
+- **Advanced mode toggle** — `SwitchButton` widget; state synced with saved `advanced_mode` config.
+
+---
+
+## 11. Tech Stack
+
+- Python **3.13** (`>=3.13.0, <3.14`)
+- PySide6, `keyring`, `requests`, `packaging`, `tomli-w`
+- Dev: `pytest`, `pytest-qt`, `pytest-cov`, `pyright`, `ruff`, `pre-commit`, `nuitka`, `pillow` (icon script only), MkDocs Material
+- Release builds: Nuitka standalone / app bundle
+
+---
+
+## 12. Common Pitfalls
+
+1. **Adding flags in Python instead of `flags.toml`** — always extend the registry first.
+2. **Emitting secrets as CLI flags** — use `secret_env` in flags.toml + `build_environment()`.
+3. **Blocking serverless tabs on connection failure** — check `SERVER_REQUIRED_TABS`.
+4. **Forgetting Nuitka data files** — `flags.toml` and `core/fixtures/` or packaged app crashes on import.
+5. **Assuming POSIX env inheritance** — secrets must go through `env.sh` inside `run.sh`.
+6. **Editing `tests/fixtures/cli_help/`** — that path is removed; use `core/fixtures/cli_help/`.
+7. **Qt signal arity** — `QTimer.timeout` and `QPlainTextEdit.textChanged` emit no args; `QAction.triggered` emits `bool`.
+
+---
+
+## 13. Useful Commands
+
+```bash
+uv sync --dev
+uv run pytest
+uv run python app.py --self-test
+uv run python scripts/capture_cli_help.py          # refresh CLI help fixtures
+uv run python scripts/generate_windows_icon.py     # regenerate .ico from .png
+uv run pyright core/
+uv run pre-commit run --all-files
+```
