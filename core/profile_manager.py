@@ -150,41 +150,47 @@ def migrate_single_config_to_default() -> None:
     base_dir = default_config_dir()
     old_config = base_dir / "config.toml"
     old_secrets = base_dir / "secrets.toml"
-    p_root = profiles_root()
+    default_p_dir = profiles_root() / "default"
+    default_cfg = default_p_dir / "config.toml"
+    default_sec = default_p_dir / "secrets.toml"
 
-    if old_config.exists() and not p_root.exists():
-        default_p_dir = p_root / "default"
-        default_p_dir.mkdir(parents=True, exist_ok=True)
+    # Migrate when legacy root files exist but the default profile copy is missing.
+    # profiles/ may already exist from ensure_default_profile() without a prior copy.
+    if not old_config.exists() and not old_secrets.exists():
+        return
+    if default_cfg.exists() and (not old_secrets.exists() or default_sec.exists()):
+        return
 
-        # Copy/Move config.toml
-        shutil.copy2(old_config, default_p_dir / "config.toml")
+    default_p_dir.mkdir(parents=True, exist_ok=True)
+
+    if old_config.exists() and not default_cfg.exists():
+        shutil.copy2(old_config, default_cfg)
         try:
             bak = base_dir / "config.toml.pre-profile.bak"
             old_config.rename(bak)
         except Exception:
             pass
 
-        # Copy/Move secrets.toml if present
-        if old_secrets.exists():
-            shutil.copy2(old_secrets, default_p_dir / "secrets.toml")
-            try:
-                sbak = base_dir / "secrets.toml.pre-profile.bak"
-                old_secrets.rename(sbak)
-            except Exception:
-                pass
+    if old_secrets.exists() and not default_sec.exists():
+        shutil.copy2(old_secrets, default_sec)
+        try:
+            sbak = base_dir / "secrets.toml.pre-profile.bak"
+            old_secrets.rename(sbak)
+        except Exception:
+            pass
 
+    if default_cfg.exists() or default_sec.exists():
         now_iso = datetime.now(UTC).isoformat()
-        index_data = {
-            "schema_version": 1,
-            "active_profile": "default",
-            "profiles": [
-                {
-                    "name": "default",
-                    "created_at": now_iso,
-                }
-            ],
-        }
-        _save_profiles_index(index_data)
+        idx_data = _load_profiles_index()
+        p_list = idx_data.get("profiles", [])
+        if not any(p.get("name") == "default" for p in p_list if isinstance(p, dict)):
+            p_list.append({"name": "default", "created_at": now_iso})
+            idx_data["profiles"] = p_list
+        if not idx_data.get("active_profile"):
+            idx_data["active_profile"] = "default"
+        if "schema_version" not in idx_data:
+            idx_data["schema_version"] = 1
+        _save_profiles_index(idx_data)
 
 
 def ensure_default_profile() -> None:

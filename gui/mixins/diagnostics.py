@@ -15,6 +15,7 @@ from core import (
     default_config_path,
     get_config_load_warning,
 )
+from core.profile_manager import profile_dir
 
 
 def _gui_version() -> str:
@@ -54,7 +55,9 @@ def _redact_diagnostics_toml(text: str) -> str:
 
 class DiagnosticsMixin:
     def open_config_folder(self):
-        cfg_dir = default_config_dir()
+        from core.profile_manager import active_profile_name
+
+        cfg_dir = profile_dir(active_profile_name())
         cfg_dir.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(cfg_dir)))
 

@@ -188,3 +188,53 @@ def test_profile_index_cached(tmp_path, monkeypatch):
     third = pm._load_profiles_index()
     assert third.get("active_profile") == "other"
 
+
+def test_legacy_root_config_migrated_when_profiles_dir_exists(tmp_path, monkeypatch):
+    """Regression: profiles/ may exist before default/config.toml is populated."""
+    from core.profile_manager import (
+        clear_profiles_cache,
+        migrate_single_config_to_default,
+        profile_config_path,
+    )
+
+    base = tmp_path / "immich-go-gui"
+    base.mkdir()
+    legacy = base / "config.toml"
+    legacy.write_text(
+        '[server]\nurl = "http://legacy:2283"\n',
+        encoding="utf-8",
+    )
+    (base / "profiles" / "default").mkdir(parents=True)
+
+    monkeypatch.setattr("core.config_manager.default_config_dir", lambda: base)
+    monkeypatch.setattr("core.profile_manager.default_config_dir", lambda: base)
+    clear_profiles_cache()
+
+    migrate_single_config_to_default()
+
+    migrated = profile_config_path("default")
+    assert migrated.exists()
+    loaded = load_config(migrated)
+    assert loaded.server_url == "http://legacy:2283"
+    assert not legacy.exists()
+
+
+def test_save_config_uses_profile_path_without_env_override(tmp_path, monkeypatch):
+    """Save must land in profiles/{name}/config.toml, not the config root."""
+    from core.profile_manager import clear_profiles_cache, profile_config_path
+
+    base = tmp_path / "immich-go-gui"
+    monkeypatch.setattr("core.config_manager.default_config_dir", lambda: base)
+    monkeypatch.setattr("core.profile_manager.default_config_dir", lambda: base)
+    clear_profiles_cache()
+
+    cfg = AppConfig()
+    cfg.server_url = "http://saved:2283"
+    cfg.profile_name = "default"
+    save_config(cfg)
+
+    path = profile_config_path("default")
+    assert path.exists()
+    loaded = load_config(path)
+    assert loaded.server_url == "http://saved:2283"
+

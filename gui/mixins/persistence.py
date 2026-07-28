@@ -30,10 +30,15 @@ class PersistenceMixin:
             self.settings.sync()
 
     def load_configuration(self):
+        from core.profile_manager import migrate_single_config_to_default
+
+        migrate_single_config_to_default()
         self.app_config = load_config()
 
         if not default_config_path().exists():
-            self._migrate_legacy_qsettings_to_config()
+            legacy_root = default_config_dir() / "config.toml"
+            if not legacy_root.exists():
+                self._migrate_legacy_qsettings_to_config()
             self.app_config = load_config()
 
         self.inputs["config"]["server"].setText(self.app_config.server_url)
@@ -120,7 +125,18 @@ class PersistenceMixin:
             self.app_config.theme_mode = self.theme_mode_combo.currentText()
 
         self.app_config.form_state = self.collect_form_state()
-        save_config(self.app_config)
+        cfg_path = default_config_path(
+            getattr(self.app_config, "profile_name", "default")
+        )
+        try:
+            save_config(self.app_config)
+        except OSError as exc:
+            QMessageBox.critical(
+                self,
+                "Save Failed",
+                f"Could not write configuration to:\n{cfg_path}\n\n{exc}",
+            )
+            return
 
         prof_name = getattr(self.app_config, "profile_name", "default")
         api_key = self.inputs["config"]["api_key"].text().strip()
@@ -143,7 +159,7 @@ class PersistenceMixin:
             provider=self.app_config.secrets_provider,
         )
 
-        msg = "Configuration saved successfully."
+        msg = f"Configuration saved to:\n{cfg_path}"
         if res_api.message:
             msg += f"\n\nNote (API Key): {res_api.message}"
         if res_admin.message:
