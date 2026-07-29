@@ -1,4 +1,6 @@
-from PySide6.QtWidgets import QMessageBox
+from typing import cast
+
+from PySide6.QtWidgets import QMessageBox, QWidget
 
 from core import (
     AppConfig,
@@ -96,7 +98,7 @@ class PersistenceMixin:
 
         cfg_warning = get_config_load_warning()
         if cfg_warning:
-            QMessageBox.warning(self, "Configuration Reset", cfg_warning)
+            QMessageBox.warning(cast(QWidget, self), "Configuration Reset", cfg_warning)
 
         self.update_window_title()
         self._update_secret_status()
@@ -179,7 +181,7 @@ class PersistenceMixin:
             save_config(self.app_config)
         except OSError as exc:
             QMessageBox.critical(
-                self,
+                cast(QWidget, self),
                 "Save Failed",
                 f"Could not write configuration to:\n{cfg_path}\n\n{exc}",
             )
@@ -214,9 +216,10 @@ class PersistenceMixin:
 
         if show_popup:
             QMessageBox.information(
-                self,
+                cast(QWidget, self),
                 "Saved",
                 msg,
+                QMessageBox.StandardButton.Ok,
             )
         self._update_secret_status()
         self._mark_configuration_clean()
