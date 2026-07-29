@@ -99,13 +99,7 @@ jobs:
         shell: bash
         run: |
           NUMERIC_VERSION=$(echo "${{ env.VERSION }}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || echo "1.0.0")
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI.exe \
-            --include-data-files=immich-go-gui.png=immich-go-gui.png \
-            --include-data-files=core/flags.toml=core/flags.toml \
-            --include-data-dir=assets=assets \
-            --include-data-dir=core/fixtures=core/fixtures \
-            --windows-console-mode=disable --windows-icon-from-ico=immich-go-gui.ico \
-            --company-name="Shitan198u" --product-name="Immich-Go GUI" \
+          uv run python -m nuitka --output-filename=Immich-Go-GUI.exe \
             --file-version="${NUMERIC_VERSION}.0" --product-version="${NUMERIC_VERSION}.0" app.py
 
       - name: Create Windows Portable Archive
@@ -139,23 +133,15 @@ jobs:
       - name: Build macOS
         if: matrix.name == 'macos'
         run: |
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI \
-            --include-data-files=immich-go-gui.png=immich-go-gui.png \
-            --include-data-files=core/flags.toml=core/flags.toml \
-            --include-data-dir=assets=assets \
-            --include-data-dir=core/fixtures=core/fixtures app.py
+          uv run python -m nuitka --output-filename=Immich-Go-GUI app.py
           npm install -g create-dmg@${{ env.CREATE_DMG_VERSION }}
-          create-dmg app.app
+          create-dmg --no-code-sign app.app
           mv *.dmg "Immich-Go-GUI-${{ env.VERSION }}-${{ steps.macos-arch.outputs.suffix }}.dmg"
 
       - name: Build Linux Standalone
         if: matrix.name == 'linux'
         run: |
-          uv run python -m nuitka --standalone --enable-plugin=pyside6 --output-filename=Immich-Go-GUI \
-            --include-data-files=immich-go-gui.png=immich-go-gui.png \
-            --include-data-files=core/flags.toml=core/flags.toml \
-            --include-data-dir=assets=assets \
-            --include-data-dir=core/fixtures=core/fixtures app.py
+          uv run python -m nuitka --output-filename=Immich-Go-GUI app.py
 
       - name: Create Linux Portable Archive
         if: matrix.name == 'linux'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a multi-resolution Windows .ico from the app PNG (dev tool; requires Pillow)."""
+"""Generate Windows .ico and macOS .icns icons from the app PNG (dev tool; requires Pillow)."""
 
 from __future__ import annotations
 
@@ -13,17 +13,30 @@ except ImportError as exc:  # pragma: no cover - dev-only script
         "Pillow is required for icon generation. Install with: uv pip install pillow"
     ) from exc
 
-DEFAULT_SIZES = (16, 24, 32, 48, 64, 128, 256)
+DEFAULT_ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+DEFAULT_ICNS_SIZES = (16, 32, 64, 128, 256, 512)
 
 
-def generate_icon(
-    png_path: Path, ico_path: Path, sizes: tuple[int, ...] = DEFAULT_SIZES
+def generate_ico(
+    png_path: Path, ico_path: Path, sizes: tuple[int, ...] = DEFAULT_ICO_SIZES
 ) -> None:
     with Image.open(png_path) as img:
         rgba = img.convert("RGBA")
         rgba.save(
             ico_path,
             format="ICO",
+            sizes=[(size, size) for size in sizes],
+        )
+
+
+def generate_icns(
+    png_path: Path, icns_path: Path, sizes: tuple[int, ...] = DEFAULT_ICNS_SIZES
+) -> None:
+    with Image.open(png_path) as img:
+        rgba = img.convert("RGBA")
+        rgba.save(
+            icns_path,
+            format="ICNS",
             sizes=[(size, size) for size in sizes],
         )
 
@@ -43,11 +56,19 @@ def main() -> None:
         default=root / "immich-go-gui.ico",
         help="Output ICO path",
     )
+    parser.add_argument(
+        "--icns",
+        type=Path,
+        default=root / "immich-go-gui.icns",
+        help="Output ICNS path",
+    )
     args = parser.parse_args()
     if not args.png.is_file():
         raise SystemExit(f"PNG not found: {args.png}")
-    generate_icon(args.png, args.ico)
-    print(f"Wrote {args.ico} ({', '.join(str(s) for s in DEFAULT_SIZES)}px)")
+    generate_ico(args.png, args.ico)
+    generate_icns(args.png, args.icns)
+    print(f"Wrote {args.ico} ({', '.join(str(s) for s in DEFAULT_ICO_SIZES)}px)")
+    print(f"Wrote {args.icns} ({', '.join(str(s) for s in DEFAULT_ICNS_SIZES)}px)")
 
 
 if __name__ == "__main__":

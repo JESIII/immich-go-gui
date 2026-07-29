@@ -16,6 +16,7 @@
 
 # nuitka-project-if: {OS} == "Darwin":
 #   nuitka-project: --macos-create-app-bundle
+#   nuitka-project: --macos-app-icon=immich-go-gui.icns
 
 # nuitka-project-if: {OS} == "Linux":
 #   nuitka-project: --standalone
