@@ -12,7 +12,8 @@ on:
       - 'v*'
 
 env:
-  CREATE_DMG_VERSION: '7.3.0'
+  CREATE_DMG_VERSION: '8.1.0'
+  APPIMAGETOOL_VERSION: '1.9.1'
   NFPM_VERSION: '2.41.2'
 
 jobs:
@@ -187,7 +188,7 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
 
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          wget -q "https://github.com/AppImage/appimagetool/releases/download/${{ env.APPIMAGETOOL_VERSION }}/appimagetool-x86_64.AppImage" -O appimagetool
           chmod +x appimagetool
           ./appimagetool --appimage-extract-and-run AppDir "Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.AppImage"
 
