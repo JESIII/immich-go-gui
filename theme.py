@@ -110,6 +110,7 @@ def theme_tokens(theme: str) -> dict:
         "terminal_text": "#F9FAFB",
     }
 
+
 _QSS_TEMPLATE: str | None = None
 
 

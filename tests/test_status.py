@@ -1,13 +1,11 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QMessageBox
 
 from core.command_builder import validate_state_light
-from theme import apply_application_theme, clear_icon_cache
-def test_running_process_boolean_state(gui):
-    from PySide6.QtWidgets import QMessageBox
 
+
+def test_running_process_boolean_state(gui):
     gui.active_lock_path = None
     gui.running_process = False
     gui.update_status()
@@ -26,9 +24,9 @@ def test_running_process_boolean_state(gui):
         assert gui.active_lock_path is None
         assert gui.lbl_running_warning.isHidden() is True
 
+
 def test_close_event_save_prompt(gui, monkeypatch):
     from PySide6.QtGui import QCloseEvent
-    from PySide6.QtWidgets import QMessageBox
 
     calls = {"save": 0, "question": 0}
 
@@ -51,9 +49,9 @@ def test_close_event_save_prompt(gui, monkeypatch):
     assert calls["save"] == 1
     assert event.isAccepted()
 
+
 def test_close_event_cancel_ignores(gui, monkeypatch):
     from PySide6.QtGui import QCloseEvent
-    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(
         "PySide6.QtWidgets.QMessageBox.question",
@@ -71,9 +69,9 @@ def test_close_event_cancel_ignores(gui, monkeypatch):
     gui.closeEvent(event)
     assert not event.isAccepted()
 
+
 def test_close_event_discard_no_save(gui, monkeypatch):
     from PySide6.QtGui import QCloseEvent
-    from PySide6.QtWidgets import QMessageBox
 
     calls = {"save": 0, "question": 0}
 
@@ -114,6 +112,7 @@ def test_close_event_clean_skips_save_prompt(gui, monkeypatch):
     assert calls["question"] == 0
     assert event.isAccepted()
 
+
 def test_icon_cache_cleared_on_theme_switch(gui, monkeypatch):
     cleared = {"n": 0}
 
@@ -129,6 +128,7 @@ def test_icon_cache_cleared_on_theme_switch(gui, monkeypatch):
     gui.apply_theme("Dark")
     assert cleared["n"] == 1
 
+
 def test_theme_switch_light_dark_system(gui, monkeypatch):
     # Avoid full QSS re-apply / widget walk — this test only checks mode state.
     monkeypatch.setattr(
@@ -143,9 +143,8 @@ def test_theme_switch_light_dark_system(gui, monkeypatch):
     gui.apply_theme("System")
     assert gui.theme_mode == "System"
 
-def test_validate_state_light_does_not_call_glob(monkeypatch):
-    from core.command_builder import validate_state_light
 
+def test_validate_state_light_does_not_call_glob(monkeypatch):
     called = {"n": 0}
 
     def fake_glob(*_args, **_kwargs):
@@ -160,6 +159,7 @@ def test_validate_state_light_does_not_call_glob(monkeypatch):
     )
     assert res.is_valid
     assert called["n"] == 0
+
 
 def test_binary_debounce_and_ban_file_lines_repeat(gui):
     gui.toggle_advanced(True)
@@ -184,6 +184,7 @@ def test_binary_debounce_and_ban_file_lines_repeat(gui):
     ban_row.value_widget.setPlainText("*.tmp\n*.bak")
     gui._do_update_status()
 
+
 def test_inline_field_errors_shown_on_validation(gui):
     gui.stacked_widget.setCurrentIndex(1)
     gui.upload_tabs.setCurrentIndex(0)
@@ -194,4 +195,3 @@ def test_inline_field_errors_shown_on_validation(gui):
     lbl = gui._field_error_labels[("upload-folder", "path")]
     assert lbl.text()
     assert "required" in lbl.text().lower()
-

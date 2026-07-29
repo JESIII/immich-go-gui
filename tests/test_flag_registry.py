@@ -41,9 +41,9 @@ def test_registry_flag_counts_match_docs():
     }
     for tab, count in expected.items():
         allowed = REGISTRY.allowed_flags(tab)
-        assert (
-            len(allowed) == count
-        ), f"Tab {tab}: expected {count}, got {len(allowed)}: {sorted(allowed)}"
+        assert len(allowed) == count, (
+            f"Tab {tab}: expected {count}, got {len(allowed)}: {sorted(allowed)}"
+        )
 
 
 def test_upload_picasa_folder_album_not_stripped_in_simple_mode(gui):

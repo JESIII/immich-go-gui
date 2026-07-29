@@ -3,6 +3,8 @@ from pathlib import Path
 
 from core.command_builder import build_plan_from_state
 from tests.conftest import _norm_argv
+
+
 def test_golden_upload_folder(gui):
     """Golden: upload-folder simple mode minimal command."""
     gui.toggle_advanced(False)
@@ -26,6 +28,7 @@ def test_golden_upload_folder(gui):
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "test-key"
     assert not any("--api-key" in p for p in plan.argv)
 
+
 def test_golden_upload_gp(gui):
     """Golden: upload from-google-photos simple mode minimal command."""
     gui.toggle_advanced(False)
@@ -48,6 +51,7 @@ def test_golden_upload_gp(gui):
         ]
     )
 
+
 def test_golden_stack(gui):
     """Golden: stack simple mode command."""
     gui.toggle_advanced(False)
@@ -68,6 +72,7 @@ def test_golden_stack(gui):
             "--manage-burst=Stack",
         ]
     )
+
 
 def test_golden_stack_advanced_with_date_range(gui):
     """Golden: stack advanced mode command with date-range flag."""
@@ -92,6 +97,7 @@ def test_golden_stack_advanced_with_date_range(gui):
         ]
     )
 
+
 def test_golden_archive_folder(gui):
     """Golden: archive from-folder simple mode."""
     gui.toggle_advanced(False)
@@ -112,6 +118,7 @@ def test_golden_archive_folder(gui):
         ]
     )
     assert not any("--server" in p for p in plan.argv)
+
 
 def test_golden_upload_immich(gui):
     """Golden: upload from-immich simple mode."""
@@ -139,6 +146,7 @@ def test_golden_upload_immich(gui):
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "new-key"
     assert plan.env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY") == "old-key"
 
+
 def test_golden_archive_immich(gui):
     """Golden: archive from-immich simple mode."""
     gui.toggle_advanced(False)
@@ -161,6 +169,7 @@ def test_golden_archive_immich(gui):
         ]
     )
     assert plan.env.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_API_KEY") == "test-key"
+
 
 def test_build_plan_from_state_upload_folder_golden():
     config_state = {
@@ -201,6 +210,7 @@ def test_build_plan_from_state_upload_folder_golden():
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "test-key"
     assert not any("--api-key" in part for part in plan.argv)
 
+
 def test_golden_json_fixtures():
     fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "command_states"
     json_files = list(fixtures_dir.glob("*.json"))
@@ -222,9 +232,10 @@ def test_golden_json_fixtures():
             dry_run=False,
             advanced_state=advanced_state,
         )
-        assert _norm_argv(plan.argv) == _norm_argv(
-            expected_argv
-        ), f"Fixture {jf.name} produced unexpected argv: {plan.argv} != {expected_argv}"
+        assert _norm_argv(plan.argv) == _norm_argv(expected_argv), (
+            f"Fixture {jf.name} produced unexpected argv: {plan.argv} != {expected_argv}"
+        )
+
 
 def test_golden_upload_icloud_simple(gui):
     gui.toggle_advanced(False)
@@ -241,6 +252,7 @@ def test_golden_upload_icloud_simple(gui):
     )
     assert plan.tab_key == "upload-icloud"
 
+
 def test_golden_upload_picasa_simple(gui):
     gui.toggle_advanced(False)
     gui.stacked_widget.setCurrentIndex(1)
@@ -255,6 +267,7 @@ def test_golden_upload_picasa_simple(gui):
         ["upload", "from-picasa", "--server=http://localhost:2283", "/photos/picasa"]
     )
     assert plan.tab_key == "upload-picasa"
+
 
 def test_golden_archive_gp_simple(gui):
     gui.toggle_advanced(False)
@@ -275,6 +288,7 @@ def test_golden_archive_gp_simple(gui):
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-gp"
 
+
 def test_golden_archive_icloud_simple(gui):
     gui.toggle_advanced(False)
     gui.stacked_widget.setCurrentIndex(2)
@@ -289,6 +303,7 @@ def test_golden_archive_icloud_simple(gui):
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-icloud"
 
+
 def test_golden_archive_picasa_simple(gui):
     gui.toggle_advanced(False)
     gui.stacked_widget.setCurrentIndex(2)
@@ -302,4 +317,3 @@ def test_golden_archive_picasa_simple(gui):
     )
     assert "--server" not in " ".join(plan.argv)
     assert plan.tab_key == "archive-picasa"
-

@@ -1,9 +1,6 @@
-from pathlib import Path
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-from PySide6.QtWidgets import QMessageBox
 
 from core.command_builder import build_environment, build_plan_from_state
 from core.flag_registry import REGISTRY
@@ -25,6 +22,7 @@ def test_global_flag_ordering(gui):
     opts = gui.build_command(dry_run=False)
     assert "--log-level=DEBUG" in opts
 
+
 def test_on_errors_emitted_when_configured(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
@@ -37,6 +35,7 @@ def test_on_errors_emitted_when_configured(gui):
     )
     opts = gui.build_command(dry_run=False)
     assert "--on-errors=continue" in opts
+
 
 def test_client_timeout_emitted(gui):
     gui.toggle_advanced(True)
@@ -51,6 +50,7 @@ def test_client_timeout_emitted(gui):
     opts = gui.build_command(dry_run=False)
     assert "--client-timeout=60m" in opts
 
+
 def test_device_uuid_emitted(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
@@ -64,6 +64,7 @@ def test_device_uuid_emitted(gui):
     opts = gui.build_command(dry_run=False)
     assert "--device-uuid=my-device-123" in opts
 
+
 def test_api_trace_on_upload_gp(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
@@ -75,6 +76,7 @@ def test_api_trace_on_upload_gp(gui):
     opts = gui.build_command(dry_run=False)
     assert "--api-trace" in opts
 
+
 def test_api_trace_on_stack(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(3)  # stack
@@ -83,6 +85,7 @@ def test_api_trace_on_stack(gui):
     gui.adv_rows["stack"]["api-trace"].set_state({"enabled": True, "value": True})
     opts = gui.build_command(dry_run=False)
     assert "--api-trace" in opts
+
 
 def test_from_client_timeout(gui):
     gui.toggle_advanced(True)
@@ -98,6 +101,7 @@ def test_from_client_timeout(gui):
     opts = gui.build_command(dry_run=False)
     assert "--from-client-timeout=60m" in opts
 
+
 def test_gp_multi_path(gui):
     gui.stacked_widget.setCurrentIndex(1)  # upload page
     gui.upload_tabs.setCurrentIndex(1)  # upload-gp
@@ -108,6 +112,7 @@ def test_gp_multi_path(gui):
     assert "/takeout-001.zip" in opts
     assert "/takeout-002.zip" in opts
 
+
 def test_archive_immich_global_skip_ssl(gui):
     gui.inputs["config"]["skip-ssl"].setChecked(True)
     gui.stacked_widget.setCurrentIndex(2)
@@ -117,6 +122,7 @@ def test_archive_immich_global_skip_ssl(gui):
     gui.inputs["archive-immich"]["write-to"].setText("/backup")
     opts = gui.build_command(dry_run=True)
     assert "--from-skip-verify-ssl" in opts
+
 
 def test_upload_immich_global_skip_ssl(gui):
     gui.inputs["config"]["skip-ssl"].setChecked(True)
@@ -130,6 +136,7 @@ def test_upload_immich_global_skip_ssl(gui):
     assert "--from-skip-verify-ssl" in opts
     assert "--skip-verify-ssl" in opts
 
+
 def test_global_skip_ssl_option(gui):
     gui.inputs["config"]["skip-ssl"].setChecked(True)
     gui.stacked_widget.setCurrentIndex(1)  # upload page
@@ -139,6 +146,7 @@ def test_global_skip_ssl_option(gui):
     gui.inputs["upload-folder"]["path"].setText("/photos")
     opts = gui.build_command(dry_run=True)
     assert "--skip-verify-ssl" in opts
+
 
 def test_simple_mode_ignores_advanced_upload_folder_flags(gui):
     gui.toggle_advanced(False)
@@ -178,6 +186,7 @@ def test_simple_mode_ignores_advanced_upload_folder_flags(gui):
     assert "--time-zone=UTC" not in plan.argv
     assert "--manage-epson-fastfoto" not in plan.argv
 
+
 def test_advanced_mode_emits_advanced_upload_folder_flags(gui):
     gui.toggle_advanced(True)
 
@@ -216,6 +225,7 @@ def test_advanced_mode_emits_advanced_upload_folder_flags(gui):
     assert "--time-zone=UTC" in plan.argv
     assert "--manage-epson-fastfoto" in plan.argv
 
+
 def test_simple_mode_ignores_advanced_stack_flags(gui):
     gui.toggle_advanced(False)
 
@@ -238,6 +248,7 @@ def test_simple_mode_ignores_advanced_stack_flags(gui):
     assert "--manage-epson-fastfoto" not in plan.argv
     assert "--api-trace" not in plan.argv
 
+
 def test_archive_folder_destination_is_absolutized(gui):
     gui.toggle_advanced(False)
     gui.stacked_widget.setCurrentIndex(2)
@@ -253,6 +264,7 @@ def test_archive_folder_destination_is_absolutized(gui):
     write_arg = next(arg for arg in plan.argv if arg.startswith("--write-to-folder="))
     write_path = write_arg.split("=", 1)[1]
     assert os.path.isabs(write_path)
+
 
 def test_archive_immich_source_model_env():
     env = build_environment(
@@ -272,6 +284,7 @@ def test_archive_immich_source_model_env():
     )
     assert "IMMICH_GO_ARCHIVE_SERVER" not in env
 
+
 def test_archive_immich_source_model_cmd():
     plan = build_plan_from_state(
         tab_key="archive-immich",
@@ -284,6 +297,7 @@ def test_archive_immich_source_model_cmd():
     assert "--write-to-folder=/dest/folder" in _norm_argv(plan.argv)
     assert "--dry-run" in plan.argv
     assert not any(arg.startswith("--server=") for arg in plan.argv)
+
 
 def test_plan_errors_surfaced_in_gui(gui):
     gui.stacked_widget.setCurrentIndex(1)
@@ -309,6 +323,7 @@ def test_plan_errors_surfaced_in_gui(gui):
                 assert "Command Build Errors" in title
                 assert "Invalid flag '--unsupported'" in msg
 
+
 def test_simple_vs_advanced_mode_toggle(gui):
     gui.toggle_advanced(True)
     assert gui.is_advanced is True
@@ -321,6 +336,7 @@ def test_simple_vs_advanced_mode_toggle(gui):
     assert gui.lbl_mode.text() == "Simple"
     for frame in gui.adv_frames:
         assert frame.isHidden()
+
 
 def test_from_dry_run_emitted_for_immich_tabs():
     from core.command_builder import build_plan_from_state
@@ -336,6 +352,7 @@ def test_from_dry_run_emitted_for_immich_tabs():
     )
     assert "--dry-run" in plan.argv
     assert "--from-dry-run" in plan.argv
+
 
 def test_stack_pause_jobs_and_archive_folder_on_errors():
     from core.command_builder import build_plan_from_state
@@ -357,6 +374,7 @@ def test_stack_pause_jobs_and_archive_folder_on_errors():
     )
     assert "--on-errors=continue" in plan_archive.argv
 
+
 def test_upload_folder_path_is_absolutized(gui):
     gui.stacked_widget.setCurrentIndex(1)
     gui.upload_tabs.setCurrentIndex(0)
@@ -367,6 +385,7 @@ def test_upload_folder_path_is_absolutized(gui):
     assert opts[-1]
     assert os.path.isabs(opts[-1])
 
+
 def test_archive_folder_path_is_absolutized(gui):
     gui.stacked_widget.setCurrentIndex(2)
     gui.archive_tabs.setCurrentIndex(0)
@@ -375,6 +394,7 @@ def test_archive_folder_path_is_absolutized(gui):
     opts = gui.build_command(False)
     assert opts[-1]
     assert os.path.isabs(opts[-1])
+
 
 def test_archive_folder_destination_warnings(gui, tmp_path):
     src = tmp_path / "src"
@@ -389,6 +409,7 @@ def test_archive_folder_destination_warnings(gui, tmp_path):
 
     validation = gui.validate_inputs()
     assert any("inside the source" in w for w in validation.warnings)
+
 
 def test_simple_mode_ignores_advanced_rows(gui):
     """Verify Simple mode ignores advanced flag rows even if enabled."""
@@ -408,6 +429,7 @@ def test_simple_mode_ignores_advanced_rows(gui):
 
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" not in plan.argv
+
 
 def test_form_state_advanced_rows_persistence(gui):
     """Verify form state serialization and deserialization of advanced flag rows."""
@@ -433,6 +455,7 @@ def test_form_state_advanced_rows_persistence(gui):
     assert gui.adv_rows["upload-folder"]["time-zone"].enable.isChecked() is True
     assert gui.adv_rows["upload-folder"]["time-zone"].get_value() == "America/New_York"
 
+
 def test_advanced_mode_persistence(gui):
     gui.toggle_advanced(True)
     assert gui.is_advanced is True
@@ -441,6 +464,7 @@ def test_advanced_mode_persistence(gui):
     gui.toggle_advanced(False)
     assert gui.is_advanced is False
     assert gui.app_config.advanced_mode is False
+
 
 def test_upload_gp_path_warnings(gui, tmp_path):
     nonexistent = str(tmp_path / "missing_takeout")
@@ -451,10 +475,10 @@ def test_upload_gp_path_warnings(gui, tmp_path):
     val = gui.validate_inputs()
     assert any("does not exist" in w for w in val.warnings)
 
-def test_upload_gp_has_no_into_album_advanced_key():
-    from core.flag_registry import REGISTRY
 
+def test_upload_gp_has_no_into_album_advanced_key():
     assert "into-album" not in REGISTRY.advanced_keys("upload-gp")
+
 
 def test_gp_simple_mode_checkboxes_emitted_when_unchecked(gui):
     """A9: When GP simple checkboxes are unchecked, --flag=false is emitted."""
@@ -473,6 +497,7 @@ def test_gp_simple_mode_checkboxes_emitted_when_unchecked(gui):
     assert "--sync-albums=false" in plan.argv
     assert "--include-archived=false" in plan.argv
 
+
 def test_gp_simple_mode_checkboxes_omitted_when_checked(gui):
     """A9: When GP simple checkboxes are checked (default), --flag=false is NOT emitted."""
     gui.toggle_advanced(False)
@@ -490,6 +515,7 @@ def test_gp_simple_mode_checkboxes_omitted_when_checked(gui):
     assert "--sync-albums=false" not in plan.argv
     assert "--include-archived=false" not in plan.argv
 
+
 def test_upload_immich_simple_mode_from_date_range_emitted(gui):
     """A1: from-date-range in upload-immich simple card must produce CLI flag."""
     gui.toggle_advanced(False)
@@ -505,6 +531,7 @@ def test_upload_immich_simple_mode_from_date_range_emitted(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--from-date-range=2022-01-01,2022-12-31" in plan.argv
     assert not plan.errors
+
 
 def test_upload_immich_simple_mode_from_albums_emitted(gui):
     """A1: from-albums in upload-immich simple card must produce repeat CLI flags."""
@@ -523,6 +550,7 @@ def test_upload_immich_simple_mode_from_albums_emitted(gui):
     assert "--from-albums=Travel" in plan.argv
     assert not plan.errors
 
+
 def test_archive_immich_simple_mode_from_date_range_emitted(gui):
     """A1: from-date-range in archive-immich simple card must produce CLI flag."""
     gui.toggle_advanced(False)
@@ -538,6 +566,7 @@ def test_archive_immich_simple_mode_from_date_range_emitted(gui):
     assert "--from-date-range=2023-06-01,2023-12-31" in plan.argv
     assert not plan.errors
 
+
 def test_archive_immich_simple_mode_from_albums_emitted(gui):
     """A1: from-albums in archive-immich simple card must produce repeat CLI flags."""
     gui.toggle_advanced(False)
@@ -552,6 +581,7 @@ def test_archive_immich_simple_mode_from_albums_emitted(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--from-albums=ArchiveAlbum" in plan.argv
     assert not plan.errors
+
 
 def test_serverless_archive_tabs_never_emit_server(gui):
     gui.inputs["config"]["server"].setText("http://should-not-emit:2283")
@@ -586,6 +616,7 @@ def test_serverless_archive_tabs_never_emit_server(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--server" not in " ".join(plan.argv)
 
+
 def test_from_dry_run_button_only_one_flag(gui):
     """Dry Run button on archive-immich emits a single --from-dry-run."""
     gui.stacked_widget.setCurrentIndex(2)
@@ -596,6 +627,7 @@ def test_from_dry_run_button_only_one_flag(gui):
     plan = gui.build_plan(dry_run=True)
     count = sum(1 for a in plan.argv if a == "--from-dry-run")
     assert count == 1
+
 
 def test_upload_icloud_advanced_flag_emission(gui):
     gui.toggle_advanced(True)
@@ -614,6 +646,7 @@ def test_upload_icloud_advanced_flag_emission(gui):
     assert "--recursive=false" in plan.argv
     assert "--api-trace" in plan.argv
 
+
 def test_upload_picasa_advanced_flag_emission(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)
@@ -631,9 +664,7 @@ def test_upload_picasa_advanced_flag_emission(gui):
     assert "--recursive=false" in plan.argv
     assert "--album-picasa" in plan.argv
 
-def test_upload_folder_log_level_is_advanced_mode():
-    from core.flag_registry import REGISTRY
 
+def test_upload_folder_log_level_is_advanced_mode():
     defs = {d.key: d for d in REGISTRY.flags["upload-folder"]}
     assert defs["log-level"].mode == "advanced"
-

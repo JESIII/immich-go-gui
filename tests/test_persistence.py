@@ -1,8 +1,5 @@
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from core.config_manager import (
     SecretStore,
@@ -12,6 +9,8 @@ from core.config_manager import (
     save_secret_with_fallback,
 )
 from core.models import AppConfig
+
+
 def test_secret_store_save_load():
     with patch("core.config_manager.keyring") as mock_kr:
         mock_kr.get_password.return_value = "STORED"
@@ -20,6 +19,7 @@ def test_secret_store_save_load():
             "immich-go-gui", "default:api_key", "STORED"
         )
         assert SecretStore.get_api_key() == "STORED"
+
 
 def test_secret_store_migration():
     with patch("core.config_manager.keyring") as mock_kr:
@@ -31,6 +31,7 @@ def test_secret_store_migration():
             "immich-go-gui", "default:api_key", "OLD_KEY"
         )
         mock_settings.remove.assert_called_once_with("api_key")
+
 
 def test_has_unsaved_changes_detects_widget_edits(gui):
     gui._mark_configuration_clean()
@@ -63,6 +64,7 @@ def test_config_roundtrip(tmp_path, monkeypatch):
     assert loaded.skip_ssl is True
     assert loaded.allow_untested_updates is True
 
+
 def test_secret_store_profile_scoped(monkeypatch):
     store = {}
 
@@ -90,6 +92,7 @@ def test_secret_store_profile_scoped(monkeypatch):
     SecretStore.clear_secret("work", "api_key")
     assert SecretStore.get_secret("work", "api_key") == ""
     assert SecretStore.get_secret("default", "api_key") == "key_default"
+
 
 def test_secret_keyring_failure_fallback(tmp_path, monkeypatch):
     secrets_file = tmp_path / "secrets.toml"
@@ -123,11 +126,13 @@ def test_secret_keyring_failure_fallback(tmp_path, monkeypatch):
     )
     assert val == "fallback_secret"
 
+
 def test_collect_form_state_excludes_secrets(gui):
     state = gui.collect_form_state()
     for tab_name, tab_dict in state.items():
         for secret_key in ("api_key", "from-api-key", "admin_api_key"):
             assert secret_key not in tab_dict
+
 
 def test_secret_copy_success_verification(monkeypatch):
     from core.config_manager import SecretStore
@@ -149,6 +154,7 @@ def test_secret_copy_success_verification(monkeypatch):
     assert res is True
     assert secrets_db.get(("dst", "api_key")) == "my-secret-key"
 
+
 def test_advanced_secret_value_not_persisted(gui):
     gui.toggle_advanced(True)
     gui.adv_rows["upload-immich"]["from-admin-api-key"].set_state(
@@ -163,6 +169,7 @@ def test_advanced_secret_value_not_persisted(gui):
     assert saved["enabled"] is False
     assert saved["value"] == ""
 
+
 def test_secret_status_label_keyring(gui, monkeypatch):
     gui.app_config.secrets_provider = "keyring"
     monkeypatch.setattr(
@@ -172,12 +179,14 @@ def test_secret_status_label_keyring(gui, monkeypatch):
     gui._update_secret_status()
     assert "keyring" in gui.lbl_secret_status.text().lower()
 
+
 def test_secret_status_label_file_fallback(gui, monkeypatch):
     gui.app_config.secrets_provider = "config"
     monkeypatch.setattr(SecretStore, "get_secret", staticmethod(lambda *_: ""))
     monkeypatch.setattr(gui, "_secrets_file_has_key", lambda: True)
     gui._update_secret_status()
     assert "secrets.toml" in gui.lbl_secret_status.text()
+
 
 def test_profile_index_cached(tmp_path, monkeypatch):
     from core import profile_manager as pm
@@ -252,4 +261,3 @@ def test_save_config_uses_profile_path_without_env_override(tmp_path, monkeypatc
     assert path.exists()
     loaded = load_config(path)
     assert loaded.server_url == "http://saved:2283"
-

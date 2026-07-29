@@ -1,10 +1,9 @@
 import json
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -18,12 +17,10 @@ from core.command_builder import (
     FlagEmitter,
     mask_command_for_display,
     validate_date_range,
-    validate_state,
 )
-from core.config_manager import get_secret_with_fallback, save_secret_with_fallback
 from core.flag_registry import REGISTRY
 from core.network import normalize_server_url
-from core.process_tracker import create_lock, is_lock_active, read_lock, scan_locks
+from core.process_tracker import create_lock, is_lock_active
 from core.validation import (
     clean_date_range,
     expand_source_paths,
@@ -34,16 +31,20 @@ from core.validation import (
 )
 from core.validation import validate_date_range as validate_date_range_core
 from tests.conftest import _norm_argv
+
+
 def test_collect_paths_single_file():
     assert _norm_argv(collect_paths("/path/to/file.zip")) == _norm_argv(
         ["/path/to/file.zip"]
     )
+
 
 def test_collect_paths_multiline():
     text = "/path/one.zip\n\n/path/two.zip\n"
     assert _norm_argv(collect_paths(text)) == _norm_argv(
         ["/path/one.zip", "/path/two.zip"]
     )
+
 
 def test_collect_paths_glob_expansion(tmp_path):
     (tmp_path / "takeout-001.zip").touch()
@@ -53,11 +54,14 @@ def test_collect_paths_glob_expansion(tmp_path):
     assert len(result) == 2
     assert all("takeout-" in p for p in result)
 
+
 def test_normalize_server_url_adds_scheme():
     assert normalize_server_url("localhost:2283") == "http://localhost:2283"
 
+
 def test_normalize_server_url_strips_trailing_slash():
     assert normalize_server_url("http://localhost:2283/") == "http://localhost:2283"
+
 
 def test_normalize_server_url_preserves_https():
     assert (
@@ -65,9 +69,11 @@ def test_normalize_server_url_preserves_https():
         == "https://photos.example.com"
     )
 
+
 def test_normalize_server_url_empty():
     assert normalize_server_url("") == ""
     assert normalize_server_url("   ") == ""
+
 
 def test_mask_command_for_display():
     cmd = [
@@ -83,6 +89,7 @@ def test_mask_command_for_display():
     assert "--api-key=********" in masked
     assert "--server=http://local" in masked
 
+
 def test_mask_command_space_separated():
     cmd = ["immich-go", "upload", "from-folder", "--api-key", "super_secret", "/photos"]
     masked = mask_command_for_display(cmd)
@@ -90,16 +97,19 @@ def test_mask_command_space_separated():
     assert "********" in masked
     assert "--api-key" in masked
 
+
 def test_mask_command_from_api_key():
     cmd = ["immich-go", "upload", "from-immich", "--from-api-key=old_secret"]
     masked = mask_command_for_display(cmd)
     assert "--from-api-key=********" in masked
+
 
 def test_mask_command_admin_api_key():
     cmd = ["immich-go", "stack", "--admin-api-key=ADMIN_SECRET"]
     masked = mask_command_for_display(cmd)
     assert "ADMIN_SECRET" not in masked
     assert "--admin-api-key=********" in masked
+
 
 def test_validate_date_range():
     assert validate_date_range("") is True
@@ -109,11 +119,13 @@ def test_validate_date_range():
     assert validate_date_range("2023-01-01,2023-12-31") is True
     assert validate_date_range("invalid-date") is False
 
+
 def test_build_environment_no_trailing_spaces():
     env = build_environment("upload-folder", "http://s", "key", "http://fs", "fkey")
     for k in env:
         if k.startswith("IMMICH_GO_"):
             assert k == k.strip(), f"Trailing space in env key: {k!r}"
+
 
 def test_api_key_never_in_argv(gui):
     """Secrets must not appear in plan.argv for any tab."""
@@ -131,6 +143,7 @@ def test_api_key_never_in_argv(gui):
 
     assert plan.env.get("IMMICH_GO_UPLOAD_API_KEY") == "super_secret_key"
 
+
 def test_from_api_key_never_in_argv(gui):
     gui.stacked_widget.setCurrentIndex(1)
     gui.upload_tabs.setCurrentIndex(4)
@@ -147,6 +160,7 @@ def test_from_api_key_never_in_argv(gui):
 
     assert plan.env.get("IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY") == "old_secret"
 
+
 def test_archive_folder_no_server_in_argv(gui):
     """archive-folder should not have --server or --api-key."""
     gui.stacked_widget.setCurrentIndex(2)
@@ -161,12 +175,14 @@ def test_archive_folder_no_server_in_argv(gui):
     assert not any("--server" in p for p in plan.argv)
     assert not any("--api-key" in p for p in plan.argv)
 
+
 def test_build_environment_upload(gui):
     gui.inputs["config"]["server"].setText("http://test:2283")
     gui.inputs["config"]["api_key"].setText("my_key")
     env = gui.build_environment("upload-folder")
     assert env["IMMICH_GO_UPLOAD_SERVER"] == "http://test:2283"
     assert env["IMMICH_GO_UPLOAD_API_KEY"] == "my_key"
+
 
 def test_build_environment_upload_immich(gui):
     gui.inputs["config"]["server"].setText("http://new:2283")
@@ -179,10 +195,12 @@ def test_build_environment_upload_immich(gui):
     assert env["IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_SERVER"] == "http://old:2283"
     assert env["IMMICH_GO_UPLOAD_FROM_IMMICH_FROM_API_KEY"] == "old_key"
 
+
 def test_clean_date_range():
     assert clean_date_range("  2023-01-01 , 2023-12-31  ") == "2023-01-01,2023-12-31"
     assert clean_date_range("2023") == "2023"
     assert clean_date_range("") == ""
+
 
 def test_validate_date_range_extended():
     ok, err = validate_date_range_core("2023")
@@ -209,10 +227,12 @@ def test_validate_date_range_extended():
     ok, err = validate_date_range_core("2023-12-31,2023-01-01")
     assert ok is False and "cannot be after" in err.lower()
 
+
 def test_normalize_extensions_csv():
     assert normalize_extensions_csv(".JPG, png , .heic, jpg") == ".jpg,.png,.heic"
     assert normalize_extensions_csv("  RAW, .CR2, raw ") == ".raw,.cr2"
     assert normalize_extensions_csv("") == ""
+
 
 def test_normalize_list_csv():
     assert normalize_list_csv(" vacation, family/reunion , ") == [
@@ -220,6 +240,7 @@ def test_normalize_list_csv():
         "family/reunion",
     ]
     assert normalize_list_csv("") == []
+
 
 def test_glob_and_path_validation(tmp_path):
     f1 = tmp_path / "photo1.jpg"
@@ -237,6 +258,7 @@ def test_glob_and_path_validation(tmp_path):
     assert len(warnings) == 1
     assert "does not exist" in warnings[0]
 
+
 def test_destination_validation(tmp_path):
     src_dir = tmp_path / "photos"
     src_dir.mkdir()
@@ -247,9 +269,8 @@ def test_destination_validation(tmp_path):
     assert len(warnings) == 1
     assert "inside the source path" in warnings[0]
 
-def test_command_builder_destructive_warnings():
-    from core.command_builder import build_plan_from_state
 
+def test_command_builder_destructive_warnings():
     config_state = {"server": "http://localhost:2283", "api_key": "test_key"}
     tab_state = {
         "path": "/photos",
@@ -269,9 +290,8 @@ def test_command_builder_destructive_warnings():
     assert "KeepJPG may delete the RAW file" in warn_text
     assert "StackKeepJPEG may discard non-cover burst frames" in warn_text
 
-def test_admin_api_key_environment_passing():
-    from core.command_builder import build_plan_from_state
 
+def test_admin_api_key_environment_passing():
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "user_key",
@@ -290,6 +310,7 @@ def test_admin_api_key_environment_passing():
     assert "super_admin_key" not in plan.argv
     assert plan.env.get("IMMICH_GO_UPLOAD_ADMIN_API_KEY") == "super_admin_key"
 
+
 def test_parse_help_flags():
     sample_help = """
     OPTIONS:
@@ -306,11 +327,13 @@ def test_parse_help_flags():
     assert "recursive" in flags
     assert "help" not in flags
 
+
 def test_help_name_for_tab():
     assert help_name_for_tab("upload-folder") == "upload_from-folder"
     assert help_name_for_tab("upload-gp") == "upload_from-google-photos"
     assert help_name_for_tab("archive-immich") == "archive_from-immich"
     assert help_name_for_tab("stack") == "stack"
+
 
 def test_load_help_fixture():
     flags = load_help_fixture("0.32.0", "upload_from-folder")
@@ -318,9 +341,8 @@ def test_load_help_fixture():
     assert "recursive" in flags
     assert "manage-raw-jpeg" in flags
 
-def test_all_tab_allowed_flags_exist_in_help_fixtures():
-    from core.flag_registry import REGISTRY
 
+def test_all_tab_allowed_flags_exist_in_help_fixtures():
     tabs = list(REGISTRY.tabs.keys())
     for tab_key in tabs:
         fixture_name = help_name_for_tab(tab_key)
@@ -328,9 +350,10 @@ def test_all_tab_allowed_flags_exist_in_help_fixtures():
         allowed_flags = TAB_ALLOWED_FLAGS[tab_key]
 
         for flag in allowed_flags:
-            assert (
-                flag in fixture_flags
-            ), f"Flag '--{flag}' registered in TAB_ALLOWED_FLAGS[{tab_key}] was not found in fixture '{fixture_name}'"
+            assert flag in fixture_flags, (
+                f"Flag '--{flag}' registered in TAB_ALLOWED_FLAGS[{tab_key}] was not found in fixture '{fixture_name}'"
+            )
+
 
 def test_flag_emitter_allowlist_enforcement():
     emitter = FlagEmitter("upload-folder", strict=False)
@@ -344,17 +367,20 @@ def test_flag_emitter_allowlist_enforcement():
     with pytest.raises(ValueError, match="not allowed"):
         strict_emitter.add_option("invalid-flag", "val")
 
+
 def test_check_fixtures_compatibility():
     report = check_fixtures("0.32.0")
     assert report.version == "0.32.0"
     assert report.is_fully_compatible() is True
     assert len(report.missing_flags_by_tab) == 0
 
+
 def test_compat_ignore_list_excludes_api_key_flags():
     report = check_fixtures("0.32.0")
     for flags in report.unknown_flags_by_tab.values():
         assert "api-key" not in flags
         assert "from-api-key" not in flags
+
 
 def test_show_cli_compatibility_dialog(gui):
     with patch("PySide6.QtWidgets.QMessageBox.information") as mock_info:
@@ -363,11 +389,10 @@ def test_show_cli_compatibility_dialog(gui):
         title = mock_info.call_args[0][1]
         assert "CLI Compatibility" in title
 
+
 def test_stale_lock_detection_with_pid_and_heartbeat(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     from core.process_tracker import (
-        create_lock,
-        is_lock_active,
         release_lock,
         update_lock,
     )
@@ -385,9 +410,8 @@ def test_stale_lock_detection_with_pid_and_heartbeat(tmp_path, monkeypatch):
 
     release_lock(l_path)
 
-def test_default_true_boolean_emission():
-    from core.command_builder import build_plan_from_state
 
+def test_default_true_boolean_emission():
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "test_key",
@@ -432,6 +456,7 @@ def test_default_true_boolean_emission():
     assert "--takeout-tag=false" in plan_gp.argv
     assert "--people-tag=false" in plan_gp.argv
 
+
 def test_collect_paths_expansion_and_abspath(tmp_path):
     from core.command_builder import collect_paths
 
@@ -440,10 +465,11 @@ def test_collect_paths_expansion_and_abspath(tmp_path):
     assert len(paths) == 1
     assert os.path.isabs(paths[0])
 
+
 def test_missing_fixtures_not_fully_compatible(tmp_path):
     from core.cli_contract import check_fixtures
 
-    report = (
+    _ = (
         check_fixtures.__wrapped__(str(tmp_path / "missing-fixtures"))
         if hasattr(check_fixtures, "__wrapped__")
         else None
@@ -455,6 +481,7 @@ def test_missing_fixtures_not_fully_compatible(tmp_path):
     assert report_missing.is_fully_compatible() is False
     report_empty = CompatibilityReport(version="0.99.0", supported=True)
     assert report_empty.is_fully_compatible() is True
+
 
 def test_advanced_flag_disabled_not_emitted(gui):
     """Verify disabled advanced flag is not emitted even if value widget is set."""
@@ -475,6 +502,7 @@ def test_advanced_flag_disabled_not_emitted(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" not in plan.argv
 
+
 def test_advanced_flag_enabled_text_emitted(gui):
     """Verify enabled advanced text flag is emitted."""
     gui.toggle_advanced(True)
@@ -493,6 +521,7 @@ def test_advanced_flag_enabled_text_emitted(gui):
 
     plan = gui.build_plan(dry_run=False)
     assert "--time-zone=UTC" in plan.argv
+
 
 def test_advanced_bool_false_emitted(gui):
     """Verify enabled boolean false flag is emitted as --flag=false."""
@@ -513,6 +542,7 @@ def test_advanced_bool_false_emitted(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--recursive=false" in plan.argv
 
+
 def test_advanced_bool_true_emitted_as_presence(gui):
     """Verify enabled boolean true flag is emitted as --flag presence."""
     gui.toggle_advanced(True)
@@ -532,6 +562,7 @@ def test_advanced_bool_true_emitted_as_presence(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--include-trashed" in plan.argv
 
+
 def test_validate_server_url():
     from core.validation import validate_server_url
 
@@ -550,8 +581,8 @@ def test_validate_server_url():
     ok, err = validate_server_url("invalid-url")
     assert ok is False
 
+
 def test_cleanup_stale_temp_dirs(tmp_path, monkeypatch):
-    import tempfile
     import time
 
     from core.terminal_launcher import cleanup_stale_temp_dirs
@@ -568,13 +599,14 @@ def test_cleanup_stale_temp_dirs(tmp_path, monkeypatch):
     assert cleaned == 1
     assert not dummy_dir.exists()
 
+
 def test_advanced_keys_match_registry():
     from core.advanced_flags import ADVANCED_FLAGS
-    from core.flag_registry import REGISTRY
 
     for tab, defs in ADVANCED_FLAGS.items():
         expected = {def_.key for def_ in defs}
         assert REGISTRY.advanced_keys(tab) == expected
+
 
 def test_from_admin_api_key_advanced_secret_env(gui):
     gui.toggle_advanced(True)
@@ -602,6 +634,7 @@ def test_from_admin_api_key_advanced_secret_env(gui):
         == "old-admin-secret"
     )
 
+
 def test_no_duplicate_test_names():
     """A2: Ensure no duplicate test function names exist in test_app.py."""
     import ast
@@ -615,6 +648,7 @@ def test_no_duplicate_test_names():
     ]
     dupes = [n for n, c in collections.Counter(names).items() if c > 1]
     assert not dupes, f"Duplicate test names found in test_app.py: {dupes}"
+
 
 def test_advanced_flags_subset_of_tab_allowed_flags():
     """A8: Every flag in ADVANCED_FLAGS must be in TAB_ALLOWED_FLAGS for its tab.
@@ -638,6 +672,7 @@ def test_advanced_flags_subset_of_tab_allowed_flags():
 
     assert not missing, "\n".join(missing)
 
+
 def test_validate_advanced_state_rejects_invalid_month():
     """A3: validate_advanced_state must reject semantically invalid dates."""
     from core.advanced_flags import validate_advanced_state
@@ -650,6 +685,7 @@ def test_validate_advanced_state_rejects_invalid_month():
     assert not result.is_valid
     assert any("date" in e.lower() or "invalid" in e.lower() for e in result.errors)
 
+
 def test_validate_advanced_state_rejects_reversed_range():
     """A3: validate_advanced_state must reject start > end date ranges."""
     from core.advanced_flags import validate_advanced_state
@@ -660,6 +696,7 @@ def test_validate_advanced_state_rejects_reversed_range():
     )
     assert not result.is_valid
     assert result.errors
+
 
 def test_validate_advanced_state_accepts_valid_date_range():
     """A3: validate_advanced_state must accept well-formed date ranges."""
@@ -672,9 +709,9 @@ def test_validate_advanced_state_accepts_valid_date_range():
     assert result.is_valid
     assert not result.errors
 
+
 def test_env_var_secret_contract_with_stub(gui):
     """Fix 1.2: Verify subprocess receives secrets via env vars and never in argv."""
-    import json
     import subprocess
     from pathlib import Path
 
@@ -703,9 +740,9 @@ def test_env_var_secret_contract_with_stub(gui):
         "source-secret-key-456",
         "source-admin-secret-789",
     ):
-        assert not any(
-            secret in arg for arg in plan.argv
-        ), f"Secret '{secret}' leaked into argv!"
+        assert not any(secret in arg for arg in plan.argv), (
+            f"Secret '{secret}' leaked into argv!"
+        )
 
     # 2. Run the stub process using plan.argv and plan.env
     cmd = [sys.executable, stub_path] + plan.argv
@@ -742,6 +779,7 @@ def test_env_var_secret_contract_with_stub(gui):
     ):
         assert not any(secret in arg for arg in received_argv)
 
+
 def test_flag_emitter_allows_repeat_options():
     from core.command_builder import FlagEmitter
 
@@ -750,9 +788,8 @@ def test_flag_emitter_allows_repeat_options():
     assert emitter.add_option("tag", "b") is True
     assert emitter.opts == ["--tag=a", "--tag=b"]
 
-def test_emission_log_populated():
-    from core.command_builder import build_plan_from_state
 
+def test_emission_log_populated():
     config_state = {
         "server": "http://localhost:2283",
         "api_key": "key",
@@ -769,6 +806,7 @@ def test_emission_log_populated():
     assert "advanced" in sources
     assert any(e["flag"] == "--on-errors=continue" for e in plan.emission_log)
 
+
 def test_overwrite_warn_values(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(1)
@@ -782,6 +820,7 @@ def test_overwrite_warn_values(gui):
     plan = gui.build_plan(dry_run=False)
     assert "--overwrite" in plan.argv
     assert any("Overwrite mode" in w for w in plan.warnings)
+
 
 def test_log_file_created_and_masked(tmp_path, monkeypatch):
     import logging
@@ -815,4 +854,3 @@ def test_log_file_created_and_masked(tmp_path, monkeypatch):
     assert "upload-folder" in text
     assert "super-secret" not in text
     assert "IMMICH_GO_UPLOAD_API_KEY" in text
-

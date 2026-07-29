@@ -1,12 +1,11 @@
 import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from core.binary_manager import BinaryManager, get_version_support
 from core.cli_contract import check_binary_help
 from core.models import VersionSupport
+
 
 class TestBinaryManagerWindowsPathResolution:
     """Group B (extended): binary_manager.py Path.resolve() fix — issue #66."""
@@ -47,9 +46,9 @@ class TestBinaryManagerWindowsPathResolution:
 
         assert mock_run.called
         call_args = mock_run.call_args[0][0]
-        assert os.path.isabs(
-            call_args[0]
-        ), f"Expected absolute resolved path in subprocess call, got: {call_args[0]!r}"
+        assert os.path.isabs(call_args[0]), (
+            f"Expected absolute resolved path in subprocess call, got: {call_args[0]!r}"
+        )
 
     def test_verify_extracted_binary_uses_resolved_path(self, tmp_path):
         """Fix #66: verify_extracted_binary resolves path before subprocess.run."""
@@ -67,20 +66,23 @@ class TestBinaryManagerWindowsPathResolution:
 
         assert result is True
         call_args = mock_run.call_args[0][0]
-        assert os.path.isabs(
-            call_args[0]
-        ), f"Expected absolute resolved path, got: {call_args[0]!r}"
+        assert os.path.isabs(call_args[0]), (
+            f"Expected absolute resolved path, got: {call_args[0]!r}"
+        )
 
 
 def test_version_support_tested():
     assert get_version_support("0.32.0") == VersionSupport.TESTED
     assert get_version_support("v0.32.0") == VersionSupport.TESTED
 
+
 def test_version_support_unsupported_old():
     assert get_version_support("0.31.0") == VersionSupport.UNSUPPORTED_OLD
 
+
 def test_version_support_untested_new():
     assert get_version_support("0.33.0") == VersionSupport.UNTESTED_NEW
+
 
 def test_update_decision_allows_tested_version():
     manager = BinaryManager()
@@ -95,6 +97,7 @@ def test_update_decision_allows_tested_version():
     assert decision.allowed is True
     assert decision.requires_confirmation is True
 
+
 def test_update_decision_blocks_untested_by_default():
     manager = BinaryManager()
 
@@ -106,6 +109,7 @@ def test_update_decision_blocks_untested_by_default():
     )
 
     assert decision.allowed is False
+
 
 def test_update_decision_allows_untested_when_enabled():
     manager = BinaryManager()
@@ -120,6 +124,7 @@ def test_update_decision_allows_untested_when_enabled():
     assert decision.allowed is True
     assert decision.requires_confirmation is True
 
+
 def test_binary_manager_downgrade_prevention():
     from core.binary_manager import BinaryManager
 
@@ -127,6 +132,7 @@ def test_binary_manager_downgrade_prevention():
     decision = bm.evaluate_update(current_version="0.33.0", latest_version="0.32.0")
     assert decision.allowed is False
     assert "newer version" in decision.message
+
 
 def test_binary_manager_get_release_asset_url(monkeypatch):
     from core.binary_manager import BinaryManager
@@ -150,12 +156,14 @@ def test_binary_manager_get_release_asset_url(monkeypatch):
     url = bm.get_release_asset_url("0.32.0")
     assert "immich-go_0.32.0_linux_x86_64.tar.gz" in url
 
+
 def test_binary_manager_verify_extracted_binary(tmp_path):
     from core.binary_manager import BinaryManager
 
     bm = BinaryManager()
     # Nonexistent file
     assert bm.verify_extracted_binary(str(tmp_path / "nonexistent")) is False
+
 
 def test_binary_manager_download_and_install_cancellation(tmp_path):
     """Fix 1.3: download_and_install respects cancellation and cleans up temp files."""
@@ -226,6 +234,7 @@ def test_binary_manager_checksum_verification_pass(tmp_path):
         assert success is True
         assert "Successfully installed" in msg
 
+
 def test_binary_manager_checksum_verification_fail(tmp_path):
     from core.binary_manager import BinaryManager
 
@@ -252,6 +261,7 @@ def test_binary_manager_checksum_verification_fail(tmp_path):
         assert success is False
         assert "checksum verification failed" in msg.lower()
 
+
 def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
     from core.binary_manager import BinaryManager
 
@@ -274,6 +284,7 @@ def test_binary_manager_checksum_missing_checksums_txt(tmp_path):
         success, msg = bm.download_and_install(version="0.32.0")
         assert success is False
         assert "checksums.txt" in msg.lower()
+
 
 def test_binary_manager_checksum_tampered_archive(tmp_path):
     from core.binary_manager import BinaryManager, calculate_sha256
@@ -300,9 +311,8 @@ def test_binary_manager_checksum_tampered_archive(tmp_path):
         assert success is False
         assert "checksum verification failed" in msg.lower()
 
-def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
-    from core.cli_contract import check_binary_help
 
+def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
     calls = []
 
     def fake_run(cmd, **kwargs):
@@ -316,4 +326,3 @@ def test_check_binary_help_all_11_tabs(tmp_path, monkeypatch):
     monkeypatch.setattr("core.cli_contract.subprocess.run", fake_run)
     check_binary_help(tmp_path / "immich-go")
     assert len(calls) == 11
-

@@ -1,4 +1,6 @@
 from tests.conftest import _norm_argv
+
+
 def test_tab_switching_updates_crumb(gui):
     gui.stacked_widget.setCurrentIndex(1)  # Upload page
     gui.upload_tabs.setCurrentIndex(1)  # Google Takeout sub-tab
@@ -10,6 +12,7 @@ def test_tab_switching_updates_crumb(gui):
     gui.stacked_widget.setCurrentIndex(2)  # Archive page
     gui.archive_tabs.setCurrentIndex(4)  # Archive Server sub-tab
     assert gui.lbl_crumb.text() == "archive · from-immich"
+
 
 def test_build_command_stack(gui):
     gui.stacked_widget.setCurrentIndex(3)  # stack
@@ -25,6 +28,7 @@ def test_build_command_stack(gui):
     assert "--manage-heic-jpeg=KeepHeic" in opts
     assert "--dry-run" in opts
 
+
 def test_api_trace_on_stack_disabled(gui):
     gui.stacked_widget.setCurrentIndex(3)
     gui.inputs["config"]["server"].setText("http://stack:2283")
@@ -32,6 +36,7 @@ def test_api_trace_on_stack_disabled(gui):
     gui.adv_rows["stack"]["api-trace"].set_state({"enabled": False, "value": True})
     opts = gui.build_command(dry_run=False)
     assert not any("--api-trace" in o for o in opts)
+
 
 def test_build_command_upload_immich(gui):
     gui.toggle_advanced(True)
@@ -104,6 +109,7 @@ def test_build_command_upload_immich(gui):
     assert "--from-skip-verify-ssl" in opts
     assert "--dry-run" not in opts
 
+
 def test_build_command_archive_folder(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
@@ -123,6 +129,7 @@ def test_build_command_archive_folder(gui):
     assert "/source/folder" in opts
     assert "--dry-run" in opts
 
+
 def test_build_command_archive_immich(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
@@ -141,10 +148,12 @@ def test_build_command_archive_immich(gui):
     assert "--from-albums=ArchiveAlbum" in opts
     assert "--dry-run" not in opts
 
+
 def test_archive_ui_options_removed(gui):
     assert "manage-raw-jpeg" not in gui.inputs["archive-folder"]
     assert "manage-burst" not in gui.inputs["archive-immich"]
     assert "manage-raw-jpeg" not in gui.inputs["archive-immich"]
+
 
 def test_config_tab_completeness(gui):
     assert "allow_untested_updates" in gui.inputs["config"]
@@ -155,6 +164,7 @@ def test_config_tab_completeness(gui):
     assert gui.app_config.allow_untested_updates is True
     assert gui.app_config.preferred_terminal == "konsole"
 
+
 def test_gp_simple_card_has_restored_checkboxes(gui):
     """A9: GP simple card has include-partner, sync-albums, include-archived checkboxes."""
     gp_inputs = gui.inputs.get("upload-gp", {})
@@ -162,7 +172,7 @@ def test_gp_simple_card_has_restored_checkboxes(gui):
     assert "sync-albums" in gp_inputs
     assert "include-archived" in gp_inputs
 
+
 def test_upload_immich_simple_mode_has_no_from_favorite_widget(gui):
     """A1: from-favorite must NOT be a simple-mode widget (it's advanced-only)."""
     assert "from-favorite" not in gui.inputs.get("upload-immich", {})
-

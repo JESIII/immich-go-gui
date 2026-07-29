@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QMessageBox
 from core import (
     AppConfig,
     SecretStore,
+    default_config_dir,
     default_config_path,
     get_config_load_warning,
     get_secret_with_fallback,
@@ -114,7 +115,9 @@ class PersistenceMixin:
             "secrets_provider": config_inputs["secret_provider"].currentData()
             if config_inputs.get("secret_provider")
             else "keyring",
-            "allow_untested_updates": config_inputs["allow_untested_updates"].isChecked()
+            "allow_untested_updates": config_inputs[
+                "allow_untested_updates"
+            ].isChecked()
             if config_inputs.get("allow_untested_updates")
             else False,
             "preferred_terminal": config_inputs["preferred_terminal"].currentText()

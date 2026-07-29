@@ -1,9 +1,7 @@
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from core.process_tracker import (
     create_lock,
@@ -37,6 +35,7 @@ def test_process_tracker_lifecycle(tmp_path, monkeypatch):
     assert lock_path.exists() is False
     assert len(scan_locks()) == 0
 
+
 def test_terminal_launcher_posix_script_creation(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     lock_path = create_lock("upload-folder", "upload", "./immich-go")
@@ -53,6 +52,7 @@ def test_terminal_launcher_posix_script_creation(tmp_path, monkeypatch):
         assert res.ok is True
         assert mock_popen.called
 
+
 def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(tmp_path / "config.toml"))
     monkeypatch.setattr("sys.platform", "linux")
@@ -61,7 +61,7 @@ def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
     env = {"IMMICH_GO_UPLOAD_SERVER": "http://localhost:2283"}
     cmd = ["./immich-go", "upload", "from-folder", "/photos"]
 
-    with patch("subprocess.Popen") as mock_popen, patch("shutil.which") as mock_which:
+    with patch("subprocess.Popen"), patch("shutil.which") as mock_which:
         mock_which.return_value = "/usr/bin/gnome-terminal"
         res = launch_external_terminal(cmd, env, lock_path, preferred_terminal="auto")
         assert res.ok is True
@@ -85,6 +85,7 @@ def test_terminal_launcher_working_directory_isolation(tmp_path, monkeypatch):
     assert "trap cleanup EXIT INT TERM HUP" in content
     assert f"cd '{latest_temp}'" not in content
     assert f"rm -rf '{latest_temp}'" not in content
+
 
 def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
     """Regression test: closing the cmd window must mark the lock stale even when
@@ -121,11 +122,12 @@ def test_windows_stale_lock_on_closed_terminal(tmp_path, monkeypatch):
 
     # BEFORE fix: is_lock_active() would return True (heartbeat check wins).
     # AFTER fix: should return False because terminal_pid is dead on win32.
-    assert (
-        is_lock_active(l_path) is False
-    ), "Lock must be stale when cmd window PID is dead, even if heartbeat file is fresh"
+    assert is_lock_active(l_path) is False, (
+        "Lock must be stale when cmd window PID is dead, even if heartbeat file is fresh"
+    )
 
     release_lock(l_path)
+
 
 def test_is_process_alive_win32_still_active(monkeypatch):
     """Cover win32 ctypes OpenProcess / GetExitCodeProcess path in _is_process_alive."""
@@ -157,6 +159,7 @@ def test_is_process_alive_win32_still_active(monkeypatch):
     assert _is_process_alive(9999) is False
     assert _is_process_alive(None) is False
 
+
 def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
     from core.terminal_launcher import launch_external_terminal
 
@@ -187,6 +190,7 @@ def test_forward_all_immich_go_env_vars(tmp_path, monkeypatch):
             env_used.get("IMMICH_GO_ARCHIVE_FROM_IMMICH_FROM_SERVER")
             == "http://srv:2283"
         )
+
 
 def test_windows_bat_heartbeat_generation(tmp_path, monkeypatch):
     """Fix 1.4: Windows terminal launch generates a .bat file with background heartbeat loop."""
@@ -329,4 +333,3 @@ class TestWindowsBatFileCreation:
         assert isinstance(cmd_arg, list)
         assert cmd_arg[0] == "cmd"
         assert not mock_popen.call_args[1].get("shell")
-

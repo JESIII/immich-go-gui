@@ -112,7 +112,9 @@ class TestPosixScriptExecution:
         assert output_file.exists(), "stub did not run"
         stub_result = json.loads(output_file.read_text())
         assert stub_result["env"]["IMMICH_GO_UPLOAD_SERVER"] == "http://localhost:2283"
-        assert stub_result["env"]["IMMICH_GO_UPLOAD_API_KEY"] == "integration-secret-key"
+        assert (
+            stub_result["env"]["IMMICH_GO_UPLOAD_API_KEY"] == "integration-secret-key"
+        )
 
         assert not lock_path.exists(), "lock file was not removed by cleanup trap"
 
@@ -121,9 +123,7 @@ class TestPosixScriptExecution:
         cmd = ["bash", "-c", "exit 42"]
         env = {"IMMICH_GO_UPLOAD_SERVER": "http://x"}
 
-        run_sh, _, lock_path = self._generate_scripts(
-            tmp_path, monkeypatch, env, cmd
-        )
+        run_sh, _, lock_path = self._generate_scripts(tmp_path, monkeypatch, env, cmd)
 
         exec_env = os.environ.copy()
         exec_env["IMMICH_GO_GUI_HEADLESS"] = "1"
@@ -229,7 +229,7 @@ class TestWindowsBatExecution:
         bat_text = bat_path.read_text(encoding="utf-8")
         bat_text = bat_text.replace(
             subprocess.list2cmdline(cmd),
-            f"{subprocess.list2cmdline(cmd)} > \"{output_file}\"",
+            f'{subprocess.list2cmdline(cmd)} > "{output_file}"',
         )
         bat_path.write_text(bat_text, encoding="utf-8")
 

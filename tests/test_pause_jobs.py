@@ -1,5 +1,7 @@
 from core.command_builder import FlagEmitter
 from core.command_builder import build_plan_from_state as _build_plan
+
+
 def test_pause_jobs_not_on_archive(gui):
     gui.toggle_advanced(True)
     gui.stacked_widget.setCurrentIndex(2)  # archive page
@@ -10,6 +12,7 @@ def test_pause_jobs_not_on_archive(gui):
     gui.inputs["archive-folder"]["write-to"].setText("/dst")
     opts = gui.build_command(dry_run=False)
     assert not any("--pause-immich-jobs" in o for o in opts)
+
 
 def test_pause_jobs_auto_disables_on_stack_without_admin_key(gui):
     """Without an admin key, --pause-immich-jobs=false is emitted on stack tab
@@ -45,12 +48,12 @@ class TestPauseJobsAutoDisable:
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
-        assert (
-            "--pause-immich-jobs=false" in plan.argv
-        ), "Expected --pause-immich-jobs=false when no admin key is set"
-        assert any(
-            "Admin API Key" in w for w in plan.warnings
-        ), f"Expected a warning about Admin API Key; got: {plan.warnings}"
+        assert "--pause-immich-jobs=false" in plan.argv, (
+            "Expected --pause-immich-jobs=false when no admin key is set"
+        )
+        assert any("Admin API Key" in w for w in plan.warnings), (
+            f"Expected a warning about Admin API Key; got: {plan.warnings}"
+        )
 
     def test_pause_not_disabled_when_admin_key_present(self):
         """When admin key is set, do not auto-disable pausing."""
@@ -60,9 +63,9 @@ class TestPauseJobsAutoDisable:
             tab_state={"path": "/photos"},
             binary_path="./immich-go",
         )
-        assert (
-            "--pause-immich-jobs=false" not in plan.argv
-        ), "Should not auto-disable when admin key is provided"
+        assert "--pause-immich-jobs=false" not in plan.argv, (
+            "Should not auto-disable when admin key is provided"
+        )
         assert not any("Admin API Key" in w for w in plan.warnings)
 
     def test_explicit_pause_false_no_admin_key(self):
@@ -75,9 +78,9 @@ class TestPauseJobsAutoDisable:
             binary_path="./immich-go",
         )
         pause_flags = _pause_flag_args(plan.argv)
-        assert (
-            len(pause_flags) == 1
-        ), f"Expected exactly one pause flag; got: {pause_flags}"
+        assert len(pause_flags) == 1, (
+            f"Expected exactly one pause flag; got: {pause_flags}"
+        )
         assert pause_flags[0] == "--pause-immich-jobs=false"
         assert not any("Admin API Key" in w for w in plan.warnings)
 
@@ -117,9 +120,9 @@ class TestPauseJobsAutoDisable:
                 tab_state=tab_state,
                 binary_path="./immich-go",
             )
-            assert (
-                "--pause-immich-jobs=false" in plan.argv
-            ), f"Expected auto-disable on tab '{tab_key}'; argv={plan.argv}"
+            assert "--pause-immich-jobs=false" in plan.argv, (
+                f"Expected auto-disable on tab '{tab_key}'; argv={plan.argv}"
+            )
 
     def test_from_pause_does_not_suppress_dest_pause_safety(self):
         """from-pause-immich-jobs must not block destination pause safety injection."""
@@ -142,6 +145,6 @@ class TestPauseJobsAutoDisable:
             binary_path="./immich-go",
         )
         pause_flags = _pause_flag_args(plan.argv)
-        assert (
-            len(pause_flags) == 1
-        ), f"Expected exactly one pause flag; got: {pause_flags}"
+        assert len(pause_flags) == 1, (
+            f"Expected exactly one pause flag; got: {pause_flags}"
+        )

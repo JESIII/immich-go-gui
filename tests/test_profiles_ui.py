@@ -10,6 +10,8 @@ from core.profile_manager import (
     set_active_profile_name,
     validate_profile_name,
 )
+
+
 def test_profile_manager_lifecycle(tmp_path, monkeypatch):
     cfg_dir = tmp_path / "config_dir"
     monkeypatch.setenv("IMMICH_GO_GUI_CONFIG", str(cfg_dir / "config.toml"))
@@ -43,6 +45,7 @@ def test_profile_manager_lifecycle(tmp_path, monkeypatch):
     delete_profile("work_renamed")
     assert "work_renamed" not in [p.name for p in list_profiles()]
 
+
 def test_profile_name_validation():
     valid, err = validate_profile_name("work_profile-1")
     assert valid is True
@@ -53,9 +56,8 @@ def test_profile_name_validation():
     valid, err = validate_profile_name("")
     assert valid is False
 
-def test_profile_switch_save_discard_cancel(gui, monkeypatch):
-    from PySide6.QtWidgets import QMessageBox
 
+def test_profile_switch_save_discard_cancel(gui, monkeypatch):
     actions = []
 
     def fake_question(*args, **kwargs):
@@ -103,4 +105,3 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
     gui.switch_profile("office")
     assert "saved" in actions
     assert "active:office" in actions
-
