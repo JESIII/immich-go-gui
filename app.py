@@ -2,8 +2,8 @@
 # nuitka-project: --enable-plugin=pyside6
 # nuitka-project: --include-data-files=immich-go-gui.png=immich-go-gui.png
 # nuitka-project: --include-data-files=core/flags.toml=core/flags.toml
+# nuitka-project: --include-data-dir=assets=assets
 # nuitka-project: --include-data-dir=core/fixtures=core/fixtures
-# nuitka-project: --include-data-dir=gui=gui
 
 # nuitka-project-if: {OS} == "Windows":
 #   nuitka-project: --standalone
