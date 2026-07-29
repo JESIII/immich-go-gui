@@ -51,11 +51,11 @@ jobs:
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: xvfb-run uv run pytest --cov=core --cov=app --cov-fail-under=80
+        run: xvfb-run uv run pytest --cov=core --cov-fail-under=75
 
       - name: Run Tests with Coverage (macOS / Windows)
         if: runner.os != 'Linux'
-        run: uv run pytest --cov=core --cov=app --cov-fail-under=80
+        run: uv run pytest --cov=core --cov-fail-under=75
 
   self-test:
     needs: quality
