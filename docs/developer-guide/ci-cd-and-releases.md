@@ -67,7 +67,7 @@ Examples:
 
 ### Build Rules
 
-- **App icon:** `immich-go-gui.ico` in the repo root must embed standard sizes (16, 24, 32, 48, 64, 128, 256 px). Regenerate from `immich-go-gui.png` with `uv run python scripts/generate_windows_icon.py` (requires Pillow; dev-only, not a runtime dependency).
+- **App icons:** `immich-go-gui.ico` (Windows) and `immich-go-gui.icns` (macOS) in the repo root. Regenerate from `immich-go-gui.png` with `uv run python scripts/generate_build_icons.py` (requires Pillow; dev-only, not a runtime dependency).
 - **Inno Setup output:** `OutputDir=..\..\` — release workflow moves `.exe` files back to workspace root before artifact upload.
 - **AppImageTool:** Uses continuous release from AppImageKit with `--appimage-extract-and-run`.
 

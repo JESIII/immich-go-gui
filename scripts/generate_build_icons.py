@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Windows .ico and macOS .icns icons from the app PNG (dev tool; requires Pillow)."""
+"""Generate Windows .ico and macOS .icns build icons from the app PNG (dev tool; requires Pillow)."""
 
 from __future__ import annotations
 

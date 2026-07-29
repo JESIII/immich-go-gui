@@ -87,6 +87,7 @@ core/fixtures/cli_help/{version}/*
 assets/icons/*
 immich-go-gui.png
 immich-go-gui.ico          # Windows only; multi-size 16–256px
+immich-go-gui.icns         # macOS only; multi-size 16–512px
 ```
 
 Nuitka directives live at the top of `app.py`. All release workflow invocations must include `--include-data-files=core/flags.toml=core/flags.toml` and `--include-data-dir=core/fixtures=core/fixtures`.
@@ -220,7 +221,7 @@ Naming: `Immich-Go-GUI-{VERSION}-{OS}-{ARCH}.{ext}`
 
 ### Packaging rules
 
-- **Windows icon:** `immich-go-gui.ico` — multi-resolution (16–256px). Regenerate: `uv run python scripts/generate_windows_icon.py` (Pillow is dev-only).
+- **Build icons:** `immich-go-gui.ico` (Windows) and `immich-go-gui.icns` (macOS). Regenerate: `uv run python scripts/generate_build_icons.py` (Pillow is dev-only).
 - **Inno Setup:** `packaging/windows/installer.iss` outputs to `..\..\` — release workflow relocates `.exe` before artifact upload.
 - **AppImage:** uses `appimagetool` continuous release with `--appimage-extract-and-run` (not pinned — known trade-off).
 - **Release Please:** config in `.github/release-please-config.json` + `.github/.release-please-manifest.json` — keep manifest in sync on manual version bumps.
@@ -269,7 +270,7 @@ uv sync --dev
 uv run pytest
 uv run python app.py --self-test
 uv run python scripts/capture_cli_help.py          # refresh CLI help fixtures
-uv run python scripts/generate_windows_icon.py     # regenerate .ico from .png
+uv run python scripts/generate_build_icons.py      # regenerate .ico and .icns from .png
 uv run pyright core/
 uv run pre-commit run --all-files
 ```
