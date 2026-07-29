@@ -14,7 +14,7 @@ on:
 env:
   CREATE_DMG_VERSION: '8.1.0'
   APPIMAGETOOL_VERSION: '1.9.1'
-  NFPM_VERSION: '2.41.2'
+  NFPM_VERSION: '2.47.0'
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9
 
       - name: Install dependencies
         run: uv sync --dev
@@ -78,7 +78,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9
 
       - name: Install dependencies
         run: uv sync --dev
