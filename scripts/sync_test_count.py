@@ -80,10 +80,14 @@ def main() -> int:
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--sync", action="store_true", help="Update documentation to match pytest (default)."
+        "--sync",
+        action="store_true",
+        help="Update documentation to match pytest (default).",
     )
     group.add_argument(
-        "--check", action="store_true", help="Verify documentation matches pytest without writing."
+        "--check",
+        action="store_true",
+        help="Verify documentation matches pytest without writing.",
     )
     args = parser.parse_args()
 

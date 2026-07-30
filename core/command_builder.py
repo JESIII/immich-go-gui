@@ -579,7 +579,9 @@ def collect_safety_warnings(
 ) -> list[str]:
     """Return safety warnings (e.g. forced pause-jobs disable) without building a full plan."""
     warnings = []
-    if (tab_key in UPLOAD_TABS or tab_key == "stack") and not config_state.get("admin_api_key", "").strip():
+    if (tab_key in UPLOAD_TABS or tab_key == "stack") and not config_state.get(
+        "admin_api_key", ""
+    ).strip():
         user_opted_out = False
         if isinstance(advanced_state, dict):
             pause_entry = advanced_state.get("pause-immich-jobs", {})
@@ -592,7 +594,9 @@ def collect_safety_warnings(
         if not user_opted_out:
             warnings.append(_PAUSE_JOBS_WARNING)
 
-    if tab_key in ("upload-immich", "archive-immich") and isinstance(advanced_state, dict):
+    if tab_key in ("upload-immich", "archive-immich") and isinstance(
+        advanced_state, dict
+    ):
         from_pause_entry = (
             advanced_state.get("from-pause-jobs")
             or advanced_state.get("from-pause-immich-jobs")

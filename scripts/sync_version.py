@@ -87,7 +87,9 @@ def check_or_update_file(
 
     current_found = match.group(0)
     # Resolve backreferences in expected_str against the current match
-    expected_matched = re.sub(pattern, expected_str, current_found, count=1, flags=re.MULTILINE)
+    expected_matched = re.sub(
+        pattern, expected_str, current_found, count=1, flags=re.MULTILINE
+    )
     if current_found == expected_matched:
         return True
 

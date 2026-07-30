@@ -57,9 +57,7 @@ def test_run_self_test_empty_registry_fails(monkeypatch, capsys):
 
 def test_run_self_test_plan_with_errors_fails(monkeypatch, capsys):
     fake_plan = SimpleNamespace(errors=["binary path is required"])
-    monkeypatch.setattr(
-        app_module, "build_plan_from_state", lambda **kwargs: fake_plan
-    )
+    monkeypatch.setattr(app_module, "build_plan_from_state", lambda **kwargs: fake_plan)
     code = app_module.run_self_test()
     captured = capsys.readouterr()
     assert code == 1
