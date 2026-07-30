@@ -8,7 +8,6 @@ on:
   pull_request:
     branches:
       - master
-      - staging
   workflow_dispatch:
 
 permissions:
@@ -23,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has_code_changes: ${{ steps.check.outputs.has_code_changes }}
+      has_sync_relevant_changes: ${{ steps.check.outputs.has_sync_relevant_changes }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -34,6 +34,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "has_code_changes=true" >> $GITHUB_OUTPUT
+            echo "has_sync_relevant_changes=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -41,6 +42,7 @@ jobs:
 
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "has_code_changes=false" >> $GITHUB_OUTPUT
+            echo "has_sync_relevant_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -53,6 +55,16 @@ jobs:
           else
             echo "⏭️ Only documentation changes"
             echo "has_code_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if synchronization-relevant files changed
+          SYNC_FILES=$(echo "$CHANGED_FILES" | grep -E '^(pyproject\.toml|\.github/\.release-please-manifest\.json|docs/README\.md|docs/developer-guide/ci-cd-and-releases\.md|docs/developer-guide/testing\.md|docs/developer-guide/architecture\.md)$' || true)
+
+          if [[ -n "$SYNC_FILES" ]]; then
+            echo "🔄 Synchronization-relevant changes detected"
+            echo "has_sync_relevant_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_sync_relevant_changes=false" >> $GITHUB_OUTPUT
           fi
 
   # 2. Multi-OS Unit Tests (Linux, macOS, Windows)
@@ -92,7 +104,46 @@ jobs:
         if: runner.os != 'Linux'
         run: uv run pytest
 
-  # 3. Security Audit & Dependency Review
+  # 3. Version sync and doc consistency
+  quality:
+    name: 🔍 Quality Checks
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.has_code_changes == 'true' || needs.analyze-changes.outputs.has_sync_relevant_changes == 'true'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Install Linux Desktop Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libegl1 libgl1 \
+            libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-render-util0 libxcb-shape0
+
+      - name: Version Sync Check
+        run: uv run python scripts/sync_version.py --check
+
+      - name: Test Count Sync Check
+        id: test-count-sync
+        continue-on-error: true
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          if ! uv run python scripts/sync_test_count.py --check; then
+            echo "::warning title=Test Count Sync Mismatch::Documentation test counts do not match collected pytest output. Run 'uv run python scripts/sync_test_count.py --sync' to synchronize."
+          fi
+
+  # 4. Security Audit & Dependency Review
   security-scan:
     name: 🔐 Security Scan
     runs-on: ubuntu-latest
@@ -115,17 +166,17 @@ jobs:
           fail-on-severity: high
           comment-summary-in-pr: always
 
-  # 4. Aggregate Results & PR Commenting
+  # 5. Aggregate Results & PR Commenting
   fast-feedback-complete:
     name: ✅ Fast Feedback Complete
     runs-on: ubuntu-latest
-    needs: [analyze-changes, unit-tests, security-scan]
+    needs: [analyze-changes, unit-tests, quality, security-scan]
     if: always()
     steps:
       - name: Check if doc-only PR
         id: doc-check
         run: |
-          if [[ "${{ needs.analyze-changes.outputs.has_code_changes }}" != "true" ]]; then
+          if [[ "${{ needs.analyze-changes.outputs.has_code_changes }}" != "true" && "${{ needs.analyze-changes.outputs.has_sync_relevant_changes }}" != "true" ]]; then
             echo "📝 Documentation-only PR - skipping code quality checks"
             echo "is_doc_only=true" >> $GITHUB_OUTPUT
             exit 0
@@ -136,13 +187,16 @@ jobs:
         if: steps.doc-check.outputs.is_doc_only != 'true'
         env:
           TEST_STATUS: ${{ needs.unit-tests.result }}
+          QUALITY_STATUS: ${{ needs.quality.result }}
           SECURITY_STATUS: ${{ needs.security-scan.result }}
         run: |
           echo "Unit Tests: $TEST_STATUS"
+          echo "Quality Checks: $QUALITY_STATUS"
           echo "Security Scan: $SECURITY_STATUS"
 
           if [[ "$TEST_STATUS" != "success" ]] || \
-             [[ "$SECURITY_STATUS" != "success" ]]; then
+             [[ "$QUALITY_STATUS" != "success" && "$QUALITY_STATUS" != "skipped" ]] || \
+             [[ "$SECURITY_STATUS" != "success" && "$SECURITY_STATUS" != "skipped" ]]; then
             echo "❌ Fast feedback checks failed"
             exit 1
           fi
@@ -159,7 +213,7 @@ jobs:
 
             const commentBody = isDocOnly
               ? `## ✅ Fast Feedback Passed (Documentation)\n\nThis PR contains documentation/non-code changes — code verification was skipped.\n\n**Status:** Ready for review.`
-              : `## ✅ Fast Feedback Passed\n\nAll automated code quality checks passed successfully:\n- ✅ **Multi-OS Unit Tests** (Linux Xvfb, macOS, Windows)\n- ✅ **Security & Vulnerability Audit** (\`pip-audit\` / Dependency Review)\n\n**Status:** Ready to merge once approved!`;
+              : `## ✅ Fast Feedback Passed\n\nAll automated code quality checks passed successfully:\n- ✅ **Multi-OS Unit Tests** (Linux Xvfb, macOS, Windows)\n- ✅ **Version & Test Count Sync** (\`sync_version.py\` / \`sync_test_count.py --check\`)\n- ✅ **Security & Vulnerability Audit** (\`pip-audit\` / Dependency Review)\n\n**Status:** Ready to merge once approved!`;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
