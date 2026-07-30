@@ -116,9 +116,7 @@ class AppUpdateMixin:
             return
 
         if is_update_available(installed, release.version):
-            self._set_app_update_status(
-                f"Update available: v{release.version}", "warn"
-            )
+            self._set_app_update_status(f"Update available: v{release.version}", "warn")
             msg = QMessageBox(self)
             msg.setWindowTitle("Update Available")
             msg.setText(

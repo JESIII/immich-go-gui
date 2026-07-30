@@ -17,9 +17,7 @@ def test_status_card_elides_and_sets_tooltip(qtbot):
     assert card.txt_s.text() == long_text
     w = card.txt_s.contentsRect().width() or card.txt_s.width()
     if w > 0:
-        elided = card.txt_s.fontMetrics().elidedText(
-            long_text, card.txt_s._elide, w
-        )
+        elided = card.txt_s.fontMetrics().elidedText(long_text, card.txt_s._elide, w)
         assert len(elided) < len(long_text)
         assert "…" in elided
 
@@ -57,9 +55,7 @@ def test_close_event_save_prompt(gui, monkeypatch):
     monkeypatch.setattr(
         gui,
         "_save_pending_configuration",
-        lambda show_popup=False: calls.__setitem__(
-            "pending", calls["pending"] + 1
-        ),
+        lambda show_popup=False: calls.__setitem__("pending", calls["pending"] + 1),
     )
     monkeypatch.setattr("gui.main_window.scan_locks", list)
     gui._mark_configuration_clean()
@@ -85,15 +81,15 @@ def test_close_event_both_tracks_dirty_single_prompt(gui, monkeypatch):
     monkeypatch.setattr(
         gui,
         "_save_pending_configuration",
-        lambda show_popup=False: calls.__setitem__(
-            "pending", calls["pending"] + 1
-        ),
+        lambda show_popup=False: calls.__setitem__("pending", calls["pending"] + 1),
     )
     monkeypatch.setattr("gui.main_window.scan_locks", list)
     gui._mark_configuration_clean()
     gui._mark_server_details_clean()
     gui.inputs["config"]["api_key"].setText("new-key")
-    gui.inputs["config"]["skip-ssl"].setChecked(not gui.inputs["config"]["skip-ssl"].isChecked())
+    gui.inputs["config"]["skip-ssl"].setChecked(
+        not gui.inputs["config"]["skip-ssl"].isChecked()
+    )
     event = QCloseEvent()
     gui.closeEvent(event)
     assert calls["prompt"] == 1
@@ -136,9 +132,7 @@ def test_close_event_discard_no_save(gui, monkeypatch):
     monkeypatch.setattr(
         gui,
         "_save_pending_configuration",
-        lambda show_popup=False: calls.__setitem__(
-            "pending", calls["pending"] + 1
-        ),
+        lambda show_popup=False: calls.__setitem__("pending", calls["pending"] + 1),
     )
     monkeypatch.setattr("gui.main_window.scan_locks", list)
     gui._mark_configuration_clean()

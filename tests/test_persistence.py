@@ -480,7 +480,9 @@ def test_linux_xdg_save_server_details_roundtrip(tmp_path, monkeypatch):
         gui.save_server_details(show_popup=False)
 
         cfg_path = profile_config_path("default")
-        assert cfg_path == xdg / "immich-go-gui" / "profiles" / "default" / "config.toml"
+        assert (
+            cfg_path == xdg / "immich-go-gui" / "profiles" / "default" / "config.toml"
+        )
         assert load_config(cfg_path).server_url == "http://linux-host:2283"
 
         gui.inputs["config"]["server"].clear()

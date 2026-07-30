@@ -133,7 +133,9 @@ def test_profile_switch_both_tracks_dirty_single_prompt(gui, monkeypatch):
         "_save_pending_configuration",
         lambda show_popup=False: saved.__setitem__("n", saved["n"] + 1),
     )
-    monkeypatch.setattr("gui.mixins.profiles_ui.set_active_profile_name", lambda _: None)
+    monkeypatch.setattr(
+        "gui.mixins.profiles_ui.set_active_profile_name", lambda _: None
+    )
     monkeypatch.setattr(gui, "load_configuration", lambda: None)
     monkeypatch.setattr(gui, "update_profiles_menu", lambda: None)
     monkeypatch.setattr(gui, "update_window_title", lambda: None)
@@ -142,7 +144,9 @@ def test_profile_switch_both_tracks_dirty_single_prompt(gui, monkeypatch):
     gui._mark_configuration_clean()
     gui._mark_server_details_clean()
     gui.inputs["config"]["api_key"].setText("new-key")
-    gui.inputs["config"]["skip-ssl"].setChecked(not gui.inputs["config"]["skip-ssl"].isChecked())
+    gui.inputs["config"]["skip-ssl"].setChecked(
+        not gui.inputs["config"]["skip-ssl"].isChecked()
+    )
 
     gui.switch_profile("work")
     assert len(prompts) == 1

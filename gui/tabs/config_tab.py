@@ -147,9 +147,7 @@ def build_config_tab(host) -> QWidget:
         "github.com/shitan198u/immich-go-gui/releases</a>"
     )
     releases_link.setObjectName("Hint")
-    releases_link.setTextInteractionFlags(
-        Qt.TextInteractionFlag.TextBrowserInteraction
-    )
+    releases_link.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
     releases_link.setOpenExternalLinks(True)
     releases_hint_layout.addWidget(releases_hint)
     releases_hint_layout.addWidget(releases_link)

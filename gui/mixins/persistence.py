@@ -373,8 +373,7 @@ class PersistenceMixin:
 
         if server_dirty and app_dirty:
             body = (
-                "Server connection and other settings changed. "
-                f"Save before {context}?"
+                f"Server connection and other settings changed. Save before {context}?"
             )
         elif server_dirty:
             body = (
@@ -382,10 +381,7 @@ class PersistenceMixin:
                 f"Save connection details before {context}?"
             )
         else:
-            body = (
-                "Theme, timeout, or other settings changed. "
-                f"Save before {context}?"
-            )
+            body = f"Theme, timeout, or other settings changed. Save before {context}?"
 
         return QMessageBox.question(
             cast(QWidget, self),
