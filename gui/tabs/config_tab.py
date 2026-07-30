@@ -6,12 +6,15 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from core import default_secrets_path, load_binary_metadata
-from gui.widgets import BasePage, Card, ElidingLabel, FormSection
+from gui.mixins.app_update import _gui_version
+from gui.widgets import BasePage, Card, ElidingLabel, FormSection, spin_with_unit_label
 from theme import THEME_DARK, THEME_LIGHT, THEME_SYSTEM
 
 
@@ -51,9 +54,35 @@ def build_config_tab(host) -> QWidget:
 
     host._add_ssl_skip_row(form, host.inputs["config"])
 
+    host.client_timeout_spin = QSpinBox()
+    host.client_timeout_spin.setRange(5, 240)
+    host.client_timeout_spin.setValue(60)
+    host.inputs["config"]["client_timeout_minutes"] = host.client_timeout_spin
+    form.add_row(
+        "Client Timeout",
+        spin_with_unit_label(host.client_timeout_spin, "min"),
+        "Low values may cause long uploads or archives to fail. Increase if jobs time out.",
+    )
+
     host.btn_test_connection = QPushButton("Test Connection")
     host.btn_test_connection.clicked.connect(host.on_test_connection_clicked)
-    form.add_row("", host.btn_test_connection)
+    host.btn_save_server_details = QPushButton("Save Server Details")
+    host.btn_save_server_details.clicked.connect(
+        lambda: host.save_server_details(show_popup=True)
+    )
+    conn_btn_container = QWidget()
+    conn_btn_row = QHBoxLayout(conn_btn_container)
+    conn_btn_row.setContentsMargins(0, 0, 0, 0)
+    conn_btn_row.setSpacing(8)
+    host.btn_test_connection.setSizePolicy(
+        QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+    )
+    host.btn_save_server_details.setSizePolicy(
+        QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+    )
+    conn_btn_row.addWidget(host.btn_test_connection)
+    conn_btn_row.addWidget(host.btn_save_server_details)
+    form.add_row("", conn_btn_container)
 
     card.layout.addLayout(form)
     page.addWidget(card)
@@ -92,25 +121,57 @@ def build_config_tab(host) -> QWidget:
     card_sec.layout.addLayout(sec_form)
     page.addWidget(card_sec)
 
+    card_app = Card("Application")
+    app_form = FormSection()
+    host.lbl_app_version = QLabel(_gui_version())
+    host.lbl_app_version.setObjectName("FieldLabel")
+    host.lbl_app_version.setWordWrap(True)
+    app_form.add_row("Current Version", host.lbl_app_version)
+
+    host.lbl_app_update_status = QLabel("Check for updates to see status.")
+    host.lbl_app_update_status.setObjectName("AppUpdateStatus")
+    app_form.add_row("Status", host.lbl_app_update_status)
+
+    host.btn_check_app_updates = QPushButton("Check for Updates")
+    host.btn_check_app_updates.clicked.connect(host.check_for_application_updates)
+    app_form.add_row("", host.btn_check_app_updates)
+
+    releases_hint_container = QWidget()
+    releases_hint_layout = QVBoxLayout(releases_hint_container)
+    releases_hint_layout.setContentsMargins(0, 0, 0, 0)
+    releases_hint_layout.setSpacing(4)
+    releases_hint = QLabel("Downloads from GitHub Releases.")
+    releases_hint.setObjectName("Hint")
+    releases_link = QLabel(
+        "<a href='https://github.com/shitan198u/immich-go-gui/releases'>"
+        "github.com/shitan198u/immich-go-gui/releases</a>"
+    )
+    releases_link.setObjectName("Hint")
+    releases_link.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextBrowserInteraction
+    )
+    releases_link.setOpenExternalLinks(True)
+    releases_hint_layout.addWidget(releases_hint)
+    releases_hint_layout.addWidget(releases_link)
+    app_form.add_row("", releases_hint_container)
+    card_app.layout.addLayout(app_form)
+    page.addWidget(card_app)
+
     card2 = Card("Binary Management")
-    row = QHBoxLayout()
-    row.setSpacing(16)
-    row.setAlignment(Qt.AlignmentFlag.AlignTop)
-    info = QVBoxLayout()
-    info.setSpacing(2)
+    binary_form = FormSection()
     host.lbl_binary_version = QLabel("Checking version…")
     host.lbl_binary_version.setObjectName("FieldLabel")
     host.lbl_binary_version.setWordWrap(True)
+    binary_form.add_row("Current Version", host.lbl_binary_version)
+
     host.lbl_binary_path = ElidingLabel("", Qt.TextElideMode.ElideMiddle)
     host.lbl_binary_path.setObjectName("Hint")
-    info.addWidget(host.lbl_binary_version)
-    info.addWidget(host.lbl_binary_path)
-    row.addLayout(info, 1)
-    btn_check = QPushButton("Check for Updates")
-    host.btn_check_updates = btn_check
-    btn_check.clicked.connect(host.check_for_updates)
-    row.addWidget(btn_check, 0, Qt.AlignmentFlag.AlignTop)
-    card2.layout.addLayout(row)
+    binary_form.add_row("Binary Path", host.lbl_binary_path)
+
+    host.btn_check_updates = QPushButton("Check for Updates")
+    host.btn_check_updates.clicked.connect(host.check_for_updates)
+    binary_form.add_row("", host.btn_check_updates)
+    card2.layout.addLayout(binary_form)
 
     manual_form = FormSection()
     host.manual_binary_edit = QLineEdit()
@@ -168,6 +229,9 @@ def build_config_tab(host) -> QWidget:
     adv_card.setVisible(False)
     page.addWidget(adv_card)
     host.adv_frames.append(adv_card)
+
+    if hasattr(host, "_init_app_update_ui"):
+        host._init_app_update_ui()
 
     page.addStretch()
     return page

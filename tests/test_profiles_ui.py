@@ -59,13 +59,17 @@ def test_profile_name_validation():
 
 def test_profile_switch_save_discard_cancel(gui, monkeypatch):
     actions = []
+    prompts = []
 
-    def fake_question(*args, **kwargs):
+    def fake_prompt(context):
+        prompts.append(context)
         return actions[-1]
 
-    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question", fake_question)
+    monkeypatch.setattr(gui, "_prompt_save_pending_configuration", fake_prompt)
     monkeypatch.setattr(
-        gui, "save_configuration", lambda show_popup=True: actions.append("saved")
+        gui,
+        "_save_pending_configuration",
+        lambda show_popup=False: actions.append("saved_pending"),
     )
     monkeypatch.setattr(
         "gui.mixins.profiles_ui.set_active_profile_name",
@@ -78,30 +82,68 @@ def test_profile_switch_save_discard_cancel(gui, monkeypatch):
 
     actions.append(QMessageBox.StandardButton.Cancel)
     gui._mark_configuration_clean()
+    gui._mark_server_details_clean()
     gui.inputs["config"]["server"].setText("http://changed:2283")
     gui.switch_profile("work")
     assert "active:work" not in actions
+    assert prompts == ["switching profile"]
 
     actions.clear()
+    prompts.clear()
     gui._mark_configuration_clean()
+    gui._mark_server_details_clean()
     gui.switch_profile("work")
-    assert "saved" not in actions
+    assert "saved_pending" not in actions
     assert "active:work" in actions
     assert "loaded" in actions
 
     actions.clear()
+    prompts.clear()
     actions.append(QMessageBox.StandardButton.Discard)
     gui._mark_configuration_clean()
+    gui._mark_server_details_clean()
     gui.inputs["config"]["server"].setText("http://changed:2283")
     gui.switch_profile("home")
-    assert "saved" not in actions
+    assert "saved_pending" not in actions
     assert "active:home" in actions
     assert "loaded" in actions
 
     actions.clear()
+    prompts.clear()
     actions.append(QMessageBox.StandardButton.Save)
     gui._mark_configuration_clean()
+    gui._mark_server_details_clean()
     gui.inputs["config"]["server"].setText("http://save-me:2283")
     gui.switch_profile("office")
-    assert "saved" in actions
+    assert "saved_pending" in actions
     assert "active:office" in actions
+
+
+def test_profile_switch_both_tracks_dirty_single_prompt(gui, monkeypatch):
+    prompts = []
+
+    def fake_prompt(context):
+        prompts.append(context)
+        return QMessageBox.StandardButton.Save
+
+    saved = {"n": 0}
+    monkeypatch.setattr(gui, "_prompt_save_pending_configuration", fake_prompt)
+    monkeypatch.setattr(
+        gui,
+        "_save_pending_configuration",
+        lambda show_popup=False: saved.__setitem__("n", saved["n"] + 1),
+    )
+    monkeypatch.setattr("gui.mixins.profiles_ui.set_active_profile_name", lambda _: None)
+    monkeypatch.setattr(gui, "load_configuration", lambda: None)
+    monkeypatch.setattr(gui, "update_profiles_menu", lambda: None)
+    monkeypatch.setattr(gui, "update_window_title", lambda: None)
+    monkeypatch.setattr("gui.mixins.profiles_ui.active_profile_name", lambda: "default")
+
+    gui._mark_configuration_clean()
+    gui._mark_server_details_clean()
+    gui.inputs["config"]["api_key"].setText("new-key")
+    gui.inputs["config"]["skip-ssl"].setChecked(not gui.inputs["config"]["skip-ssl"].isChecked())
+
+    gui.switch_profile("work")
+    assert len(prompts) == 1
+    assert saved["n"] == 1

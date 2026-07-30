@@ -157,16 +157,29 @@ def default_config_dir() -> Path:
         return Path.home() / ".config" / "immich-go-gui"
 
 
+def resolve_profile_name(
+    profile_name: str | None = None, config: AppConfig | None = None
+) -> str:
+    """Resolve a non-empty profile name for config path and persistence."""
+    from .profile_manager import active_profile_name
+
+    candidate = profile_name
+    if not candidate and config is not None:
+        candidate = config.profile_name
+    if not candidate:
+        candidate = active_profile_name()
+    return candidate or "default"
+
+
 def default_config_path(profile_name: str | None = None) -> Path:
     """Returns the path to the config TOML file for the given or active profile."""
     env_override = os.environ.get("IMMICH_GO_GUI_CONFIG", "").strip()
     if env_override:
         return Path(env_override)
 
-    from .profile_manager import active_profile_name, profile_config_path
+    from .profile_manager import profile_config_path
 
-    target_profile = profile_name or active_profile_name()
-    return profile_config_path(target_profile)
+    return profile_config_path(resolve_profile_name(profile_name))
 
 
 def default_secrets_path(profile_name: str | None = None) -> Path:
@@ -221,9 +234,7 @@ def load_config(path: Path | None = None, profile_name: str | None = None) -> Ap
         path = default_config_path(profile_name)
 
     cfg = AppConfig()
-    from .profile_manager import active_profile_name
-
-    cfg.profile_name = profile_name or active_profile_name()
+    cfg.profile_name = resolve_profile_name(profile_name)
 
     if not path.exists():
         return cfg
@@ -240,7 +251,9 @@ def load_config(path: Path | None = None, profile_name: str | None = None) -> Ap
         )
         return cfg
 
-    cfg.schema_version = data.get("schema_version", 2)
+    schema_version = data.get("schema_version", 2)
+    cfg.schema_version = schema_version
+    migrated = False
 
     gen = data.get("general", {})
     cfg.theme_mode = gen.get("theme", "system")
@@ -251,25 +264,74 @@ def load_config(path: Path | None = None, profile_name: str | None = None) -> Ap
     srv = data.get("server", {})
     cfg.server_url = srv.get("url", "")
     cfg.skip_ssl = srv.get("skip_ssl", False)
+    cfg.client_timeout_minutes = int(srv.get("client_timeout_minutes", 60))
 
     sec = data.get("secrets", {})
     cfg.secrets_provider = sec.get("provider", "keyring")
 
-    cfg.form_state = data.get("form_state", {})
+    if schema_version < 3:
+        form_state = data.get("form_state", {})
+        if isinstance(form_state, dict):
+            migrated_timeout = _extract_legacy_client_timeout(form_state)
+            if migrated_timeout is not None:
+                cfg.client_timeout_minutes = migrated_timeout
+            _log.info(
+                "Migrated config schema v%s -> v3 at %s (discarded legacy form_state)",
+                schema_version,
+                path,
+            )
+        cfg.schema_version = 3
+        migrated = True
+    else:
+        cfg.form_state = data.get("form_state", {})
 
+    if migrated:
+        _log.info(
+            "Configuration format upgraded; workflow tab fields are no longer saved."
+        )
+        save_config(cfg, path=path, profile_name=cfg.profile_name)
+
+    _log.info(
+        "Loaded config profile=%s path=%s schema_version=%s",
+        cfg.profile_name,
+        path,
+        cfg.schema_version,
+    )
     return cfg
+
+
+def _extract_legacy_client_timeout(form_state: dict) -> int | None:
+    """Pull enabled client-timeout from legacy per-tab advanced form_state."""
+    advanced = form_state.get("advanced", {})
+    if not isinstance(advanced, dict):
+        return None
+    for tab_adv in advanced.values():
+        if not isinstance(tab_adv, dict):
+            continue
+        row = tab_adv.get("client-timeout")
+        if not isinstance(row, dict) or not row.get("enabled"):
+            continue
+        value = row.get("value")
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def save_config(
     config: AppConfig, path: Path | None = None, profile_name: str | None = None
 ) -> None:
     """Saves AppConfig to user-level TOML file."""
-    target_prof = profile_name or config.profile_name
+    target_prof = resolve_profile_name(profile_name, config)
+    config.profile_name = target_prof
     if path is None:
         path = default_config_path(target_prof)
 
     data = {
-        "schema_version": 2,
+        "schema_version": 3,
         "general": {
             "theme": config.theme_mode,
             "advanced_mode": config.advanced_mode,
@@ -279,12 +341,43 @@ def save_config(
         "server": {
             "url": config.server_url,
             "skip_ssl": config.skip_ssl,
+            "client_timeout_minutes": config.client_timeout_minutes,
         },
         "secrets": {
             "provider": config.secrets_provider,
         },
-        "form_state": config.form_state or {},
     }
+
+    text = tomli_w.dumps(data)
+    _atomic_write_text(path, text, mode=0o644)
+
+
+def save_server_url(
+    server_url: str,
+    path: Path | None = None,
+    profile_name: str | None = None,
+) -> None:
+    """Update only ``[server].url`` in the config file without resetting other keys."""
+    if path is None:
+        path = default_config_path(profile_name)
+
+    if path.exists():
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            _log.warning(
+                "Failed to read config for server URL update %s: %s", path, exc
+            )
+            data = {}
+    else:
+        data = {}
+
+    server = data.get("server")
+    if not isinstance(server, dict):
+        server = {}
+    server["url"] = server_url
+    data["server"] = server
+    data["schema_version"] = 3
 
     text = tomli_w.dumps(data)
     _atomic_write_text(path, text, mode=0o644)

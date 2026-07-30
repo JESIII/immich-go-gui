@@ -22,7 +22,7 @@ class MenuMixin:
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
         save_action = QAction("Save Configuration", self)
-        save_action.triggered.connect(lambda: self.save_configuration())
+        save_action.triggered.connect(self._save_from_menu)
         file_menu.addAction(save_action)
         load_action = QAction("Load Configuration", self)
         load_action.triggered.connect(self.load_configuration)
@@ -49,6 +49,12 @@ class MenuMixin:
         export_diag_action = QAction("Export Diagnostics…", self)
         export_diag_action.triggered.connect(self.export_diagnostics)
         file_menu.addAction(export_diag_action)
+
+        file_menu.addSeparator()
+
+        app_update_action = QAction("Check for Application Updates…", self)
+        app_update_action.triggered.connect(self.check_for_application_updates)
+        file_menu.addAction(app_update_action)
 
         file_menu.addSeparator()
 
