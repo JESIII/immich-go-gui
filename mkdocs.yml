@@ -97,7 +97,6 @@ nav:
       - Environment Variables: reference/environment-variables.md
       - immich-go Compatibility: reference/immich-go-compatibility.md
   - Contributing: CONTRIBUTING.md
-  - Changelog: CHANGELOG.md
 
 docs_dir: docs
 site_dir: site

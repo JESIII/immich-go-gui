@@ -320,7 +320,7 @@ flowchart TB
 |------|---------|
 | [README](https://github.com/shitan198u/immich-go-gui/blob/master/README.md) | Project landing page |
 | [CONTRIBUTING](CONTRIBUTING.md) | How to contribute |
-| [CHANGELOG](CHANGELOG.md) | Version history |
+| [CHANGELOG](https://github.com/shitan198u/immich-go-gui/blob/master/CHANGELOG.md) | Version history |
 | [LICENSE](https://github.com/shitan198u/immich-go-gui/blob/master/LICENSE) | MIT license |
 
 <div class="version-banner">
