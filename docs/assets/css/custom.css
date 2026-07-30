@@ -390,19 +390,19 @@ body {
 
 .md-typeset .md-button--primary {
   background: linear-gradient(135deg, var(--igg-coral) 0%, #F1603D 50%, var(--igg-coral-bright) 100%) !important;
-  color: #ffffff !important;
+  color: #0B0D0F !important;
   border-color: transparent !important;
   box-shadow:
     0 4px 16px var(--igg-coral-glow),
     0 0 0 1px rgba(255, 255, 255, 0.12) inset,
     0 1px 0 rgba(255, 255, 255, 0.2) inset !important;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
 }
 
 .md-typeset .md-button--primary:hover,
 .md-typeset .md-button--primary:focus {
   background: linear-gradient(135deg, #F1603D 0%, var(--igg-coral-bright) 100%) !important;
-  color: #ffffff !important;
+  color: #0B0D0F !important;
   transform: translateY(-3px) scale(1.02);
   box-shadow:
     0 10px 28px rgba(225, 81, 46, 0.55),
