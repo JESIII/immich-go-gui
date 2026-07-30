@@ -11,7 +11,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from packaging.version import Version, InvalidVersion
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SEMVER_TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)$")
@@ -48,18 +47,8 @@ def get_pyproject_version() -> str:
 
 
 def resolve_target_version() -> str:
-    """Resolve active version taking max of latest git release tag and pyproject.toml."""
-    pyproject_ver = get_pyproject_version()
-    git_ver = get_latest_git_release_version()
-    if not git_ver:
-        return pyproject_ver
-
-    try:
-        v_py = Version(pyproject_ver)
-        v_git = Version(git_ver)
-        return pyproject_ver if v_py >= v_git else git_ver
-    except InvalidVersion:
-        return pyproject_ver
+    """Resolve active version using pyproject.toml as the source of truth."""
+    return get_pyproject_version()
 
 
 def check_or_update_file(
