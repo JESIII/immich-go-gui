@@ -24,15 +24,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: slate
-      accent: slate
+      primary: custom        # was: slate
+      accent: custom         # was: slate
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: slate
-      accent: slate
+      primary: custom        # was: slate
+      accent: custom         # was: slate
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -107,7 +107,7 @@ plugins:
   - social:
       cards: true
       cards_layout_options:
-        background_color: "#121520"
+        background_color: "#0E1113"   # was: "#121520"
         color: "#ffffff"
         background_image: null
   - autorefs
