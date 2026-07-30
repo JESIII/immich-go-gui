@@ -19,20 +19,20 @@ validation:
 theme:
   name: material
   custom_dir: overrides
-  logo: assets/logo.svg
+  logo: assets/logo.png
   favicon: assets/favicon.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: slate
-      accent: slate
+      primary: custom        # was: slate
+      accent: custom         # was: slate
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: slate
-      accent: slate
+      primary: custom        # was: slate
+      accent: custom         # was: slate
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -97,7 +97,6 @@ nav:
       - Environment Variables: reference/environment-variables.md
       - immich-go Compatibility: reference/immich-go-compatibility.md
   - Contributing: CONTRIBUTING.md
-  - Changelog: CHANGELOG.md
 
 docs_dir: docs
 site_dir: site
@@ -107,7 +106,7 @@ plugins:
   - social:
       cards: true
       cards_layout_options:
-        background_color: "#121520"
+        background_color: "#0E1113"   # was: "#121520"
         color: "#ffffff"
         background_image: null
   - autorefs
