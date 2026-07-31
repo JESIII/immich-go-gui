@@ -10,6 +10,7 @@ Authoritative context for AI agents working in this repository. When user-provid
 - **Frequent logical commits**: Small, reviewable commits with Conventional Commit prefixes (`fix:`, `feat:`, `chore:`, `test:`, `docs:`, `ci:`).
 - **Pre-Commit Verification**: The `.githooks/pre-commit` hook runs `pre-commit` (staged files only) automatically on every commit. Before **opening PRs**, run the full local pre-PR gate: `uv run pre-commit run --all-files`, `uv run ty check core/`, `uv run python app.py --self-test`, `uv run python scripts/sync_version.py --check`. Note that `pr-fast-feedback.yml` additionally runs multi-OS pytest, test-count synchronization, and security checks (pip-audit, CodeQL).
 - **Mandatory Pre-Commit Verification**: Run local checks (`uv run pre-commit run --all-files`, `uv run ty check core/`, `uv run python app.py --self-test`, `uv run python scripts/sync_version.py --check`) **before committing or opening PRs**. This guarantees `pr-fast-feedback.yml` passes on first attempt.
+- **Pre-Commit Verification**: The `.githooks/pre-commit` hook runs `pre-commit` (staged files only) automatically on every commit. Before **opening PRs**, run the full gate: `uv run pre-commit run --all-files`, `uv run ty check core/`, `uv run python app.py --self-test`, `uv run python scripts/sync_version.py --check`. This guarantees `pr-fast-feedback.yml` passes on first attempt.
 - **Minimal scope**: Match existing patterns. Avoid drive-by refactors — especially splitting `app.py` unless explicitly requested.
 
 ---
@@ -115,6 +116,7 @@ Nuitka directives live at the top of `app.py`. All release workflow invocations 
 
 ## 6. Testing
 
+- **Suite Metrics**: **271 tests across 20 modules**, coverage gate **75%** on `core` (Linux CI).
 - **Suite Metrics**: **271 tests across 20 modules**, coverage gate **75%** on `core` (Linux CI).
 - **Conventions**:
   - Windows path normalization: pass argv through `_norm_argv(...)` before comparing paths.
