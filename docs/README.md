@@ -68,7 +68,8 @@ Immich-Go GUI is a cross-platform desktop application (PySide6/Qt) that wraps th
 
 ## See it in action
 
-<video src="assets/immich-demo.webm" width="100%" controls></video>
+![Immich-Go GUI Demonstration](assets/immich-demo.gif)
+
 
 
 ## Start here

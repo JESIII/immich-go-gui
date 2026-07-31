@@ -9,7 +9,8 @@ A cross-platform desktop front-end for [immich-go](https://github.com/simulot/im
 
 📖 **Live Documentation Website**: [https://shitan198u.github.io/immich-go-gui/](https://shitan198u.github.io/immich-go-gui/)
 
-<video src="immich-demo.webm" width="100%" controls></video>
+![Immich-Go GUI Demonstration](immich-demo.gif)
+
 
 
 
