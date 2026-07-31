@@ -2,6 +2,15 @@
 # Immich-Go GUI — Native Git Pre-Commit Hook
 set -e
 
+# Ensure user bin directories are in PATH for GUI applications (e.g. VSCode)
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.astral/uv/bin:/usr/local/bin:$PATH"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "❌ Error: 'uv' command not found."
+    echo "Please ensure uv is installed and in your PATH."
+    exit 1
+fi
+
 echo "🔍 Running pre-commit quality checks..."
 # Check staged files only; CI runs --all-files as the safety net.
-uv run pre-commit run
+exec uv run pre-commit run "$@"
