@@ -68,20 +68,9 @@ Immich-Go GUI is a cross-platform desktop application (PySide6/Qt) that wraps th
 
 ## See it in action
 
-<div class="shot-gallery">
-  <a href="assets/screenshot-1.png">
-    <img src="assets/screenshot-1.png" alt="Immich-Go GUI main window" />
-    <span class="shot-label">Main Window</span>
-  </a>
-  <a href="assets/screenshot-2.png">
-    <img src="assets/screenshot-2.png" alt="Workflow configuration tab" />
-    <span class="shot-label">Workflow Tab</span>
-  </a>
-  <a href="assets/screenshot-3.png">
-    <img src="assets/screenshot-3.png" alt="Command preview pane" />
-    <span class="shot-label">Command Preview</span>
-  </a>
-</div>
+![Immich-Go GUI Demonstration](assets/immich-demo.gif)
+
+
 
 ## Start here
 

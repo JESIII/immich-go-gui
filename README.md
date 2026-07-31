@@ -9,28 +9,9 @@ A cross-platform desktop front-end for [immich-go](https://github.com/simulot/im
 
 📖 **Live Documentation Website**: [https://shitan198u.github.io/immich-go-gui/](https://shitan198u.github.io/immich-go-gui/)
 
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <a href="docs/assets/screenshot-1.png">
-        <img src="docs/assets/screenshot-1.png" alt="Main window" width="100%"/>
-      </a>
-      <sub><b>Main Window</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <a href="docs/assets/screenshot-2.png">
-        <img src="docs/assets/screenshot-2.png" alt="Workflow tab" width="100%"/>
-      </a>
-      <sub><b>Workflow Tab</b></sub>
-    </td>
-    <td align="center" width="33%">
-      <a href="docs/assets/screenshot-3.png">
-        <img src="docs/assets/screenshot-3.png" alt="Command preview" width="100%"/>
-      </a>
-      <sub><b>Command Preview</b></sub>
-    </td>
-  </tr>
-</table>
+![Immich-Go GUI Demonstration](immich-demo.gif)
+
+
 
 
 ## Why this exists
