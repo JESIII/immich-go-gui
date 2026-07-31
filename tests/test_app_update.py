@@ -75,7 +75,7 @@ class _UpdateHost(AppUpdateMixin):
         self.lbl_app_update_status = _StatusLabel()
 
 
-def test_check_for_application_updates_up_to_date(monkeypatch):
+def test_check_for_application_updates_up_to_date(qapp, monkeypatch):
     host = _UpdateHost()
     monkeypatch.setattr(
         "gui.mixins.app_update._gui_version",
@@ -96,7 +96,7 @@ def test_check_for_application_updates_up_to_date(monkeypatch):
     assert host.app_update_status_state() == "ok"
 
 
-def test_check_for_application_updates_available(monkeypatch):
+def test_check_for_application_updates_available(qapp, monkeypatch):
     host = _UpdateHost()
     monkeypatch.setattr(
         "gui.mixins.app_update._gui_version",
@@ -116,7 +116,7 @@ def test_check_for_application_updates_available(monkeypatch):
     assert host.app_update_status_state() == "warn"
 
 
-def test_check_for_application_updates_dev_build(monkeypatch):
+def test_check_for_application_updates_dev_build(qapp, monkeypatch):
     host = _UpdateHost()
     monkeypatch.setattr(
         "gui.mixins.app_update._gui_version",
@@ -138,7 +138,7 @@ def test_check_for_application_updates_dev_build(monkeypatch):
     assert host.app_update_status_state() == "default"
 
 
-def test_check_for_application_updates_network_error(monkeypatch):
+def test_check_for_application_updates_network_error(qapp, monkeypatch):
     host = _UpdateHost()
     monkeypatch.setattr(
         "gui.mixins.app_update._gui_version",
@@ -155,7 +155,7 @@ def test_check_for_application_updates_network_error(monkeypatch):
     assert host.app_update_status_state() == "err"
 
 
-def test_check_for_application_updates_opens_download_page(monkeypatch):
+def test_check_for_application_updates_opens_download_page(qapp, monkeypatch):
     host = _UpdateHost()
     monkeypatch.setattr(
         "gui.mixins.app_update._gui_version",

@@ -10,7 +10,7 @@ repos:
         args: ['--maxkb=2000'] # Allows up to 2MB (for your PNG files)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.9
+    rev: v0.16.0
     hooks:
       # Run the linter
       - id: ruff

@@ -40,8 +40,17 @@ minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
 timeout = 120
+# Default run excludes integration + live_cli (require real subprocess/binary);
+# unit + gui + theme + security + slow stay opt-in-only on-demand.
+addopts = "-ra --strict-markers --durations=20 -m 'not integration and not live_cli'"
 markers = [
     "integration: end-to-end tests that execute real subprocesses",
+    "live_cli: tests that require a real immich-go binary",
+    "gui: Qt widget tests",
+    "theme: tests that require real theme/icon rendering",
+    "security: security-invariant tests",
+    "unit: pure-core tests that do not require the Qt application",
+    "slow: tests that are slow to run",
 ]
 
 [tool.ty.src]

@@ -453,7 +453,7 @@ def test_save_config_uses_profile_path_without_env_override(tmp_path, monkeypatc
     not sys.platform.startswith("linux"),
     reason="XDG_CONFIG_HOME is honored only on Linux",
 )
-def test_linux_xdg_save_server_details_roundtrip(tmp_path, monkeypatch):
+def test_linux_xdg_save_server_details_roundtrip(qapp, tmp_path, monkeypatch):
     """Regression: GUI save must persist server URL and API key under Linux XDG profile paths."""
     from unittest.mock import patch
 
@@ -502,7 +502,7 @@ def test_linux_xdg_save_server_details_roundtrip(tmp_path, monkeypatch):
     not sys.platform.startswith("linux"),
     reason="XDG_CONFIG_HOME is honored only on Linux",
 )
-def test_linux_xdg_save_configuration_roundtrip(tmp_path, monkeypatch):
+def test_linux_xdg_save_configuration_roundtrip(qapp, tmp_path, monkeypatch):
     """Regression: File → Save persists server URL via save_server_details when dirty."""
     from unittest.mock import patch
 

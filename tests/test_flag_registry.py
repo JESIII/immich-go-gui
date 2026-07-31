@@ -86,6 +86,7 @@ def test_picasa_simple_keys_are_not_advanced_only():
     assert "recursive" in REGISTRY.advanced_keys("upload-picasa")
 
 
+@pytest.mark.live_cli
 def test_bool_defaults_match_live_cli():
     """Bool flag defaults in flags.toml must match live immich-go --help output."""
     import subprocess
