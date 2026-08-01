@@ -83,11 +83,22 @@ def gui(qapp, _session_config_root):
         with patch.object(ImmichGoGUI, "load_configuration"):
             g = ImmichGoGUI()
         g.binary_path = "./immich-go"
-        # Never fire silent connection tests during the suite — they hit the
-        # network with a 4s timeout and dominate wall time when Qt processes events.
-        if hasattr(g, "_conn_test_debounce"):
-            g._conn_test_debounce.stop()
-            g._conn_test_debounce.timeout.disconnect()
+        # Stop ALL background timers so tests never pay for deferred work that
+        # fires when Qt processes events. `_conn_test_debounce` is the obvious
+        # one; `_status_debounce` (150ms) and `_cleanup_timer` (6h) also do
+        # widget work and can fire mid-test.
+        for _timer_name in (
+            "_conn_test_debounce",
+            "_status_debounce",
+            "_cleanup_timer",
+            "binary_debounce",
+        ):
+            _timer = getattr(g, _timer_name, None)
+            if _timer is not None:
+                try:
+                    _timer.stop()
+                except Exception:
+                    pass
         g._auto_test_connection = lambda: None
         g._mark_configuration_clean()
         if hasattr(g, "_mark_server_details_clean"):
@@ -98,10 +109,15 @@ def gui(qapp, _session_config_root):
 
 
 @pytest.fixture(autouse=True)
-def _reset_client_timeout(gui):
-    spin = gui.inputs.get("config", {}).get("client_timeout_minutes")
-    if spin is not None:
-        spin.setValue(60)
+def _reset_client_timeout(request):
+    # Pure-core tests (unit marker, no `gui` fixture) must not pay the full
+    # ImmichGoGUI construction cost. Only run the reset when the test actually
+    # requests the shared `gui` fixture (or the gui marker is applied).
+    if "gui" in request.fixturenames:
+        gui = request.getfixturevalue("gui")
+        spin = gui.inputs.get("config", {}).get("client_timeout_minutes")
+        if spin is not None:
+            spin.setValue(60)
     yield
 
 
@@ -167,7 +183,11 @@ def _clear_profiles_cache():
 
 
 @pytest.fixture(autouse=True)
-def _reset_shared_config(gui):
+def _reset_shared_config(request):
+    if "gui" not in request.fixturenames:
+        yield
+        return
+    gui = request.getfixturevalue("gui")
     cfg = gui.inputs["config"]
     cfg["skip-ssl"].setChecked(False)
     if cfg.get("server"):
@@ -185,6 +205,25 @@ def _reset_shared_config(gui):
         picasa["folder-album"].setCurrentIndex(0)
     if "into-album" in picasa:
         picasa["into-album"].clear()
+
+
+@pytest.fixture(autouse=True)
+def _block_network(monkeypatch):
+    """Deny real network access so a stray requests call fails fast instead of
+    hanging the suite on a multi-second timeout (also enforces hermeticity).
+    Tests that legitimately exercise network code re-patch requests explicitly
+    inside the test body, which overrides this deny via monkeypatch last-wins.
+    """
+    import requests
+
+    def _deny(*args, **kwargs):
+        raise RuntimeError(
+            "Tests must not make real network calls. Patch requests explicitly."
+        )
+
+    for _name in ("get", "post", "put", "delete", "head", "patch"):
+        monkeypatch.setattr(requests, _name, _deny)
+    monkeypatch.setattr(requests.Session, "request", _deny)
 
 
 @pytest.fixture(autouse=True)

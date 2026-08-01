@@ -5,9 +5,10 @@ name: PR Fast Feedback
 # Nuitka build verification, and posts automated PR feedback.
 
 on:
+  # NOTE: No `branches:` filter here — CI must run on PRs targeting ANY base
+  # branch (master, staging, etc.). Filtering to `branches: [master]` only
+  # caused PRs opened against staging to silently get zero CI checks.
   pull_request:
-    branches:
-      - master
   workflow_dispatch:
 
 permissions:
