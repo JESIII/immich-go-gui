@@ -314,7 +314,7 @@ def test_secret_keyring_failure_fallback(tmp_path, monkeypatch):
 
 def test_collect_form_state_excludes_secrets(gui):
     state = gui.collect_form_state()
-    for tab_name, tab_dict in state.items():
+    for tab_dict in state.values():
         for secret_key in ("api_key", "from-api-key", "admin_api_key"):
             assert secret_key not in tab_dict
 
@@ -503,7 +503,9 @@ def test_linux_xdg_save_server_details_roundtrip(qapp, tmp_path, monkeypatch):
     reason="XDG_CONFIG_HOME is honored only on Linux",
 )
 def test_linux_xdg_save_configuration_roundtrip(qapp, tmp_path, monkeypatch):
-    """Regression: File → Save persists server URL via save_server_details when dirty."""
+    """
+    Verify that saving configuration under an XDG configuration directory persists the server URL.
+    """
     from unittest.mock import patch
 
     from core.profile_manager import clear_profiles_cache, profile_config_path
