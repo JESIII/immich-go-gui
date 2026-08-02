@@ -45,6 +45,8 @@ jobs:
   build:
     needs: test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.set-version.outputs.version }}
     env:
@@ -204,12 +206,14 @@ jobs:
             fi
           done
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+      # Upload this platform's assets to the GitHub Release immediately —
+      # do not wait for other platforms. softprops/action-gh-release safely
+      # upserts the release and appends assets from concurrent jobs.
+      - name: Publish assets to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
         with:
-          name: Immich-Go-GUI-${{ matrix.name }}
-          if-no-files-found: error
-          path: |
+          files: |
             Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Setup.exe
             Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Portable.zip
             Immich-Go-GUI-${{ env.VERSION }}-macOS-*.dmg
@@ -219,45 +223,19 @@ jobs:
             Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.rpm
             Immich-Go-GUI-${{ env.VERSION }}-SHA256SUMS.txt
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Create Official Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            artifacts/Immich-Go-GUI-*-Windows-x86_64-Setup.exe
-            artifacts/Immich-Go-GUI-*-Windows-x86_64-Portable.zip
-            artifacts/Immich-Go-GUI-*-macOS-*.dmg
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.AppImage
-            artifacts/Immich-Go-GUI-*-Linux-x86_64-Portable.tar.gz
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.deb
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.rpm
-            artifacts/Immich-Go-GUI-*-SHA256SUMS.txt
-
-      - name: Create Test Pre-Release
+      - name: Publish assets to Test Pre-Release
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: "test-${{ needs.build.outputs.version }}"
-          name: "Test Build test-${{ needs.build.outputs.version }}"
+          tag_name: "test-${{ env.VERSION }}"
+          name: "Test Build test-${{ env.VERSION }}"
           prerelease: true
           files: |
-            artifacts/Immich-Go-GUI-*-Windows-x86_64-Setup.exe
-            artifacts/Immich-Go-GUI-*-Windows-x86_64-Portable.zip
-            artifacts/Immich-Go-GUI-*-macOS-*.dmg
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.AppImage
-            artifacts/Immich-Go-GUI-*-Linux-x86_64-Portable.tar.gz
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.deb
-            artifacts/Immich-Go-GUI-*-Linux-x86_64.rpm
-            artifacts/Immich-Go-GUI-*-SHA256SUMS.txt
+            Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Setup.exe
+            Immich-Go-GUI-${{ env.VERSION }}-Windows-x86_64-Portable.zip
+            Immich-Go-GUI-${{ env.VERSION }}-macOS-*.dmg
+            Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.AppImage
+            Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64-Portable.tar.gz
+            Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.deb
+            Immich-Go-GUI-${{ env.VERSION }}-Linux-x86_64.rpm
+            Immich-Go-GUI-${{ env.VERSION }}-SHA256SUMS.txt
