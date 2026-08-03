@@ -676,3 +676,71 @@ def test_profile_switch_with_dirty_prompts():
     assert "Unsaved Profile Changes" in resp.text
     assert "Discard & Switch" in resp.text
     assert "Save & Switch" in resp.text
+
+
+def test_config_reload_endpoint():
+    """W-23: /config/reload returns an ok toast and reloads session config."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.post("/config/reload")
+    assert resp.status_code == 200
+    assert "reloaded" in resp.text.lower()
+
+
+def test_config_download_redacts_secrets():
+    """W-24: downloading config redacts secret-bearing keys."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "https://x:2283", "api_key": "super-secret-key-xyz"},
+    )
+    resp = client.get("/config/download")
+    assert resp.status_code == 200
+    assert "super-secret-key-xyz" not in resp.text
+    # Redaction marker present for key-like entries if they exist in the model.
+    assert "Content-Disposition" in resp.headers
+
+
+def test_logs_tail_endpoint_returns_plain_text():
+    """W-24: the log-tail endpoint returns a text/plain body."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/logs/tail")
+    assert resp.status_code == 200
+    assert resp.headers.get("content-type", "").startswith("text/plain")
+
+
+def test_about_modal_has_links_and_cli_target():
+    """W-26: the About modal shows the CLI target and GitHub links."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/partial/about")
+    assert resp.status_code == 200
+    assert "About Immich-Go Web Console" in resp.text
+    assert "simulot/immich-go" in resp.text
+    assert "CLI target" in resp.text
+
+
+def test_toast_can_carry_action_link():
+    """W-25: app-update toasts can include an 'Open ↗' release link."""
+    from types import SimpleNamespace
+
+    from webapp import app as appmod
+
+    rel = SimpleNamespace(
+        version="9.9.9",
+        html_url="https://github.com/shitan198u/immich-go-gui/releases/tag/v9.9.9",
+    )
+    with (
+        patch.object(appmod, "gui_version", return_value="1.0.0"),
+        patch.object(appmod, "get_latest_gui_release", return_value=rel),
+        patch.object(appmod, "is_parseable_semver", return_value=True),
+        patch.object(appmod, "is_update_available", return_value=True),
+    ):
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post("/app-update/check")
+        assert resp.status_code == 200
+        assert "Open ↗" in resp.text
+        assert "v9.9.9" in resp.text

@@ -124,6 +124,15 @@
         <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
           🔄 Check for Updates
         </button>
+        <button class="btn btn-ghost btn-sm" hx-post="/config/reload" hx-target="#toast">
+          ♻️ Reload Config
+        </button>
+        <a class="btn btn-ghost btn-sm" href="/config/download" download>
+          ⬇ Download Config
+        </a>
+        <a class="btn btn-ghost btn-sm" href="/logs/tail" target="_blank" rel="noopener">
+          📄 View Log Tail
+        </a>
         <a class="btn btn-ghost btn-sm" href="https://github.com/shitan198u/immich-go-gui/releases" target="_blank" rel="noopener">
           📦 View Releases
         </a>

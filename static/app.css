@@ -568,6 +568,30 @@ body {
   margin-left: 0.25rem;
 }
 
+.toast-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 0.5rem;
+}
+.toast-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+.about-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.about-links a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-links a:hover {
+  text-decoration: underline;
+}
+
 
 .tab-form {
   display: flex;

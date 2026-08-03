@@ -754,6 +754,73 @@ async def binary_check_updates(request: Request) -> HTMLResponse:
     )
 
 
+async def config_reload(request: Request) -> HTMLResponse:
+    """Reload config + secrets from disk into the session (File -> Load Config)."""
+    s = ensure_loaded(request)
+    for k in ("config", "secrets", "conn"):
+        s.pop(k, None)
+    ensure_loaded(request)
+    return partial(
+        request,
+        "partials/panels.html#toast",
+        toast="Configuration reloaded from disk.",
+        tone="ok",
+    )
+
+
+async def config_download(request: Request) -> Response:
+    """Download a redacted representation of the active configuration."""
+    cfg = load_config()
+    redacted = {
+        k: (
+            "***redacted***"
+            if any(s in k for s in ("key", "secret", "token", "password"))
+            else v
+        )
+        for k, v in cfg.__dict__.items()
+    }
+    text = "\n".join(f"{k} = {v!r}" for k, v in sorted(redacted.items()))
+    return Response(
+        content=text,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": 'attachment; filename="immich-go-gui-config.txt"'
+        },
+    )
+
+
+async def logs_tail(request: Request) -> Response:
+    """Return the last N lines of the app log file."""
+    from core.config_manager import default_config_dir
+
+    log_file = default_config_dir() / "logs" / "immich-go-gui.log"
+    if not log_file.exists():
+        return Response(content="(no log file yet)", media_type="text/plain")
+    try:
+        tail = "".join(
+            log_file.read_text(encoding="utf-8", errors="replace").splitlines(
+                keepends=True
+            )[-100:]
+        )
+    except OSError:
+        tail = "(log file unreadable)"
+    return Response(content=tail, media_type="text/plain")
+
+
+async def about_partial(request: Request) -> HTMLResponse:
+    from core.binary_manager import TESTED_IMMICH_GO_VERSION
+
+    return partial(
+        request,
+        "partials/panels.html#about",
+        about_text=(
+            "Immich-Go Web Console is a Docker/HTMX web interface for the "
+            "immich-go CLI, providing 1:1 parity with the desktop GUI."
+        ),
+        cli_target=TESTED_IMMICH_GO_VERSION,
+    )
+
+
 async def binary_download(request: Request) -> HTMLResponse:
     form = dict(await request.form())
     version = str(form.get("version") or "").strip()
@@ -823,18 +890,24 @@ async def binary_manual_path(request: Request) -> HTMLResponse:
 async def app_update_check(request: Request) -> HTMLResponse:
     installed = gui_version()
     rel = get_latest_gui_release()
+    toast_url = None
     if rel is None:
         msg, tone = "Could not reach GitHub to check for updates.", "err"
     elif not is_parseable_semver(installed):
-        msg, tone = f"Development build — latest release is v{rel.version}.", "warn"
+        msg, tone = f"Development build - latest release is v{rel.version}.", "warn"
+        toast_url = rel.html_url
     elif is_update_available(installed, rel.version):
-        msg, tone = (
-            f"Update available: v{rel.version} (you run {installed}). {rel.html_url}",
-            "warn",
-        )
+        msg, tone = f"Update available: v{rel.version} (you run {installed}).", "warn"
+        toast_url = rel.html_url
     else:
         msg, tone = f"Up to date (v{installed}).", "ok"
-    return partial(request, "partials/panels.html#toast", toast=msg, tone=tone)
+    return partial(
+        request,
+        "partials/panels.html#toast",
+        toast=msg,
+        tone=tone,
+        toast_url=toast_url,
+    )
 
 
 async def compat_partial(request: Request) -> HTMLResponse:
@@ -1072,6 +1145,10 @@ def create_app() -> Starlette:
         Route("/config/save", config_save_app, methods=["POST"]),
         Route("/config/test-connection", config_test_connection, methods=["POST"]),
         Route("/config/test-connection-async", test_connection_chip, methods=["POST"]),
+        Route("/config/reload", config_reload, methods=["POST"]),
+        Route("/config/download", config_download),
+        Route("/logs/tail", logs_tail),
+        Route("/partial/about", about_partial),
         Route("/checklist/dismiss", checklist_dismiss, methods=["POST"]),
         Route("/mode/toggle", mode_toggle, methods=["POST"]),
         Route("/theme", theme_set, methods=["POST"]),

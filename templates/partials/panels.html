@@ -1,6 +1,9 @@
 {% if partial == 'partials/panels.html#toast' or toast %}
 <div class="toast toast-{{ tone|default('ok', true) }}" hx-swap-oob="beforeend:#toast">
   <span>{{ toast }}</span>
+  {% if toast_url %}
+  <a href="{{ toast_url }}" target="_blank" rel="noopener" class="toast-link">Open ↗</a>
+  {% endif %}
   <button onclick="this.parentElement.remove()" class="toast-close">✕</button>
 </div>
 {% endif %}
@@ -150,6 +153,28 @@
     {% else %}
       <span class="ribbon-empty">Complete the required fields to build a command…</span>
     {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#about' %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">About Immich-Go Web Console</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>{{ about_text }}</p>
+      <p class="mt-2">GUI version: <code>v{{ version }}</code> · CLI target: <code>v{{ cli_target }}</code></p>
+      <ul class="about-links mt-2">
+        <li><a href="https://github.com/simulot/immich-go" target="_blank" rel="noopener">immich-go (CLI)</a></li>
+        <li><a href="https://github.com/shitan198u/immich-go-gui" target="_blank" rel="noopener">immich-go-gui</a></li>
+      </ul>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Close</button>
+    </div>
   </div>
 </div>
 {% endif %}
