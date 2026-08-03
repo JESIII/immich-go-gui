@@ -744,3 +744,106 @@ def test_toast_can_carry_action_link():
         assert resp.status_code == 200
         assert "Open ↗" in resp.text
         assert "v9.9.9" in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 6 - efficiency & discoverability (W-27 presets, W-28 rebuild, W-29 keys)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_advanced_tab_renders_preset_chips():
+    """W-27: advanced mode shows filtered preset chips for the workflow."""
+    from webapp.presets import presets_for
+
+    app = create_app()
+    client = TestClient(app)
+    client.post("/mode/toggle", headers={"HX-Request": "true"})
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    assert presets_for("upload-folder"), "upload-folder must define presets"
+    assert "preset-chip" in resp.text
+    assert "Fast Scan" in resp.text
+
+
+def test_run_history_records_and_overview_shows_rebuild():
+    """W-28: recorded runs surface a Rebuild action on the Overview."""
+    from webapp.history import HISTORY
+
+    app = create_app()
+    client = TestClient(app)
+    HISTORY.record(
+        run_id="hist-123",
+        tab_key="upload-immich",
+        dry=True,
+        warnings=0,
+        display_cmd="-dry-run upload-immich",
+        raw_state={"path": "/tmp/photos", "from-api-key": "should-not-be-stored"},
+    )
+    try:
+        entry = HISTORY.get("hist-123")
+        assert entry is not None
+        assert entry["tab_state"].get("from-api-key") is None  # secrets excluded
+        resp = client.get("/overview")
+        assert resp.status_code == 200
+        assert "🧰 Rebuild" in resp.text
+    finally:
+        # avoid cross-test pollution of the shared JSON store
+        import json as _json
+        from pathlib import Path
+
+        import webapp.history as hmod
+
+        try:
+            data = hmod.HISTORY._load()
+            data = [e for e in data if e.get("run_id") != "hist-123"]
+            Path(hmod.HISTORY._path).write_text(
+                _json.dumps(data, indent=2), encoding="utf-8"
+            )
+        except Exception:
+            pass
+
+
+def test_run_rebuild_rehydrates_session_state():
+    """W-28: /runs/{id}/rebuild restores non-secret form state into the tab."""
+    from webapp.history import HISTORY
+
+    app = create_app()
+    client = TestClient(app)
+    HISTORY.record(
+        run_id="hist-456",
+        tab_key="upload-folder",
+        dry=False,
+        warnings=0,
+        display_cmd="upload",
+        raw_state={"path": "/data/photos", "recursive": True},
+    )
+    try:
+        resp = client.post("/runs/hist-456/rebuild")
+        assert resp.status_code == 204
+        assert resp.headers.get("HX-Redirect") == "/tab/upload-folder"
+        tab_resp = client.get("/tab/upload-folder")
+        assert "/data/photos" in tab_resp.text
+    finally:
+        import json as _json
+        from pathlib import Path
+
+        import webapp.history as hmod
+
+        try:
+            data = hmod.HISTORY._load()
+            data = [e for e in data if e.get("run_id") != "hist-456"]
+            Path(hmod.HISTORY._path).write_text(
+                _json.dumps(data, indent=2), encoding="utf-8"
+            )
+        except Exception:
+            pass
+
+
+def test_base_page_exposes_footer_hint_and_shortcuts_overlay():
+    """W-29: the shell renders the footer hint + keyboard shortcut overlay."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "shortcuts-overlay" in resp.text
+    assert "Ctrl" in resp.text or "kbd" in resp.text

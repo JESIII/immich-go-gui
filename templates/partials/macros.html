@@ -32,7 +32,7 @@
 {% endmacro %}
 
 {% macro render_adv_row(d, stored) %}
-<div class="adv-row">
+<div class="adv-row" data-key="{{ d.key }}">
   <label class="adv-checkbox">
     <input type="checkbox" name="adv_{{ d.key }}_en" value="1" {% if stored.enabled %}checked{% endif %}
            onchange="this.closest('.adv-row').querySelector('.adv-input-wrap').classList.toggle('disabled', !this.checked)">

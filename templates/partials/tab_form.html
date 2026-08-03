@@ -61,10 +61,25 @@
       <h2 class="card-title">Advanced CLI Flags</h2>
       <button type="button" class="btn btn-ghost btn-sm" hx-post="/advanced/reset" hx-target="#toast">Reset Advanced Flags</button>
     </div>
-    <div class="card-body adv-grid">
-      {% for d in adv_defs %}
-        {{ m.render_adv_row(d, adv.get(d.key, {'enabled': false, 'value': d.default})) }}
-      {% endfor %}
+    <div class="card-body">
+      {% if presets %}
+      <div class="preset-row">
+        {% for p in presets %}
+        <button type="button" class="preset-chip btn btn-ghost btn-xs"
+                data-tooltip="{{ p.desc }}"
+                onclick="applyPreset({{ p.flags|tojson }})">⚡ {{ p.name }}</button>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="adv-filter-row">
+        <input type="text" id="adv-filter" class="form-input form-input-sm" placeholder="🔎 Filter advanced flags…">
+        <span id="adv-count" class="adv-count"></span>
+      </div>
+      <div class="adv-grid">
+        {% for d in adv_defs %}
+          {{ m.render_adv_row(d, adv.get(d.key, {'enabled': false, 'value': d.default})) }}
+        {% endfor %}
+      </div>
     </div>
   </div>
   {% endif %}
@@ -72,10 +87,10 @@
   <div id="live-ribbon" data-tab="{{ tab }}"></div>
 
   <div class="form-actions">
-    <button type="submit" name="dry" value="1" class="btn btn-secondary">
+    <button type="submit" id="btn-dry" name="dry" value="1" class="btn btn-secondary" title="Ctrl+Shift+Enter">
       🔍 Dry Run Preview
     </button>
-    <button type="submit" name="dry" value="0" class="btn btn-primary">
+    <button type="submit" id="btn-execute" name="dry" value="0" class="btn btn-primary" title="Ctrl+Enter">
       🚀 Preview & Execute
     </button>
   </div>

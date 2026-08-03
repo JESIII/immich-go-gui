@@ -71,11 +71,31 @@
     <div class="content" id="content">
       {{ content|safe }}
     </div>
+
+    <footer class="main-footer">
+      <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> preview · <kbd>Ctrl</kbd>+<kbd>K</kbd> jump to tab · <kbd>?</kbd> shortcuts</span>
+    </footer>
   </main>
 </div>
 
 <div id="modal-container"></div>
 <div id="toast" class="toast-container"></div>
+<div id="shortcuts-overlay" class="shortcuts-overlay" hidden>
+  <div class="shortcuts-card">
+    <h3 class="modal-title">⌨️ Keyboard Shortcuts</h3>
+    <table class="shortcuts-table">
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Preview &amp; execute the current workflow</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Dry-run preview</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Jump to a workflow tab</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Toggle this shortcut overlay</td></tr>
+    </table>
+    <button class="btn btn-secondary btn-sm" onclick="this.closest('#shortcuts-overlay').hidden = true">Close</button>
+  </div>
+</div>
+<div id="tab-jumper" class="tab-jumper" hidden>
+  <input type="text" id="tab-jumper-input" class="form-input" placeholder="Type to filter tabs…">
+  <div id="tab-jumper-list" class="tab-jumper-list"></div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>

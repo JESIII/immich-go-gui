@@ -1,0 +1,108 @@
+<div class="overview-grid">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Upload Workflows</h2>
+      <span class="card-subtitle">Import media into Immich server</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.upload %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Archive Workflows</h2>
+      <span class="card-subtitle">Export or download serverless archives</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.archive %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-badge">serverless</span>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Stack Workflows</h2>
+      <span class="card-subtitle">Group & stack duplicate media</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.stack %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if recent %}
+  <div class="card card-wide">
+    <div class="card-header">
+      <h2 class="card-title">Recent Run History</h2>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Run ID</th>
+            <th>Workflow</th>
+            <th>Command</th>
+            <th>Started</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in recent %}
+          <tr hx-get="/run/{{ run.run_id }}" hx-target="#content" hx-push-url="true" class="row-clickable">
+            <td><code>{{ run.run_id }}</code></td>
+            <td><span class="badge">{{ run.tab_key }}</span></td>
+            <td><code class="code-truncate">{{ run.display_cmd }}</code></td>
+            <td><small>{{ run.started_at[:19] }}</small></td>
+            <td>
+              {% if not run.finished %}
+                <span class="chip running">running…</span>
+              {% elif run.exit_code == 0 %}
+                <span class="chip ok">exit 0</span>
+              {% else %}
+                <span class="chip err">exit {{ run.exit_code }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if run.run_id in rebuildable %}
+              <button class="btn btn-ghost btn-xs"
+                      hx-post="/runs/{{ run.run_id }}/rebuild"
+                      hx-target="#content"
+                      onclick="event.stopPropagation()"
+                      title="Rehydrate this run's flags into the workflow form">🧰 Rebuild</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>

@@ -8,6 +8,7 @@ import secrets
 import shlex
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from starlette.applications import Starlette
@@ -77,6 +78,8 @@ from webapp.forms import (
     parse_tab_state,
     source_flags,
 )
+from webapp.history import HISTORY
+from webapp.presets import presets_for
 from webapp.runner import RUNS, RunInProgress
 
 BASE = Path(__file__).resolve().parent.parent
@@ -239,6 +242,27 @@ async def overview_page(request: Request) -> HTMLResponse:
         "stack": [k for k, t in REGISTRY.tabs.items() if t.section == "stack"],
     }
     recent = [RUNS.runs[r] for r in reversed(RUNS.order) if r in RUNS.runs][:6]
+    # Merge persisted history (survives restarts) with in-memory runs so the
+    # Rebuild action remains available after the process restarts.
+    seen = {r.run_id for r in recent}
+    for entry in reversed(HISTORY.entries()):
+        if entry.get("run_id") in seen:
+            continue
+        seen.add(entry["run_id"])
+        recent.append(
+            SimpleNamespace(
+                run_id=entry["run_id"],
+                tab_key=entry.get("tab_key", "?"),
+                display_cmd=entry.get("display_cmd", ""),
+                started_at=entry.get("started_at", ""),
+                finished=True,
+                exit_code=0,
+                dry=bool(entry.get("dry", False)),
+                rebuildable=True,
+            )
+        )
+        if len(recent) >= 6:
+            break
     return page(
         request,
         "partials/overview.html",
@@ -247,6 +271,7 @@ async def overview_page(request: Request) -> HTMLResponse:
         commands=REGISTRY.tab_commands,
         serverless=REGISTRY.serverless_tabs,
         recent=recent,
+        rebuildable=HISTORY.ids(),
         crumb="overview",
     )
 
@@ -269,6 +294,7 @@ async def tab_page(request: Request, tab_key: str | None = None) -> Response:
         adv_defs=REGISTRY.advanced_defs(key),
         st=s["tab_state"][key],
         adv=adv_state_for(request, key),
+        presets=presets_for(key),
         cfg=current_config_state(request),
         serverless=key in SERVERLESS_TABS,
         crumb=crumb_for(("tab", key)),
@@ -614,10 +640,45 @@ async def run_start(request: Request) -> HTMLResponse:
         run = RUNS.start(plan, plan.binary_path)
     except RunInProgress as e:
         return partial(request, "partials/panels.html#toast", toast=str(e), tone="err")
+    HISTORY.record(
+        run_id=run.run_id,
+        tab_key=run.tab_key,
+        dry=run.dry_run,
+        warnings=len(plan.warnings),
+        display_cmd=run.display_cmd,
+        raw_state=s["tab_state"].get(run.tab_key, {}),
+    )
     s["view"] = ("run", run.run_id)
     return page(
         request, "partials/run_panel.html", run=run, crumb=f"run · {run.tab_key}"
     )
+
+
+async def run_rebuild(request: Request) -> Response:
+    """Rehydrate a previous run's (non-secret) form state into the session."""
+    s = ensure_loaded(request)
+    entry = HISTORY.get(request.path_params["rid"])
+    if not entry:
+        return partial(
+            request,
+            "partials/panels.html#toast",
+            toast="No saved state for that run.",
+            tone="err",
+        )
+    tab = entry.get("tab_key", "")
+    if tab not in REGISTRY.tabs:
+        return partial(
+            request,
+            "partials/panels.html#toast",
+            toast="That workflow no longer exists.",
+            tone="err",
+        )
+    current = s["tab_state"].get(tab, {})
+    # Secret fields (e.g. source API keys) were stripped when stored, so they
+    # stay blank for re-entry while everything else is restored.
+    s["tab_state"][tab] = {**current, **entry.get("tab_state", {})}
+    s["view"] = ("tab", tab)
+    return HTMLResponse("", status_code=204, headers={"HX-Redirect": f"/tab/{tab}"})
 
 
 async def run_panel_page(request: Request) -> Response:
@@ -1138,6 +1199,7 @@ def create_app() -> Starlette:
         Route("/run/{rid}", run_panel_page),
         Route("/runs/{rid}/stream", run_stream),
         Route("/runs/{rid}/stop", run_stop, methods=["POST"]),
+        Route("/runs/{rid}/rebuild", run_rebuild, methods=["POST"]),
         Route("/run-state/reset", run_state_reset, methods=["POST"]),
         Route("/advanced/reset", advanced_reset, methods=["POST"]),
         # config
