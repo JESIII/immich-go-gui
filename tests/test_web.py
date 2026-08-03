@@ -494,3 +494,64 @@ def test_preview_builds_plan_with_session_secrets():
     assert resp.status_code == 200
     assert "Dry Run Confirmation" in resp.text
     assert "plan-secret" not in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 2 - navigation & layout (W-11 status, W-12 server banner, W-13 theme)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_server_banner_shows_target_server():
+    """W-12: server-required tabs display the configured target server."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "https://target:2283", "api_key": "k"},
+    )
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    assert "Target server" in resp.text
+    assert "https://target:2283" in resp.text
+
+
+def test_serverless_tab_has_no_target_banner():
+    """W-12: serverless archive tabs must not show a target-server banner."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/archive-folder")
+    assert resp.status_code == 200
+    assert "Target server" not in resp.text
+
+
+def test_theme_endpoint_sets_system_cookie():
+    """W-13: the /theme endpoint persists a 'system' preference cookie."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.post("/theme", data={"theme": "system"})
+    assert resp.status_code == 204
+    assert client.cookies.get("igg_theme") == "system"
+
+
+def test_status_surfaces_connection_result():
+    """W-11: a successful connection test surfaces a Connected chip in status."""
+    from types import SimpleNamespace
+
+    from webapp import app as appmod
+
+    fake = SimpleNamespace(ok=True, message="Connected", server_version="v1.118.0")
+    with patch.object(appmod, "test_immich_connection", return_value=fake):
+        app = create_app()
+        client = TestClient(app)
+        client.post(
+            "/config/save-server",
+            data={"server": "https://x:2283", "api_key": "k"},
+        )
+        client.post(
+            "/config/test-connection",
+            data={"server": "https://x:2283", "api_key": "k"},
+        )
+        resp = client.get("/partial/status")
+        assert resp.status_code == 200
+        assert "Connected" in resp.text
+        assert "v1.118.0" in resp.text

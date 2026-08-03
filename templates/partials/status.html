@@ -1,0 +1,22 @@
+<div class="status-pill-inner">
+  <span class="status-chip {% if binary.state=='ok' %}chip-ok{% else %}chip-err{% endif %}" title="immich-go CLI binary state">
+    CLI: {{ binary.version_text or 'Missing' }}
+  </span>
+  <span class="status-chip {% if srv[0]=='ok' %}chip-ok{% else %}chip-err{% endif %}" title="{{ srv[1] }}">
+    {{ srv[1] }}
+  </span>
+  {% if conn and conn.ok %}
+  <span class="status-chip chip-ok" title="Connection test passed">Connected{% if conn.server_version %} · v{{ conn.server_version }}{% endif %}</span>
+  {% elif conn %}
+  <span class="status-chip chip-err" title="{{ conn.message }}">Connection issue</span>
+  {% endif %}
+  {% if active %}
+  <a hx-get="/run/{{ active.run_id }}" hx-target="#content" hx-push-url="true" class="status-chip chip-running animate-pulse">
+    ⚡ Running ({{ active.tab_key }})
+  </a>
+  {% elif locked %}
+  <span class="status-chip chip-warn" title="Lock file active">
+    🔒 Locked
+  </span>
+  {% endif %}
+</div>

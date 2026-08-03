@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme-preference="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Immich-Go · Web Console</title>
+<script>
+/* Resolve the active theme before first paint to avoid a flash.
+   data-theme-preference holds the stored choice (dark|light|system) in the
+   igg_theme cookie; data-theme is the effective value the CSS keys off. */
+(function () {
+  var pref = document.documentElement.getAttribute('data-theme-preference') || 'dark';
+  var effective = pref;
+  if (pref === 'system') {
+    effective = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+  }
+  document.documentElement.setAttribute('data-theme', effective);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/vendor/htmx.min.js"></script>
+<script src="/static/vendor/sse.js"></script>
+</head>
+<body hx-headers='{"X-CSRF": "{{ csrf }}"}'>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" hx-get="/overview" hx-target="#content" hx-push-url="true">
+      <span class="brand-mark">▣</span>
+      <span class="brand-text">IMMICH-GO<small>web console v{{ version }}</small></span>
+    </a>
+
+    {% include 'partials/nav.html' %}
+
+    <div class="sidebar-footer">
+      <div class="profile-chip" hx-get="/partial/profiles" hx-target="#modal-container">
+        <span class="profile-icon">👤</span>
+        <span class="profile-name">{{ profile }}</span>
+      </div>
+
+      {% if auth_enabled %}
+      <a href="/logout" class="btn btn-ghost btn-sm" title="Log out">Logout</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <div class="crumb" id="crumb">{{ crumb|default('overview', true) }}</div>
+
+      <div class="header-actions">
+        <button id="mode-toggle-btn" class="btn btn-sm btn-ghost" hx-post="/mode/toggle" hx-target="#content" title="Toggle Advanced Mode">
+          {% if advanced %}⚡ Advanced Mode{% else %}🌱 Simple Mode{% endif %}
+        </button>
+
+        <div id="status-pill" hx-get="/partial/status" hx-trigger="load, every 8s">
+          <span class="pill-badge loading">checking…</span>
+        </div>
+
+        <button class="btn btn-icon" onclick="toggleTheme()" title="Toggle Theme">
+          <span class="theme-icon">☯</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="content" id="content">
+      {{ content|safe }}
+    </div>
+  </main>
+</div>
+
+<div id="modal-container"></div>
+<div id="toast" class="toast-container"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -354,12 +354,18 @@ async def config_save_app(request: Request) -> HTMLResponse:
 
 
 async def config_test_connection(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
     form = dict(await request.form())
     res = test_immich_connection(
         str(form.get("server") or "").strip(),
         str(form.get("api_key") or "").strip(),
         skip_ssl=form.get("skip_ssl") == "on",
     )
+    s["conn"] = {
+        "ok": bool(res.ok),
+        "message": res.message,
+        "server_version": getattr(res, "server_version", "") or "",
+    }
     return partial(
         request,
         "partials/panels.html#conn_result",
@@ -590,13 +596,14 @@ async def advanced_reset(request: Request) -> HTMLResponse:
 # Status / binary / updates / diagnostics
 # ──────────────────────────────────────────────────────────────────────
 async def status_partial(request: Request) -> HTMLResponse:
-    ensure_loaded(request)
+    s = ensure_loaded(request)
     st = BINMGR.check_binary()
     cfg_state = current_config_state(request)
     if cfg_state["server"] and cfg_state["api_key"]:
         srv = ("ok", "Server: Configured")
     else:
         srv = ("err", "Server: Not Set")
+    conn = s.get("conn")
     active = RUNS.active()
     locks = scan_locks()
     return partial(
@@ -604,6 +611,7 @@ async def status_partial(request: Request) -> HTMLResponse:
         "partials/status.html",
         binary=st,
         srv=srv,
+        conn=conn,
         active=active,
         locked=bool(locks) or RUNS.is_busy(),
     )

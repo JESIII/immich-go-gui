@@ -8,6 +8,17 @@
   <p class="page-desc">{{ tabdef.description }}</p>
 </div>
 
+{% if not serverless %}
+<div class="server-banner">
+  <span class="server-banner-label">🎯 Target server</span>
+  <code>{{ cfg.server or 'not configured' }}</code>
+  {% if tab in ('upload-immich', 'archive-immich') and st.get('from-server') %}
+  <span class="server-banner-arrow">⇦ source</span>
+  <code>{{ st.get('from-server') }}</code>
+  {% endif %}
+</div>
+{% endif %}
+
 <form id="tab-form" hx-post="/tabs/{{ tab }}/preview" hx-target="#modal-container" class="tab-form">
   <!-- Hidden configuration snapshot required by command_builder.
        Secrets (api_key / admin_api_key) are intentionally NOT round-tripped
