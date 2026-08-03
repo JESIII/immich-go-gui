@@ -13,66 +13,88 @@ command = ["upload", "from-folder"]
 section = "upload"
 server_required = true
 serverless = false
+title = "Upload Folder"
+description = "Import photos and videos from a local folder into your Immich server."
 
 [tabs.upload-gp]
 command = ["upload", "from-google-photos"]
 section = "upload"
 server_required = true
 serverless = false
+title = "Google Photos Takeout"
+description = "Import your Google Photos Takeout archives into Immich."
 
 [tabs.upload-icloud]
 command = ["upload", "from-icloud"]
 section = "upload"
 server_required = true
 serverless = false
+title = "iCloud Photos"
+description = "Import your iCloud Photos library export into Immich."
 
 [tabs.upload-picasa]
 command = ["upload", "from-picasa"]
 section = "upload"
 server_required = true
 serverless = false
+title = "Picasa / Google+"
+description = "Import legacy Picasa / Google+ album exports into Immich."
 
 [tabs.upload-immich]
 command = ["upload", "from-immich"]
 section = "upload"
 server_required = true
 serverless = false
+title = "From Immich"
+description = "Copy albums and media from another Immich server into this one."
 
 [tabs.archive-folder]
 command = ["archive", "from-folder"]
 section = "archive"
 server_required = false
 serverless = true
+title = "Archive Folder"
+description = "Download media from Immich into a local folder archive (serverless)."
 
 [tabs.archive-gp]
 command = ["archive", "from-google-photos"]
 section = "archive"
 server_required = false
 serverless = true
+title = "Google Photos Archive"
+description = "Download Immich media into a Google Photos Takeout-shaped archive (serverless)."
 
 [tabs.archive-icloud]
 command = ["archive", "from-icloud"]
 section = "archive"
 server_required = false
 serverless = true
+title = "iCloud Archive"
+description = "Download Immich media into an iCloud-shaped archive (serverless)."
 
 [tabs.archive-picasa]
 command = ["archive", "from-picasa"]
 section = "archive"
 server_required = false
 serverless = true
+title = "Picasa Archive"
+description = "Download Immich media into a Picasa / Google+ shaped archive (serverless)."
 
 [tabs.archive-immich]
 command = ["archive", "from-immich"]
 section = "archive"
 server_required = true
 serverless = false
+title = "From Immich (Archive)"
+description = "Pull media and albums from one Immich server into this one."
 
 [tabs.stack]
 command = ["stack"]
 section = "stack"
 server_required = true
 serverless = false
+title = "Stack Duplicates"
+description = "Group and stack duplicate media on the server."
 
 # ────────────────────────────────────────────────────────────────
 # Secret env-var routing

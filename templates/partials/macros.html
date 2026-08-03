@@ -1,0 +1,54 @@
+{% macro render_flag_field(f, val) %}
+<div class="form-group {% if f.kind=='bool' %}form-group-checkbox{% endif %}">
+  {% if f.kind == 'bool' %}
+    <label class="checkbox-label">
+      <input type="checkbox" name="fld_{{ f.key }}" {% if val %}checked{% endif %}>
+      <span class="label-text">{{ f.label or f.key }}</span>
+    </label>
+  {% else %}
+    <label class="form-label" for="fld_{{ f.key }}">{{ f.label or f.key }}</label>
+    {% if f.kind == 'enum' %}
+      <select id="fld_{{ f.key }}" name="fld_{{ f.key }}" class="form-select">
+        {% for opt in f.options %}
+          <option value="{{ opt }}" {% if val == opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    {% elif f.kind in ('int', 'duration_minutes') %}
+      <input type="number" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input"
+             {% if f.min_val is not none %}min="{{ f.min_val }}"{% endif %}
+             {% if f.max_val is not none %}max="{{ f.max_val }}"{% endif %}>
+    {% else %}
+      <input type="text" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input" placeholder="{{ f.placeholder or '' }}">
+    {% endif %}
+  {% endif %}
+  {% if f.help_text %}
+    <div class="form-help">{{ f.help_text }}</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_adv_row(d, stored) %}
+<div class="adv-row">
+  <label class="adv-checkbox">
+    <input type="checkbox" name="adv_{{ d.key }}_en" value="1" {% if stored.enabled %}checked{% endif %}
+           onchange="this.closest('.adv-row').querySelector('.adv-input-wrap').classList.toggle('disabled', !this.checked)">
+    <span class="adv-key">--{{ d.key }}</span>
+  </label>
+  <div class="adv-input-wrap {% if not stored.enabled %}disabled{% endif %}">
+    {% if d.kind == 'bool' %}
+      <select name="adv_{{ d.key }}_val" class="form-select form-select-sm">
+        <option value="true" {% if stored.value %}selected{% endif %}>true</option>
+        <option value="false" {% if not stored.value %}selected{% endif %}>false</option>
+      </select>
+    {% elif d.kind == 'enum' %}
+      <select name="adv_{{ d.key }}_val" class="form-select form-select-sm">
+        {% for opt in d.options %}
+          <option value="{{ opt }}" {% if stored.value==opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="adv_{{ d.key }}_val" value="{{ stored.value or '' }}" class="form-input form-input-sm" placeholder="{{ d.default or '' }}">
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}

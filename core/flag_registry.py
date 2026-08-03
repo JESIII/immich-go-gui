@@ -60,6 +60,8 @@ class TabDef:
     section: str  # "upload" | "archive" | "stack"
     server_required: bool
     serverless: bool
+    title: str = ""
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,8 @@ def _load_registry(path: Path = _FLAGS_TOML) -> Registry:
             section=meta["section"],
             server_required=meta.get("server_required", False),
             serverless=meta.get("serverless", False),
+            title=meta.get("title", ""),
+            description=meta.get("description", ""),
         )
 
     flags: dict[str, tuple[FlagDef, ...]] = {}

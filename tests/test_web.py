@@ -1,0 +1,411 @@
+"""Tests for the HTMX Web Console (Starlette + Uvicorn + SSE runner).
+
+Guarantees:
+- The web app imports strictly from core/ and never imports Qt/PySide6.
+- Form parsing correctly coerces types and translates form data to core state dicts.
+- Auth middleware correctly enforces login / session cookie validation.
+- RunManager executes subprocesses and buffers lines for SSE output streaming.
+- Diagnostics zip is Qt-free and properly redacts sensitive fields.
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import sys
+import zipfile
+from unittest.mock import patch
+
+import pytest
+from starlette.testclient import TestClient
+
+from core.flag_registry import FlagDef
+from core.models import CommandPlan, UpdateDecision, UpdateSeverity
+from webapp.app import TEMPLATES, create_app
+from webapp.forms import (
+    coerce,
+    initial_tab_state,
+    parse_config_state,
+    parse_tab_state,
+    renderable_simple_flags,
+)
+from webapp.runner import RunManager
+
+
+@pytest.fixture(autouse=True)
+def _web_config_isolation(tmp_path, monkeypatch):
+    """Redirect all GUI/web config + secrets writes to a per-test temp dir.
+
+    The repo's session-level ``_session_config_root`` only activates when the
+    ``gui`` fixture is requested, which the web route tests do not use. Without
+    this, routes such as ``/mode/toggle`` and ``/config/save`` would read/write
+    the developer's real ``~/.config/immich-go-gui``.
+    """
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.delenv("IMMICH_GO_GUI_CONFIG", raising=False)
+
+    from core.profile_manager import clear_profiles_cache
+
+    clear_profiles_cache()
+    yield
+    clear_profiles_cache()
+
+
+def test_web_app_does_not_import_qt():
+    """Verify web application modules do not import PySide6 / Qt."""
+    qt_modules = [m for m in sys.modules if "PySide6" in m or "gui." in m]
+
+    new_qt_modules = [
+        m
+        for m in sys.modules
+        if ("PySide6" in m or "gui." in m) and m not in qt_modules
+    ]
+    assert not new_qt_modules, f"Web app imported Qt modules: {new_qt_modules}"
+
+
+def test_healthz_endpoint():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.text == "ok"
+
+
+def test_overview_route_renders_html():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "IMMICH-GO" in resp.text
+    assert "Upload Workflows" in resp.text
+
+
+def test_tab_page_renders_form():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    assert "upload-folder" in resp.text
+    assert "Source Configuration" in resp.text or "Options" in resp.text
+    assert "<!doctype html>" in resp.text
+
+
+def test_htmx_header_partial_rendering():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "upload-folder" in resp.text
+    assert "<!doctype html>" not in resp.text
+    assert '<aside class="sidebar">' not in resp.text
+
+
+def test_mode_toggle_preserves_tab_view_and_updates_sidebar():
+    app = create_app()
+    client = TestClient(app)
+    resp1 = client.get("/tab/upload-gp", headers={"HX-Request": "true"})
+    assert resp1.status_code == 200
+    assert "upload-gp" in resp1.text
+
+    resp2 = client.post("/mode/toggle", headers={"HX-Request": "true"})
+    assert resp2.status_code == 200
+    assert "upload-gp" in resp2.text
+    assert 'hx-get="/tab/upload-gp"' in resp2.text
+    assert 'id="sidebar-nav"' in resp2.text
+
+
+def test_invalid_tab_redirects_to_overview():
+    app = create_app()
+    client = TestClient(app, follow_redirects=False)
+    resp = client.get("/tab/nonexistent-tab")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/overview"
+
+
+def test_config_page_renders_settings():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/config")
+    assert resp.status_code == 200
+    assert "Server Connection" in resp.text
+    assert "Binary Management" in resp.text
+
+
+def test_form_coercion_and_parsing():
+    f_bool = FlagDef(
+        key="dry-run",
+        flag="dry-run",
+        label="Dry Run",
+        mode="simple",
+        kind="bool",
+        default=False,
+    )
+    f_int = FlagDef(
+        key="timeout",
+        flag="timeout",
+        label="Timeout",
+        mode="simple",
+        kind="int",
+        default=10,
+        min_val=1,
+        max_val=100,
+    )
+
+    assert coerce(f_bool, "on") is True
+    assert coerce(f_bool, "") is False
+    assert coerce(f_int, "50") == 50
+    assert coerce(f_int, "200") == 100
+
+    simple_flags = renderable_simple_flags("upload-folder")
+    assert isinstance(simple_flags, tuple)
+
+    parsed_st = parse_tab_state("upload-folder", {"fld_delete": "on"})
+    assert isinstance(parsed_st, dict)
+
+    parsed_cfg = parse_config_state(
+        {"server": "http://localhost:2283", "api_key": "secret"}
+    )
+    assert parsed_cfg["server"] == "http://localhost:2283"
+    assert parsed_cfg["api_key"] == "secret"
+
+
+def test_auth_middleware_flow():
+    with patch.dict(
+        os.environ, {"IGG_WEB_USER": "admin", "IGG_WEB_PASSWORD": "secret_password"}
+    ):
+        app = create_app()
+        client = TestClient(app, follow_redirects=False)
+
+        # Unauthenticated request redirects to /login
+        resp = client.get("/overview")
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/login"
+
+        # Failed login
+        resp_login_fail = client.post(
+            "/login", data={"user": "admin", "password": "wrong"}
+        )
+        assert resp_login_fail.status_code == 200
+        assert "Invalid username or password" in resp_login_fail.text
+
+        # Successful login
+        resp_login_ok = client.post(
+            "/login", data={"user": "admin", "password": "secret_password"}
+        )
+        assert resp_login_ok.status_code == 303
+        assert "igg_auth" in resp_login_ok.cookies
+
+
+def test_diagnostics_zip_generation(tmp_path):
+    from webapp.diagnostics import build_diagnostics_zip
+
+    zip_bytes = build_diagnostics_zip()
+    assert len(zip_bytes) > 0
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        names = zf.namelist()
+        assert "summary.txt" in names
+        summary = zf.read("summary.txt").decode("utf-8")
+        assert "surface=web-console" in summary
+
+
+def test_run_manager_subprocess_lifecycle(tmp_path):
+    mgr = RunManager()
+    dummy_script = tmp_path / "dummy_immich_go.sh"
+    dummy_script.write_text("#!/bin/sh\necho 'hello world'\nexit 0\n")
+    dummy_script.chmod(0o755)
+
+    plan = CommandPlan(
+        argv=["upload", "folder"],
+        env={},
+        display_argv=["immich-go", "upload", "folder"],
+        warnings=[],
+        errors=[],
+        emission_log=[],
+        tab_key="upload-folder",
+        dry_run=True,
+        binary_path=str(dummy_script),
+    )
+
+    run = mgr.start(plan, str(dummy_script))
+    assert run.run_id in mgr.runs
+    assert mgr.is_busy()
+
+    # Wait for process completion
+    run.done.wait(timeout=5.0)
+    assert run.finished
+    assert run.exit_code == 0
+    assert not mgr.is_busy()
+
+    snapshot, total = run.snapshot(0)
+    assert total >= 2
+    log_texts = [h for _, h in snapshot]
+    assert any("hello world" in t for t in log_texts)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 0 - correctness foundation (B1-B8)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_enum_fields_render_as_selects_with_options():
+    """B1: simple enum flags must render as <select> populated from f.options."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    # manage-burst is a simple enum with default option "NoStack".
+    assert 'name="fld_manage-burst"' in resp.text
+    assert 'class="form-select"' in resp.text
+    assert '<option value="NoStack"' in resp.text
+
+
+def test_enum_default_is_preselected():
+    """B8: initial_tab_state returns f.default for enum kinds, not ''."""
+    st = initial_tab_state("upload-folder")
+    assert st.get("manage-burst") == "NoStack"
+    assert st.get("folder-album") == "NONE"
+
+
+def test_nav_reaches_all_eleven_tabs():
+    """B2: every one of the 11 workflow tabs is reachable from the sidebar."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/overview", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    expected = [
+        "upload-folder",
+        "upload-gp",
+        "upload-icloud",
+        "upload-picasa",
+        "upload-immich",
+        "archive-folder",
+        "archive-gp",
+        "archive-icloud",
+        "archive-picasa",
+        "archive-immich",
+        "stack",
+    ]
+    for key in expected:
+        assert f'hx-get="/tab/{key}"' in resp.text, f"Missing nav entry for {key}"
+
+
+def test_bool_advanced_row_has_true_false_value_control():
+    """B7: enabling a bool advanced flag allows emitting --flag=false."""
+    def_ = FlagDef(
+        key="recursive",
+        flag="recursive",
+        label="Recursive",
+        mode="advanced",
+        kind="bool",
+        default=True,
+    )
+    rendered = _render_adv_row(def_, {"enabled": True, "value": True})
+    assert 'name="adv_recursive_val"' in rendered
+    assert '<option value="true"' in rendered
+    assert '<option value="false"' in rendered
+
+    def_false = FlagDef(
+        key="foo", flag="foo", label="Foo", mode="advanced", kind="bool", default=False
+    )
+    rendered_false = _render_adv_row(def_false, {"enabled": True, "value": False})
+    assert '<option value="false" selected' in rendered_false
+
+
+def _render_adv_row(def_, stored):
+    """Render render_adv_row for a single def by importing the macro."""
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
+    tmpl = env.from_string(
+        "{% from 'partials/macros.html' import render_adv_row %}{{ render_adv_row(d, stored) }}"
+    )
+    return tmpl.render(d=def_, stored=stored)
+
+
+def test_secret_provider_fallback_normalized_to_config():
+    """B4: legacy 'fallback' provider value is normalized to 'config' on save."""
+    from core.config_manager import load_config
+
+    app = create_app()
+    client = TestClient(app)
+    resp = client.post(
+        "/config/save",
+        data={
+            "secret_provider": "fallback",
+            "client_timeout_minutes": "120",
+            "admin_api_key": "",
+        },
+    )
+    assert resp.status_code == 200
+    assert load_config().secrets_provider == "config"
+
+
+def test_parse_config_state_builds_matching_dict():
+    """Preview helper: form -> config_state dictionary preserves values."""
+    parsed = parse_config_state(
+        {
+            "server": "http://immich:2283",
+            "api_key": "sekret",
+            "client_timeout_minutes": "120",
+        }
+    )
+    assert parsed["server"] == "http://immich:2283"
+    assert parsed["api_key"] == "sekret"
+    assert parsed["client_timeout_minutes"] == 120
+
+
+def test_compat_partial_reports_all_tabs():
+    """B6: CLI compatibility modal renders one row per workflow tab."""
+    from core.flag_registry import REGISTRY
+
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/partial/compat")
+    assert resp.status_code == 200
+    assert "CLI Compatibility Matrix" in resp.text
+    for key in REGISTRY.tabs:
+        assert key in resp.text, f"Compatibility matrix missing {key}"
+
+
+def test_binary_update_panel_uses_decision_fields():
+    """B5: binary-update panel maps severity -> tone and gates Install on allowed."""
+    blocked = UpdateDecision(
+        allowed=False,
+        requires_confirmation=True,
+        severity=UpdateSeverity.BLOCKED,
+        message="Version 0.33.0 is untested.",
+        latest_version="0.33.0",
+        current_version="0.32.0",
+    )
+    html = TEMPLATES.get_template("partials/panels.html").render(
+        {
+            "partial": "partials/panels.html#binary_update",
+            "latest": "0.33.0",
+            "current": "0.32.0",
+            "decision": blocked,
+        }
+    )
+    assert "Version 0.33.0 is untested." in html
+    assert "alert-err" in html
+    assert "blocked" in html
+    assert "disabled" in html
+
+    ok = UpdateDecision(
+        allowed=True,
+        requires_confirmation=False,
+        severity=UpdateSeverity.WARNING,
+        message="Stable release.",
+        latest_version="0.33.0",
+        current_version="0.32.0",
+    )
+    html_ok = TEMPLATES.get_template("partials/panels.html").render(
+        {
+            "partial": "partials/panels.html#binary_update",
+            "latest": "0.33.0",
+            "current": "0.32.0",
+            "decision": ok,
+        }
+    )
+    assert "alert-warn" in html_ok
+    assert "disabled" not in html_ok

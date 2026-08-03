@@ -1,0 +1,124 @@
+<div class="config-layout">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Server Connection</h2>
+      <span class="card-subtitle">Immich instance URL and credentials</span>
+    </div>
+    <form hx-post="/config/save-server" hx-target="#toast" class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="cfg_server">Server URL</label>
+        <input type="text" id="cfg_server" name="server" value="{{ cfg.server_url }}" class="form-input" placeholder="https://immich.example.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="cfg_api_key">API Key</label>
+        <input type="password" id="cfg_api_key" name="api_key" value="{{ secrets.api_key }}" class="form-input" placeholder="Immich API Key">
+      </div>
+
+      <div class="form-actions-inline">
+        <button type="button" class="btn btn-secondary" hx-post="/config/test-connection" hx-target="#conn-result-box" hx-include="closest form">
+          📡 Test Connection
+        </button>
+        <button type="submit" class="btn btn-primary">Save Server Details</button>
+      </div>
+
+      <div id="conn-result-box" class="mt-3"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Application Settings</h2>
+    </div>
+    <form hx-post="/config/save" hx-target="#toast" class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="cfg_admin_key">Admin API Key (Optional)</label>
+        <input type="password" id="cfg_admin_key" name="admin_api_key" value="{{ secrets.admin_api_key }}" class="form-input" placeholder="Required for administrative operations">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="cfg_timeout">Client Timeout (minutes)</label>
+        <input type="number" id="cfg_timeout" name="client_timeout_minutes" value="{{ cfg.client_timeout_minutes }}" min="5" max="240" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="secret_provider">Secrets Provider</label>
+        <select id="secret_provider" name="secret_provider" class="form-select">
+          <option value="keyring" {% if cfg.secrets_provider=='keyring' %}selected{% endif %}>OS Keyring (Default)</option>
+          <option value="config" {% if cfg.secrets_provider in ('config','fallback') %}selected{% endif %}>Local secrets file (0600 secrets.toml)</option>
+        </select>
+        <div class="form-help">Secrets file path: <code>{{ secrets_path }}</code></div>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="skip_ssl" {% if cfg.skip_ssl %}checked{% endif %}>
+          <span class="label-text">Disable SSL Verification (Insecure)</span>
+        </label>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="allow_untested_updates" {% if cfg.allow_untested_updates %}checked{% endif %}>
+          <span class="label-text">Allow Untested CLI Updates</span>
+        </label>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="advanced_mode" {% if cfg.advanced_mode %}checked{% endif %}>
+          <span class="label-text">Enable Advanced CLI Flag Panels</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save Settings</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header card-header-flex">
+      <h2 class="card-title">Binary Management</h2>
+      <button class="btn btn-ghost btn-sm" hx-post="/binary/check" hx-target="#binary-update-panel">Check Updates</button>
+    </div>
+    <div class="card-body">
+      <div class="binary-status-box">
+        <div><strong>State:</strong> <span class="badge {% if binary_status.state=='ok' %}badge-ok{% else %}badge-err{% endif %}">{{ binary_status.state }}</span></div>
+        <div><strong>Version:</strong> <code>{{ binary_status.version_text }}</code></div>
+        <div><strong>Location:</strong> <code>{{ binary_path or 'not found' }}</code></div>
+      </div>
+
+      <div id="binary-update-panel" class="mt-3"></div>
+
+      <form hx-post="/binary/manual-path" hx-target="#toast" class="mt-4">
+        <div class="form-group">
+          <label class="form-label" for="manual_path">Manual Binary Path Override</label>
+          <input type="text" id="manual_path" name="manual_path" value="{{ manual_path }}" class="form-input" placeholder="/usr/local/bin/immich-go">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Set Manual Path</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Diagnostics & Diagnostics Tools</h2>
+    </div>
+    <div class="card-body">
+      <p class="text-sm">Download a redacted diagnostics archive containing configuration, log tails, binary metadata, and system summary.</p>
+      <div class="form-actions-inline mt-3">
+        <a href="/diagnostics.zip" class="btn btn-secondary btn-sm" download>
+          📦 Download Diagnostics ZIP
+        </a>
+        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
+          🔄 Check GUI Updates
+        </button>
+        <button class="btn btn-ghost btn-sm" hx-get="/partial/compat" hx-target="#modal-container">
+          📋 CLI Compatibility
+        </button>
+        <button class="btn btn-ghost btn-sm btn-danger-ghost" hx-post="/run-state/reset" hx-target="#toast">
+          🧹 Reset Run Locks
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

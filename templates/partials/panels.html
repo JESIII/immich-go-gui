@@ -1,0 +1,160 @@
+{% if partial == 'partials/panels.html#toast' or toast %}
+<div class="toast toast-{{ tone|default('ok', true) }}" hx-swap-oob="beforeend:#toast">
+  <span>{{ toast }}</span>
+  <button onclick="this.parentElement.remove()" class="toast-close">✕</button>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#errors' or errors %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card modal-card-err" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Validation Errors</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-err">
+        <ul>
+          {% for err in errors %}
+            <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#conn_result' or conn %}
+<div class="alert {% if conn.ok %}alert-ok{% else %}alert-err{% endif %}">
+  <div><strong>Status:</strong> {{ conn.message }}</div>
+  {% if conn.server_version %}
+  <div><small>Immich Server Version: <code>{{ conn.server_version }}</code></small></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#binary_update' or latest %}
+<div class="card card-inner">
+  {% if latest %}
+    {% set tone = 'alert-ok' %}
+    {% if decision and decision.severity.value == 'warning' %}{% set tone = 'alert-warn' %}{% endif %}
+    {% if decision and decision.severity.value == 'blocked' %}{% set tone = 'alert-err' %}{% endif %}
+    <div class="alert {{ tone }}">
+      <div><strong>Latest Release:</strong> <code>v{{ latest }}</code> (Installed: <code>{{ current }}</code>)</div>
+      {% if decision and decision.message %}
+      <div><small>{{ decision.message }}</small></div>
+      {% endif %}
+
+      <form hx-post="/binary/download" hx-target="#binary-update-panel" class="mt-2">
+        <input type="hidden" name="version" value="{{ latest }}">
+        {% if decision is none or decision.allowed %}
+        <button type="submit" class="btn btn-primary btn-sm">
+          ⬇ Install v{{ latest }}
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-primary btn-sm" disabled title="Blocked by update policy">
+          ⬇ Install v{{ latest }} (blocked)
+        </button>
+        {% endif %}
+      </form>
+    </div>
+  {% else %}
+    <div class="alert alert-ok">
+      You are running the latest tested version of immich-go (<code>{{ current }}</code>).
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#dl_live' %}
+<div class="dl-live-box card card-inner" hx-ext="sse" sse-connect="/binary/download/events">
+  <div class="dl-header">Downloading immich-go v{{ version }}…</div>
+  <div class="progress-bar-wrap">
+    <div id="dl-progress-bar" class="progress-bar" style="width: 0%"></div>
+  </div>
+  <div class="dl-footer mt-2">
+    <span id="dl-status-text">Fetching release asset…</span>
+    <button class="btn btn-ghost btn-xs" hx-post="/binary/download/cancel" hx-target="#toast">Cancel</button>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#compat' or report %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card modal-card-lg" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">CLI Compatibility Matrix</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title">Tested CLI Version: <code>{{ tested }}</code></div>
+      <div class="table-wrap">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Workflow Tab</th>
+              <th>Schema Status</th>
+              <th>Discrepancies</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, res in report.items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>
+                <span class="chip {% if res.ok %}ok{% else %}err{% endif %}">
+                  {% if res.ok %}pass{% else %}mismatch{% endif %}
+                </span>
+              </td>
+              <td>
+                {% if res.missing_flags %}
+                <small class="text-err">Missing: {{ res.missing_flags|join(', ') }}</small>
+                {% else %}
+                <small class="text-dim">Fully compatible</small>
+                {% endif %}
+                {% if res.unknown_flags %}
+                <br><small class="text-warn">Unknown: {{ res.unknown_flags|join(', ') }}</small>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#profile_prompt' %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Unsaved Profile Changes</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>You have unsaved changes in the active profile. Would you like to save them before switching to '{{ name }}'?</p>
+    </div>
+    <div class="modal-footer">
+      <form hx-post="/profiles/switch">
+        <input type="hidden" name="name" value="{{ name }}">
+        <input type="hidden" name="action" value="discard">
+        <button type="submit" class="btn btn-ghost">Discard & Switch</button>
+      </form>
+      <form hx-post="/profiles/switch">
+        <input type="hidden" name="name" value="{{ name }}">
+        <input type="hidden" name="action" value="save">
+        <button type="submit" class="btn btn-primary">Save & Switch</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
