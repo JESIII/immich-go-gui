@@ -723,6 +723,19 @@ kbd {
   display: none !important;
 }
 
+/* ─── Smooth htmx swaps ───
+   htmx adds .htmx-added to new elements during insert and .htmx-settling
+   during the settle phase. Disabling transitions/animations here means
+   swapped-in elements appear at their final state instantly — no
+   flash/flicker on nav, sub-tabs, profile chip, or mode toggle. Hover and
+   click transitions on *existing* elements are unaffected (those fire
+   after settle). */
+.htmx-added,
+.htmx-settling {
+  transition: none !important;
+  animation: none !important;
+}
+
 
 .tab-form {
   display: flex;

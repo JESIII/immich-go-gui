@@ -1,4 +1,4 @@
-<nav class="nav" id="sidebar-nav" {% if oob %}hx-swap-oob="outerHTML:#sidebar-nav"{% endif %}>
+<nav class="nav" id="sidebar-nav" {% if oob %}hx-swap-oob="innerHTML:#sidebar-nav"{% endif %}>
   <div class="nav-group">
     <div class="nav-title">Navigation</div>
     <a class="nav-item {% if view[0]=='overview' %}active{% endif %}" hx-get="/overview" hx-target="#content" hx-push-url="true">

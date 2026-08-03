@@ -1006,7 +1006,7 @@ def test_profile_chip_oob_swapped_on_htmx():
     resp = client.get("/tab/upload-folder", headers={"HX-Request": "true"})
     assert resp.status_code == 200
     assert 'id="profile-chip"' in resp.text
-    assert 'hx-swap-oob="outerHTML:#profile-chip"' in resp.text
+    assert 'hx-swap-oob="innerHTML:#profile-chip"' in resp.text
 
 
 def test_mode_toggle_button_shows_current_state_and_action():

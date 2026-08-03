@@ -201,12 +201,10 @@ def page(request: Request, partial_name: str, **ctx: Any) -> HTMLResponse:
         action_label = "→ Simple" if adv else "→ Advanced"
         oob_crumb = f'<div id="crumb" hx-swap-oob="innerHTML:#crumb">{crumb}</div>'
         oob_mode = (
-            f'<button id="mode-toggle-btn" class="btn btn-sm btn-ghost" '
-            f'hx-post="/mode/toggle" hx-target="#content" hx-swap-oob="outerHTML:#mode-toggle-btn" '
-            f'title="Toggle Advanced Mode">'
+            f'<div hx-swap-oob="innerHTML:#mode-toggle-btn">'
             f'<span class="mode-state">{state_label}</span>'
             f'<span class="mode-action">{action_label}</span>'
-            f"</button>"
+            f"</div>"
         )
         oob_nav = TEMPLATES.get_template("partials/nav.html").render(ctx_dict, oob=True)
         oob_profile = TEMPLATES.get_template("partials/profile_chip.html").render(
