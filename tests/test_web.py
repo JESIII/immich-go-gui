@@ -847,3 +847,62 @@ def test_base_page_exposes_footer_hint_and_shortcuts_overlay():
     assert resp.status_code == 200
     assert "shortcuts-overlay" in resp.text
     assert "Ctrl" in resp.text or "kbd" in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 7 - hardening (secret masking on live preview, SSE headers)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_live_preview_masks_source_api_key():
+    """S1/W-19: the live ribbon never leaks source API keys in its response."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "main-key"},
+    )
+    client.post("/mode/toggle", headers={"HX-Request": "true"})
+    resp = client.post(
+        "/tabs/upload-immich/live-preview",
+        data={"fld_from-api-key": "source-secret-xyz", "fld_server": "http://src:2283"},
+    )
+    assert resp.status_code == 200
+    assert "source-secret-xyz" not in resp.text
+    assert "main-key" not in resp.text
+    assert "ribbon-argv" in resp.text
+
+
+def test_run_stream_has_no_buffering_header():
+    """W-31: SSE responses carry X-Accel-Buffering: no for proxy compatibility."""
+    from types import SimpleNamespace as _NS
+
+    from starlette.testclient import TestClient as _TC
+
+    app = create_app()
+
+    fake_run = _NS(
+        run_id="sse-test",
+        snapshot=lambda cursor: ([], 0),
+        finished=True,
+        total=0,
+        exit_code=0,
+    )
+    with patch.dict("webapp.app.RUNS.runs", {"sse-test": fake_run}):
+        client = _TC(app)
+        resp = client.get("/runs/sse-test/stream")
+        assert resp.status_code == 200
+        assert resp.headers.get("x-accel-buffering") == "no"
+        assert resp.headers.get("content-type", "").startswith("text/event-stream")
+        # Drain the generator to avoid unclosed responses.
+        for _ in resp.iter_text():
+            break
+
+
+def test_theme_preference_attribute_on_shell():
+    """W-13: the shell carries the theme preference for JS resolution."""
+    app = create_app()
+    client = TestClient(app)
+    client.post("/theme", data={"theme": "system"})
+    resp = client.get("/")
+    assert 'data-theme-preference="system"' in resp.text
