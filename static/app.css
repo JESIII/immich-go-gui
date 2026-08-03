@@ -716,6 +716,13 @@ kbd {
   color: var(--accent);
 }
 
+/* Respect the hidden attribute: these elements set display:flex in their
+   usual styles, which would otherwise override the UA's [hidden] rule and
+   leave the overlays permanently visible. */
+[hidden] {
+  display: none !important;
+}
+
 
 .tab-form {
   display: flex;

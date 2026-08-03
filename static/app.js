@@ -228,6 +228,15 @@ function applyPreset(flags) {
   window._iggDirty = true;
 }
 
+document.addEventListener('click', function (evt) {
+  var chip = evt.target && evt.target.closest ? evt.target.closest('.preset-chip[data-preset]') : null;
+  if (chip && chip.dataset.preset) {
+    try {
+      applyPreset(JSON.parse(chip.dataset.preset));
+    } catch (e) {}
+  }
+});
+
 document.addEventListener('input', function (evt) {
   if (evt.target && evt.target.id === 'adv-filter') updateAdvFilter();
 });

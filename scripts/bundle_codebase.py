@@ -41,9 +41,13 @@ _SKIP_DIR_NAMES = {
 # Lean profile: root files included in code review bundle.
 _ROOT_FILES_LEAN = (
     "app.py",
+    "web.py",
     "theme.py",
     "pyproject.toml",
     "README.md",
+    "WEB_UI.md",
+    "Dockerfile",
+    "docker-compose.yml",
     ".gitignore",
     ".pre-commit-config.yaml",
 )
@@ -74,12 +78,16 @@ _TEXT_EXTENSIONS = {
     ".ps1",
     ".desktop",
     ".service",
+    ".html",
+    ".css",
+    ".js",
 }
 
 # Generated / personal artifacts never bundled.
 _SKIP_FILE_NAMES = {
     "immichgo_modules_bundle.txt",
     "immichgo_website_bundle.txt",
+    "immichgo_docker_bundle.txt",
     "GitReadme.md",
     "TODO.md",
     "uv.lock",
@@ -199,6 +207,9 @@ def collect_project_files(repo_root: Path, full: bool = False) -> list[Path]:
 
     glob_patterns = (
         "core/**/*",
+        "webapp/**/*",
+        "templates/**/*",
+        "static/**/*",
         "gui/**/*",
         "tests/**/*",
         "scripts/**/*",
@@ -230,6 +241,10 @@ def collect_project_files(repo_root: Path, full: bool = False) -> list[Path]:
             rank = 0
         elif rel.startswith("core/"):
             rank = 10
+        elif rel.startswith("webapp/"):
+            rank = 12
+        elif rel.startswith("templates/") or rel.startswith("static/"):
+            rank = 14
         elif rel.startswith("gui/"):
             rank = 15
         elif rel.startswith("assets/"):

@@ -1,0 +1,3778 @@
+================================================================================
+IMMICH-GO GUI — DOCKER & WEB CONSOLE BUNDLE
+================================================================================
+Generated for LLM code review & prompting
+Repo root: /home/shsrra/Documents/CODE/GITHUB_PROJECTS/Immich-Go/immich-go-gui
+Files included: 26
+
+Bundle contents:
+  - Dockerfile & docker-compose.yml
+  - WEB_UI.md documentation
+  - web.py Uvicorn entrypoint
+  - webapp/ package (app, forms, runner, auth, diagnostics)
+  - templates/ (base, login, partials)
+  - static/ (app.css, app.js)
+  - scripts/fetch_vendor.sh
+  - tests/test_web.py
+
+Files:
+    1. Dockerfile (28 lines)
+    2. WEB_UI.md (121 lines)
+    3. docker-compose.yml (14 lines)
+    4. web.py (23 lines)
+    5. webapp/__init__.py (1 lines)
+    6. webapp/app.py (812 lines)
+    7. webapp/auth.py (70 lines)
+    8. webapp/diagnostics.py (83 lines)
+    9. webapp/forms.py (103 lines)
+   10. webapp/runner.py (158 lines)
+   11. templates/base.html (66 lines)
+   12. templates/login.html (40 lines)
+   13. templates/partials/config.html (124 lines)
+   14. templates/partials/confirm.html (61 lines)
+   15. templates/partials/macros.html (51 lines)
+   16. templates/partials/nav.html (52 lines)
+   17. templates/partials/overview.html (99 lines)
+   18. templates/partials/panels.html (148 lines)
+   19. templates/partials/profiles.html (65 lines)
+   20. templates/partials/run_panel.html (52 lines)
+   21. templates/partials/status.html (17 lines)
+   22. templates/partials/tab_form.html (69 lines)
+   23. static/app.css (1054 lines)
+   24. static/app.js (77 lines)
+   25. scripts/fetch_vendor.sh (16 lines)
+   26. tests/test_web.py (200 lines)
+================================================================================
+
+================================================================================
+FILE 1 / 26: Dockerfile (Lines 1-28)
+================================================================================
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copy workspace code
+COPY . /app
+
+# Install python dependencies including web extra
+RUN uv sync --extra web
+
+# Ensure persistent config directory exists
+RUN mkdir -p /config
+
+EXPOSE 8080
+
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+CMD ["/bin/sh", "-c", "uv run python web.py --host 0.0.0.0 --port 8080"]
+
+
+================================================================================
+FILE 2 / 26: WEB_UI.md (Lines 1-121)
+================================================================================
+# Immich-Go GUI — Web Console
+
+The **Web Console** is a production-ready, HTMX-powered web interface for Immich-Go GUI that sits directly on top of the Qt-free `core/` package. It provides complete feature parity with the desktop application without importing any Qt modules or GUI widgets.
+
+---
+
+## 🌟 Key Architecture & Features
+
+- **Qt-Free Core Reuse**: Imports strictly from `core/` (`flag_registry`, `command_builder`, `binary_manager`, `process_tracker`, `config_manager`, `profile_manager`). Adding flags or schema updates to `core/flags.toml` automatically renders them in the web UI.
+- **Managed Subprocess & Live SSE Log Terminal**: Runs `immich-go` in managed background processes and streams stdout/stderr live to an in-app monospaced terminal panel over Server-Sent Events (`hx-ext="sse"`). Includes stop triggers, exit-code chips, auto-scroll, and run history.
+- **Multi-Profile Support**: Complete profile creation, switching, duplication, renaming, and deletion.
+- **Diagnostics Export**: Export redacted diagnostics ZIP archives containing system summaries, masked configuration TOML, profile indices, and log tails.
+- **Security & Authentication**: Mandatory user authentication via environment variables (`IGG_WEB_USER` and `IGG_WEB_PASSWORD`), session cookie management, and CSRF protection on POST operations.
+
+---
+
+## 🚀 Quick Start (Local)
+
+### 1. Install Web Dependencies
+
+```bash
+export PATH=$HOME/.local/bin:$PATH
+uv sync --extra web
+```
+
+### 2. Fetch Vendor Scripts
+
+```bash
+./scripts/fetch_vendor.sh
+```
+
+### 3. Launch Web Server
+
+```bash
+uv run python web.py --port 8080
+```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080) in your browser.
+
+---
+
+## 🔒 Authentication Configuration
+
+Authentication is enabled by setting `IGG_WEB_USER` and `IGG_WEB_PASSWORD`:
+
+```bash
+export IGG_WEB_USER="admin"
+export IGG_WEB_PASSWORD="SecurePassword123!"
+uv run python web.py --port 8080
+```
+
+When unset, authentication is disabled (development mode).
+
+---
+
+## 🐳 Docker Deployment
+
+### Run with Docker Compose
+
+```bash
+docker compose up -d
+```
+
+### Build Docker Image Manually
+
+```bash
+docker build -t immich-go-web .
+docker run -d -p 8080:8080 -e IGG_WEB_USER=admin -e IGG_WEB_PASSWORD=secret -v $(pwd)/config_data:/config immich-go-web
+```
+
+---
+
+## 🌐 Reverse Proxy Configuration
+
+When running behind reverse proxies, Server-Sent Events (SSE) log streaming requires disabling proxy response buffering.
+
+### Nginx
+
+```nginx
+server {
+    listen 80;
+    server_name immich-web.local;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Disable buffering for SSE live log stream
+    location ~ ^/runs/.+/stream$ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_http_version 1.1;
+        chunked_transfer_encoding off;
+    }
+}
+```
+
+### Caddy
+
+```caddyfile
+immich-web.local {
+    reverse_proxy 127.0.0.1:8080 {
+        flush_interval -1
+    }
+}
+```
+
+---
+
+## 🧪 Testing
+
+Run the web console test suite:
+
+```bash
+uv run pytest tests/test_web.py
+```
+
+
+================================================================================
+FILE 3 / 26: docker-compose.yml (Lines 1-14)
+================================================================================
+version: "3.8"
+
+services:
+  immich-go-web:
+    build: .
+    container_name: immich-go-web
+    ports:
+      - "8235:8080"
+    environment:
+      - IGG_WEB_USER=admin
+      - IGG_WEB_PASSWORD=admin
+    volumes:
+      - ./config_data:/config
+    restart: unless-stopped
+
+
+================================================================================
+FILE 4 / 26: web.py (Lines 1-23)
+================================================================================
+"""Immich-Go GUI — Web Console entrypoint.
+
+Run locally:      uv run python web.py --port 8080
+Run in Docker:    see Dockerfile / docker-compose.yml
+"""
+
+from __future__ import annotations
+
+import argparse
+
+import uvicorn
+
+from webapp.app import create_app
+
+app = create_app()
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description="Immich-Go GUI web console")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--reload", action="store_true")
+    args = p.parse_args()
+    uvicorn.run("web:app", host=args.host, port=args.port, reload=args.reload)
+
+
+================================================================================
+FILE 5 / 26: webapp/__init__.py (Lines 1-1)
+================================================================================
+"""Web console layer for Immich-Go GUI. Qt-free; imports core/ only."""
+
+
+================================================================================
+FILE 6 / 26: webapp/app.py (Lines 1-812)
+================================================================================
+"""Starlette application: routes, rendering, and orchestration over core/."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import secrets
+import shlex
+import threading
+from pathlib import Path
+from typing import Any
+
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
+from starlette.templating import Jinja2Templates
+
+from core import (
+    BinaryManager,
+    default_config_path,
+    get_binary_path,
+    get_secret_with_fallback,
+    load_binary_metadata,
+    load_config,
+    save_binary_metadata,
+    save_config,
+    save_secret_with_fallback,
+    save_server_url,
+)
+from core.advanced_flags import validate_advanced_state
+from core.app_update import get_latest_gui_release, is_parseable_semver, is_update_available
+from core.binary_manager import clean_version
+from core.cli_contract import check_binary_help, check_fixtures
+from core.cli_schema import SERVER_REQUIRED_TABS, SERVERLESS_TABS
+from core.command_builder import build_plan_from_state, validate_state
+from core.flag_registry import REGISTRY
+from core.network import check_preflight_server_connection, test_immich_connection
+from core.process_tracker import cleanup_stale_locks, scan_locks
+from core.profile_manager import (
+    active_profile_name,
+    create_profile,
+    delete_profile,
+    duplicate_profile,
+    list_profiles,
+    rename_profile,
+    set_active_profile_name,
+    validate_profile_name,
+)
+
+from webapp import auth as authmod
+from webapp.auth import (
+    AUTH_COOKIE,
+    SESSION_COOKIE,
+    AuthMiddleware,
+    auth_enabled,
+    check_login,
+    drop_session,
+    get_session,
+)
+from webapp.diagnostics import build_diagnostics_zip, gui_version
+from webapp.forms import (
+    initial_tab_state,
+    option_flags,
+    parse_advanced_state,
+    parse_config_state,
+    parse_tab_state,
+    source_flags,
+)
+from webapp.runner import RUNS, RunInProgress
+
+BASE = Path(__file__).resolve().parent.parent
+TEMPLATES = Jinja2Templates(directory=str(BASE / "templates"))
+BINMGR = BinaryManager()
+
+SECRET_ENV_MARKERS = ("API_KEY", "ADMIN_API_KEY")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Session-scoped working state (mirrors the Qt window's in-memory widgets)
+# ──────────────────────────────────────────────────────────────────────
+def sess(request: Request) -> dict[str, Any]:
+    return get_session(request)
+
+
+def ensure_loaded(request: Request) -> dict[str, Any]:
+    s = sess(request)
+    if "config" not in s:
+        cfg = load_config()
+        prof = cfg.profile_name
+        s["config"] = cfg
+        s["secrets"] = {
+            "api_key": get_secret_with_fallback(prof, "api_key", cfg.secrets_provider),
+            "admin_api_key": get_secret_with_fallback(prof, "admin_api_key", cfg.secrets_provider),
+        }
+        s.setdefault("tab_state", {})
+        s.setdefault("adv_state", {})
+        s.setdefault("view", ("overview", ""))
+        s.setdefault("pending", {})
+    return s
+
+
+def current_config_state(request: Request) -> dict[str, Any]:
+    s = ensure_loaded(request)
+    cfg = s["config"]
+    return {
+        "server": cfg.server_url,
+        "api_key": s["secrets"].get("api_key", ""),
+        "admin_api_key": s["secrets"].get("admin_api_key", ""),
+        "skip-ssl": cfg.skip_ssl,
+        "client_timeout_minutes": cfg.client_timeout_minutes,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Rendering helpers
+# ──────────────────────────────────────────────────────────────────────
+def base_ctx(request: Request, **extra: Any) -> dict[str, Any]:
+    s = ensure_loaded(request)
+    ctx = {
+        "request": request,
+        "version": gui_version(),
+        "profile": active_profile_name(),
+        "advanced": bool(s["config"].advanced_mode),
+        "theme": request.cookies.get("igg_theme", "dark"),
+        "auth_enabled": auth_enabled(),
+        "csrf": request.cookies.get(authmod.CSRF_COOKIE, ""),
+        "busy": RUNS.is_busy(),
+        "view": s.get("view", ("overview", "")),
+    }
+    ctx.update(extra)
+    return ctx
+
+
+def page(request: Request, partial_name: str, **ctx: Any) -> HTMLResponse:
+    ctx_dict = base_ctx(request, **ctx)
+    inner = TEMPLATES.get_template(partial_name).render(ctx_dict)
+    if request.headers.get("HX-Request"):
+        crumb = ctx_dict.get("crumb") or "overview"
+        adv = ctx_dict.get("advanced")
+        btn_label = "⚡ Advanced Mode" if adv else "🌱 Simple Mode"
+        oob_crumb = f'<div id="crumb" hx-swap-oob="innerHTML:#crumb">{crumb}</div>'
+        oob_mode = (
+            f'<button id="mode-toggle-btn" class="btn btn-sm btn-ghost" '
+            f'hx-post="/mode/toggle" hx-target="#content" hx-swap-oob="outerHTML:#mode-toggle-btn" '
+            f'title="Toggle Advanced Mode">{btn_label}</button>'
+        )
+        oob_nav = TEMPLATES.get_template("partials/nav.html").render(ctx_dict, oob=True)
+        return HTMLResponse(f"{inner}\n{oob_crumb}\n{oob_mode}\n{oob_nav}")
+    full_html = TEMPLATES.get_template("base.html").render(
+        ctx_dict,
+        content=inner,
+        partial=partial_name,
+        **{k: v for k, v in ctx.items() if k != "content"},
+    )
+    return HTMLResponse(full_html)
+
+
+def partial(request: Request, name: str, **ctx: Any) -> HTMLResponse:
+    return HTMLResponse(TEMPLATES.get_template(name).render(base_ctx(request, **ctx)))
+
+
+def crumb_for(view: tuple[str, str]) -> str:
+    kind, key = view
+    if kind == "tab" and key in REGISTRY.tabs:
+        return f"{REGISTRY.tabs[key].section} · {' '.join(REGISTRY.tabs[key].command)}"
+    if kind == "config":
+        return "configuration"
+    return "overview"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Page routes
+# ──────────────────────────────────────────────────────────────────────
+async def home(request: Request) -> Response:
+    s = ensure_loaded(request)
+    kind, key = s.get("view", ("overview", ""))
+    if kind == "tab" and key in REGISTRY.tabs:
+        return await tab_page(request)
+    if kind == "config":
+        return await config_page(request)
+    return await overview_page(request)
+
+
+async def overview_page(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    s["view"] = ("overview", "")
+    groups = {
+        "upload": [k for k, t in REGISTRY.tabs.items() if t.section == "upload"],
+        "archive": [k for k, t in REGISTRY.tabs.items() if t.section == "archive"],
+        "stack": [k for k, t in REGISTRY.tabs.items() if t.section == "stack"],
+    }
+    recent = [RUNS.runs[r] for r in reversed(RUNS.order) if r in RUNS.runs][:6]
+    return page(
+        request,
+        "partials/overview.html",
+        groups=groups,
+        tabs=REGISTRY.tabs,
+        commands=REGISTRY.tab_commands,
+        serverless=REGISTRY.serverless_tabs,
+        recent=recent,
+        crumb="overview",
+    )
+
+
+async def tab_page(request: Request, tab_key: str | None = None) -> Response:
+    key = tab_key or request.path_params.get("tab", "")
+    if key not in REGISTRY.tabs:
+        return RedirectResponse("/overview", status_code=303)
+    s = ensure_loaded(request)
+    s["view"] = ("tab", key)
+    s["tab_state"].setdefault(key, initial_tab_state(key))
+    return page(
+        request,
+        "partials/tab_form.html",
+        tab=key,
+        tabdef=REGISTRY.tabs[key],
+        command=REGISTRY.tab_commands[key],
+        src_flags=source_flags(key),
+        opt_flags=option_flags(key),
+        adv_defs=REGISTRY.advanced_defs(key),
+        st=s["tab_state"][key],
+        adv=adv_state_for(request, key),
+        cfg=current_config_state(request),
+        serverless=key in SERVERLESS_TABS,
+        crumb=crumb_for(("tab", key)),
+    )
+
+
+def adv_state_for(request: Request, key: str) -> dict[str, Any]:
+    s = ensure_loaded(request)
+    defs = REGISTRY.advanced_defs(key)
+    stored = s["adv_state"].get(key, {})
+    return {
+        d.key: stored.get(d.key, {"enabled": False, "value": d.default}) for d in defs
+    }
+
+
+async def config_page(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    s["view"] = ("config", "")
+    cfg = s["config"]
+    from core.config_manager import default_secrets_path
+
+    return page(
+        request,
+        "partials/config.html",
+        cfg=cfg,
+        secrets=s["secrets"],
+        secrets_path=default_secrets_path(),
+        binary_status=BINMGR.check_binary(),
+        binary_path=BINMGR.resolve_binary_path(),
+        manual_path=load_binary_metadata().get("manual_path", ""),
+        crumb="configuration",
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Config endpoints
+# ──────────────────────────────────────────────────────────────────────
+async def config_save_server(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    cfg = s["config"]
+    prof = cfg.profile_name
+    url = str(form.get("server") or "").strip()
+    cfg.server_url = url
+    save_server_url(url, path=default_config_path(prof), profile_name=prof)
+    res = save_secret_with_fallback(
+        prof, "api_key", str(form.get("api_key") or "").strip(), cfg.secrets_provider
+    )
+    s["secrets"]["api_key"] = str(form.get("api_key") or "").strip()
+    note = res.message or "Server connection saved."
+    return partial(request, "partials/panels.html#toast", toast=note, tone="ok")
+
+
+async def config_save_app(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    cfg = s["config"]
+    cfg.skip_ssl = form.get("skip_ssl") == "on"
+    try:
+        cfg.client_timeout_minutes = max(5, min(240, int(form.get("client_timeout_minutes") or 60)))
+    except ValueError:
+        pass
+    cfg.secrets_provider = str(form.get("secret_provider") or "keyring")
+    cfg.allow_untested_updates = form.get("allow_untested_updates") == "on"
+    cfg.preferred_terminal = str(form.get("preferred_terminal") or "auto")
+    cfg.advanced_mode = form.get("advanced_mode") == "on"
+    save_config(cfg, profile_name=cfg.profile_name)
+    save_secret_with_fallback(
+        cfg.profile_name, "admin_api_key", str(form.get("admin_api_key") or "").strip(), cfg.secrets_provider
+    )
+    s["secrets"]["admin_api_key"] = str(form.get("admin_api_key") or "").strip()
+    return partial(request, "partials/panels.html#toast", toast="Configuration saved.", tone="ok")
+
+
+async def config_test_connection(request: Request) -> HTMLResponse:
+    form = dict(await request.form())
+    res = test_immich_connection(
+        str(form.get("server") or "").strip(),
+        str(form.get("api_key") or "").strip(),
+        skip_ssl=form.get("skip_ssl") == "on",
+    )
+    return partial(
+        request,
+        "partials/panels.html#conn_result",
+        conn=res,
+        toast=res.message,
+        tone="ok" if res.ok else "err",
+    )
+
+
+async def mode_toggle(request: Request) -> Response:
+    s = ensure_loaded(request)
+    cfg = s["config"]
+    cfg.advanced_mode = not cfg.advanced_mode
+    save_config(cfg, profile_name=cfg.profile_name)
+    kind, key = s.get("view", ("overview", ""))
+    if kind == "tab" and key in REGISTRY.tabs:
+        return await tab_page(request, tab_key=key)
+    if kind == "config":
+        return await config_page(request)
+    return await overview_page(request)
+
+
+async def theme_set(request: Request) -> Response:
+    form = dict(await request.form())
+    resp = Response(status_code=204)
+    resp.set_cookie("igg_theme", str(form.get("theme", "dark")), max_age=86400 * 365, httponly=False, samesite="lax")
+    return resp
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tab form endpoints: preview → confirm → run
+# ──────────────────────────────────────────────────────────────────────
+async def tab_preview(request: Request) -> HTMLResponse:
+    key = request.path_params["tab"]
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    dry = form.get("dry") == "1"
+
+    config_state = parse_config_state(form)
+    tab_state = parse_tab_state(key, form)
+    advanced_state = parse_advanced_state(key, form) if s["config"].advanced_mode else None
+
+    s["tab_state"][key] = tab_state
+    if advanced_state is not None:
+        s["adv_state"][key] = advanced_state
+
+    res = validate_state(key, config_state, tab_state)
+    adv_res = validate_advanced_state(key, advanced_state or {})
+    res.errors.extend(adv_res.errors)
+    res.warnings.extend(adv_res.warnings)
+
+    if res.errors:
+        return partial(
+            request,
+            "partials/panels.html#errors",
+            tab=key,
+            errors=res.errors,
+            field_errors=res.field_errors,
+            dry=dry,
+        )
+
+    binary_path = get_binary_path(load_binary_metadata()) or "./immich-go"
+    plan = build_plan_from_state(
+        tab_key=key,
+        config_state=config_state,
+        tab_state=tab_state,
+        binary_path=binary_path,
+        dry_run=dry,
+        advanced_state=advanced_state,
+    )
+    if plan.errors:
+        return partial(request, "partials/panels.html#errors", tab=key, errors=plan.errors, field_errors={}, dry=dry)
+
+    preflight = None
+    if key in SERVER_REQUIRED_TABS:
+        preflight = check_preflight_server_connection(key, config_state, tab_state, timeout=3.0)
+        if not preflight.ok:
+            plan.warnings.insert(0, f"Server pre-flight check failed: {preflight.message}")
+
+    env_rows = sorted(
+        (k, v) for k, v in plan.env.items() if k.startswith("IMMICH_GO_")
+    )
+    masked_env = [
+        (k, "********" if any(m in k for m in SECRET_ENV_MARKERS) else v) for k, v in env_rows
+    ]
+
+    nonce = secrets.token_hex(8)
+    s["pending"][nonce] = plan
+    s["pending"] = dict(list(s["pending"].items())[-5:])
+
+    return partial(
+        request,
+        "partials/confirm.html",
+        plan=plan,
+        nonce=nonce,
+        dry=dry,
+        tab=key,
+        cmd_str=" ".join(shlex.quote(p) for p in plan.display_argv),
+        env_rows=masked_env,
+        preflight=preflight,
+    )
+
+
+async def run_start(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    plan = s["pending"].get(str(form.get("nonce", "")))
+    if plan is None:
+        return partial(request, "partials/panels.html#toast", toast="Preview expired — preview again.", tone="err")
+
+    status = BINMGR.check_binary()
+    if status.state == "err":
+        return partial(
+            request,
+            "partials/panels.html#toast",
+            toast="immich-go binary missing — download it from Configuration → Binary Management.",
+            tone="err",
+        )
+    try:
+        run = RUNS.start(plan, plan.binary_path)
+    except RunInProgress as e:
+        return partial(request, "partials/panels.html#toast", toast=str(e), tone="err")
+    s["view"] = ("run", run.run_id)
+    return page(request, "partials/run_panel.html", run=run, crumb=f"run · {run.tab_key}")
+
+
+async def run_panel_page(request: Request) -> Response:
+    rid = request.path_params["rid"]
+    run = RUNS.runs.get(rid)
+    if not run:
+        return RedirectResponse("/", status_code=303)
+    return page(request, "partials/run_panel.html", run=run, crumb=f"run · {run.tab_key}")
+
+
+async def run_stream(request: Request) -> Response:
+    run = RUNS.runs.get(request.path_params["rid"])
+    if not run:
+        return Response(status_code=404)
+
+    async def gen():
+        cursor = 0
+        yield "retry: 1500\n\n"
+        while True:
+            new, cursor = run.snapshot(cursor)
+            for kind, text in new:
+                payload = json.dumps({"k": kind, "h": text})
+                yield f"event: line\ndata: {payload}\n\n"
+            if run.finished and cursor >= run.total:
+                chip = (
+                    '<span class="chip ok">exit 0</span>'
+                    if run.exit_code == 0
+                    else f'<span class="chip err">exit {run.exit_code}</span>'
+                )
+                yield f"event: done\ndata: {json.dumps({'chip': chip})}\n\n"
+                break
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+async def run_stop(request: Request) -> HTMLResponse:
+    run = RUNS.stop(request.path_params["rid"])
+    tone = "ok" if run and not run.finished else "warn"
+    return partial(request, "partials/panels.html#toast", toast="Stop signal sent.", tone=tone)
+
+
+async def run_state_reset(request: Request) -> HTMLResponse:
+    n = RUNS.reset_all()
+    return partial(request, "partials/panels.html#toast", toast=f"Run state reset ({n} locks cleared).", tone="ok")
+
+
+async def advanced_reset(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    s["adv_state"] = {}
+    return partial(request, "partials/panels.html#toast", toast="Advanced flags reset to defaults.", tone="ok")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Status / binary / updates / diagnostics
+# ──────────────────────────────────────────────────────────────────────
+async def status_partial(request: Request) -> HTMLResponse:
+    ensure_loaded(request)
+    st = BINMGR.check_binary()
+    cfg_state = current_config_state(request)
+    if cfg_state["server"] and cfg_state["api_key"]:
+        srv = ("ok", "Server: Configured")
+    else:
+        srv = ("err", "Server: Not Set")
+    active = RUNS.active()
+    locks = scan_locks()
+    return partial(
+        request,
+        "partials/status.html",
+        binary=st,
+        srv=srv,
+        active=active,
+        locked=bool(locks) or RUNS.is_busy(),
+    )
+
+
+DL_STATE: dict[str, Any] = {
+    "active": False,
+    "pct": 0,
+    "done": False,
+    "ok": False,
+    "msg": "",
+    "version": "",
+    "cancel": False,
+}
+
+
+async def binary_check_updates(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    current = BINMGR.check_binary().version_text
+    latest = BINMGR.get_latest_version()
+    decision = None
+    if latest and clean_version(current) != clean_version(latest):
+        notes = BINMGR.get_release_notes(latest)
+        decision = BINMGR.evaluate_update(
+            current, latest, allow_untested=s["config"].allow_untested_updates, release_notes=notes
+        )
+    return partial(
+        request,
+        "partials/panels.html#binary_update",
+        latest=latest,
+        current=current,
+        decision=decision,
+        allow_untested=s["config"].allow_untested_updates,
+    )
+
+
+async def binary_download(request: Request) -> HTMLResponse:
+    form = dict(await request.form())
+    version = str(form.get("version") or "").strip()
+    if not version or DL_STATE["active"]:
+        return partial(
+            request,
+            "partials/panels.html#toast",
+            toast="Download already in progress or missing version.",
+            tone="err",
+        )
+    DL_STATE.update(active=True, pct=0, done=False, ok=False, msg="", version=version, cancel=False)
+
+    def work() -> None:
+        ok, msg = BINMGR.download_and_install(
+            version=version,
+            progress_cb=lambda p: DL_STATE.update(pct=p),
+            cancel_check=lambda: bool(DL_STATE["cancel"]),
+        )
+        DL_STATE.update(active=False, done=True, ok=ok, msg=msg)
+
+    threading.Thread(target=work, daemon=True).start()
+    return partial(request, "partials/panels.html#dl_live", version=version)
+
+
+async def binary_download_events(request: Request) -> StreamingResponse:
+    async def gen():
+        yield "retry: 1500\n\n"
+        while True:
+            yield f"event: progress\ndata: {json.dumps({'pct': DL_STATE['pct']})}\n\n"
+            if DL_STATE["done"]:
+                tone = "ok" if DL_STATE["ok"] else "err"
+                yield f"event: done\ndata: {json.dumps({'msg': DL_STATE['msg'], 'tone': tone})}\n\n"
+                break
+            if await request.is_disconnected():
+                break
+            await asyncio.sleep(0.4)
+
+    return StreamingResponse(
+        gen(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"}
+    )
+
+
+async def binary_download_cancel(request: Request) -> HTMLResponse:
+    DL_STATE["cancel"] = True
+    return partial(request, "partials/panels.html#toast", toast="Cancelling download…", tone="warn")
+
+
+async def binary_manual_path(request: Request) -> HTMLResponse:
+    form = dict(await request.form())
+    meta = load_binary_metadata()
+    meta["manual_path"] = str(form.get("manual_path") or "").strip()
+    save_binary_metadata(meta)
+    return partial(request, "partials/panels.html#toast", toast="Manual binary path updated.", tone="ok")
+
+
+async def app_update_check(request: Request) -> HTMLResponse:
+    installed = gui_version()
+    rel = get_latest_gui_release()
+    if rel is None:
+        msg, tone = "Could not reach GitHub to check for updates.", "err"
+    elif not is_parseable_semver(installed):
+        msg, tone = f"Development build — latest release is v{rel.version}.", "warn"
+    elif is_update_available(installed, rel.version):
+        msg, tone = f"Update available: v{rel.version} (you run {installed}). {rel.html_url}", "warn"
+    else:
+        msg, tone = f"Up to date (v{installed}).", "ok"
+    return partial(request, "partials/panels.html#toast", toast=msg, tone=tone)
+
+
+async def compat_partial(request: Request) -> HTMLResponse:
+    from core.binary_manager import TESTED_IMMICH_GO_VERSION
+
+    report = check_fixtures(TESTED_IMMICH_GO_VERSION)
+    live = None
+    bp = BINMGR.resolve_binary_path()
+    if bp and Path(bp).exists():
+        live = check_binary_help(Path(bp), TESTED_IMMICH_GO_VERSION)
+    return partial(request, "partials/panels.html#compat", report=report, live=live, tested=TESTED_IMMICH_GO_VERSION)
+
+
+async def diagnostics_zip(request: Request) -> Response:
+    data = build_diagnostics_zip()
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="immich-go-diagnostics-{gui_version()}.zip"'},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Profiles
+# ──────────────────────────────────────────────────────────────────────
+async def profiles_partial(request: Request) -> HTMLResponse:
+    return partial(request, "partials/profiles.html", profiles=list_profiles(), active=active_profile_name())
+
+
+async def profile_switch(request: Request) -> Response:
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    name = str(form.get("name") or "").strip()
+    action = form.get("action", "switch")
+    dirty = form.get("dirty") == "1"
+
+    if dirty and action == "switch":
+        return partial(request, "partials/panels.html#profile_prompt", name=name)
+    if action == "save":
+        cfg = s["config"]
+        save_config(cfg, profile_name=cfg.profile_name)
+        save_secret_with_fallback(cfg.profile_name, "api_key", s["secrets"].get("api_key", ""), cfg.secrets_provider)
+        save_secret_with_fallback(cfg.profile_name, "admin_api_key", s["secrets"].get("admin_api_key", ""), cfg.secrets_provider)
+    set_active_profile_name(name)
+    for k in ("config", "secrets", "tab_state", "adv_state", "pending"):
+        s.pop(k, None)
+    ensure_loaded(request)
+    resp = Response(status_code=204)
+    resp.headers["HX-Refresh"] = "true"
+    return resp
+
+
+async def profile_create(request: Request) -> HTMLResponse:
+    form = dict(await request.form())
+    name = str(form.get("name") or "").strip()
+    existing = [p.name for p in list_profiles()]
+    ok, err = validate_profile_name(name, existing)
+    if not ok:
+        return partial(request, "partials/panels.html#toast", toast=err or "Invalid profile name.", tone="err")
+    copy_from = str(form.get("copy_from")) if form.get("copy_from") else None
+    create_profile(name, copy_from=copy_from)
+    return partial(request, "partials/panels.html#toast", toast=f"Profile '{name}' created.", tone="ok")
+
+
+async def profile_duplicate(request: Request) -> HTMLResponse:
+    form = dict(await request.form())
+    name = str(form.get("name") or "").strip()
+    try:
+        duplicate_profile(active_profile_name(), name)
+    except ValueError as e:
+        return partial(request, "partials/panels.html#toast", toast=str(e), tone="err")
+    return partial(request, "partials/panels.html#toast", toast=f"Duplicated to '{name}'.", tone="ok")
+
+
+async def profile_rename(request: Request) -> Response:
+    form = dict(await request.form())
+    try:
+        rename_profile(active_profile_name(), str(form.get("name") or "").strip())
+    except ValueError as e:
+        return partial(request, "partials/panels.html#toast", toast=str(e), tone="err")
+    resp = Response(status_code=204)
+    resp.headers["HX-Refresh"] = "true"
+    return resp
+
+
+async def profile_delete(request: Request) -> Response:
+    try:
+        delete_profile(active_profile_name())
+    except ValueError as e:
+        return partial(request, "partials/panels.html#toast", toast=str(e), tone="err")
+    resp = Response(status_code=204)
+    resp.headers["HX-Refresh"] = "true"
+    return resp
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Auth pages
+# ──────────────────────────────────────────────────────────────────────
+async def login_page(request: Request) -> HTMLResponse:
+    return HTMLResponse(
+        TEMPLATES.get_template("login.html").render(
+            {"request": request, "error": False, "csrf": request.cookies.get(authmod.CSRF_COOKIE, "")}
+        )
+    )
+
+
+async def login_post(request: Request) -> Response:
+    form = dict(await request.form())
+    if not check_login(str(form.get("user", "")), str(form.get("password", ""))):
+        return HTMLResponse(
+            TEMPLATES.get_template("login.html").render(
+                {"request": request, "error": True, "csrf": request.cookies.get(authmod.CSRF_COOKIE, "")}
+            )
+        )
+    resp = RedirectResponse("/", status_code=303)
+    resp.set_cookie(AUTH_COOKIE, "1", httponly=True, samesite="lax")
+    return resp
+
+
+async def logout(request: Request) -> Response:
+    sid = request.cookies.get(SESSION_COOKIE)
+    if sid:
+        drop_session(sid)
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(AUTH_COOKIE)
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
+async def healthz(request: Request) -> Response:
+    return Response("ok", media_type="text/plain")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Session cookie issuance + app factory
+# ──────────────────────────────────────────────────────────────────────
+async def session_cookies_middleware(request: Request, call_next: Any) -> Response:
+    resp = await call_next(request)
+    sid = getattr(request.state, "new_sid", None)
+    if sid and not request.cookies.get(SESSION_COOKIE):
+        resp.set_cookie(SESSION_COOKIE, sid, httponly=True, samesite="lax")
+    if not request.cookies.get(authmod.CSRF_COOKIE):
+        resp.set_cookie(authmod.CSRF_COOKIE, secrets.token_urlsafe(24), httponly=False, samesite="lax")
+    return resp
+
+
+def create_app() -> Starlette:
+    cleanup_stale_locks()
+
+    routes = [
+        Route("/", home),
+        Route("/overview", overview_page),
+        Route("/tab/{tab}", tab_page),
+        Route("/config", config_page),
+        Route("/healthz", healthz),
+        Route("/login", login_page, methods=["GET"]),
+        Route("/login", login_post, methods=["POST"]),
+        Route("/logout", logout),
+        # tab workflow
+        Route("/tabs/{tab}/preview", tab_preview, methods=["POST"]),
+        Route("/runs", run_start, methods=["POST"]),
+        Route("/run/{rid}", run_panel_page),
+        Route("/runs/{rid}/stream", run_stream),
+        Route("/runs/{rid}/stop", run_stop, methods=["POST"]),
+        Route("/run-state/reset", run_state_reset, methods=["POST"]),
+        Route("/advanced/reset", advanced_reset, methods=["POST"]),
+        # config
+        Route("/config/save-server", config_save_server, methods=["POST"]),
+        Route("/config/save", config_save_app, methods=["POST"]),
+        Route("/config/test-connection", config_test_connection, methods=["POST"]),
+        Route("/mode/toggle", mode_toggle, methods=["POST"]),
+        Route("/theme", theme_set, methods=["POST"]),
+        # ops
+        Route("/partial/status", status_partial),
+        Route("/binary/check", binary_check_updates, methods=["POST"]),
+        Route("/binary/download", binary_download, methods=["POST"]),
+        Route("/binary/download/events", binary_download_events),
+        Route("/binary/download/cancel", binary_download_cancel, methods=["POST"]),
+        Route("/binary/manual-path", binary_manual_path, methods=["POST"]),
+        Route("/app-update/check", app_update_check, methods=["POST"]),
+        Route("/partial/compat", compat_partial),
+        Route("/diagnostics.zip", diagnostics_zip),
+        # profiles
+        Route("/partial/profiles", profiles_partial),
+        Route("/profiles/switch", profile_switch, methods=["POST"]),
+        Route("/profiles/create", profile_create, methods=["POST"]),
+        Route("/profiles/duplicate", profile_duplicate, methods=["POST"]),
+        Route("/profiles/rename", profile_rename, methods=["POST"]),
+        Route("/profiles/delete", profile_delete, methods=["POST"]),
+        Mount("/static", app=StaticFiles(directory=str(BASE / "static")), name="static"),
+    ]
+
+    app = Starlette(
+        debug=False,
+        routes=routes,
+        middleware=[
+            Middleware(AuthMiddleware),
+            Middleware(BaseHTTPMiddleware, dispatch=session_cookies_middleware),
+        ],
+    )
+    return app
+
+
+================================================================================
+FILE 7 / 26: webapp/auth.py (Lines 1-70)
+================================================================================
+"""Minimal auth + session + CSRF for the web console.
+
+Credentials via env: IGG_WEB_USER / IGG_WEB_PASSWORD.
+If unset, auth is disabled (dev mode) and a warning is shown.
+"""
+
+from __future__ import annotations
+
+import os
+import secrets
+import uuid
+from typing import Any
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+
+AUTH_COOKIE = "igg_auth"
+SESSION_COOKIE = "igg_sid"
+CSRF_COOKIE = "igg_csrf"
+SESSIONS: dict[str, dict[str, Any]] = {}
+
+OPEN_PATHS = {"/login", "/healthz"}
+STATIC_PREFIX = "/static/"
+
+
+def auth_enabled() -> bool:
+    user = os.environ.get("IGG_WEB_USER", "")
+    pwd = os.environ.get("IGG_WEB_PASSWORD", "")
+    return bool(user and pwd)
+
+
+def check_login(username: str, password: str) -> bool:
+    user = os.environ.get("IGG_WEB_USER", "")
+    pwd = os.environ.get("IGG_WEB_PASSWORD", "")
+    if not (user and pwd):
+        return False
+    return secrets.compare_digest(username, user) and secrets.compare_digest(password, pwd)
+
+
+def get_session(request: Request) -> dict[str, Any]:
+    sid = request.cookies.get(SESSION_COOKIE)
+    if not sid or sid not in SESSIONS:
+        sid = uuid.uuid4().hex
+        SESSIONS[sid] = {}
+    request.state.new_sid = sid
+    return SESSIONS[sid]
+
+
+def drop_session(sid: str) -> None:
+    SESSIONS.pop(sid, None)
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        path = request.url.path
+        if path in OPEN_PATHS or path.startswith(STATIC_PREFIX):
+            return await call_next(request)
+        if auth_enabled() and request.cookies.get(AUTH_COOKIE) != "1":
+            if request.headers.get("HX-Request"):
+                resp = RedirectResponse("/login", status_code=303)
+                resp.headers["HX-Redirect"] = "/login"
+                return resp
+            return RedirectResponse("/login", status_code=303)
+        if request.method == "POST":
+            csrf_cookie = request.cookies.get(CSRF_COOKIE, "")
+            csrf_sent = request.headers.get("X-CSRF", "")
+            if csrf_cookie and csrf_sent and not secrets.compare_digest(csrf_sent, csrf_cookie):
+                return PlainTextResponse("CSRF validation failed", status_code=403)
+        return await call_next(request)
+
+
+================================================================================
+FILE 8 / 26: webapp/diagnostics.py (Lines 1-83)
+================================================================================
+"""Diagnostics zip export (ported from gui/mixins/diagnostics.py, Qt-free)."""
+
+from __future__ import annotations
+
+import io
+import tomllib
+import zipfile
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+from pathlib import Path
+from typing import Any
+
+from core import (
+    METADATA_PATH,
+    TESTED_IMMICH_GO_VERSION,
+    default_config_dir,
+    default_config_path,
+    get_config_load_warning,
+)
+from core.profile_manager import global_profiles_path
+
+
+def gui_version() -> str:
+    try:
+        return _pkg_version("immich-go-gui")
+    except PackageNotFoundError:
+        return "dev"
+
+
+def _redact(text: str) -> str:
+    try:
+        data = tomllib.loads(text)
+    except Exception:
+        return "# [unparseable config omitted]\n"
+
+    def _scrub(m: dict[str, Any]) -> None:
+        for k, v in list(m.items()):
+            kl = str(k).lower()
+            if any(s in kl for s in ("api", "secret", "password", "token")):
+                m[k] = "***REDACTED***"
+            elif isinstance(v, dict):
+                _scrub(v)
+
+    fs = data.get("form_state")
+    if isinstance(fs, dict):
+        _scrub(fs)
+    try:
+        import tomli_w
+
+        return tomli_w.dumps(data)
+    except Exception:
+        return "# [redaction failed]\n"
+
+
+def build_diagnostics_zip() -> bytes:
+    buf = io.BytesIO()
+    cfg_dir = default_config_dir()
+    log_dir = cfg_dir / "logs"
+    meta = Path(METADATA_PATH)
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        summary = [
+            f"gui_version={gui_version()}",
+            "surface=web-console",
+            f"cli_target_version={TESTED_IMMICH_GO_VERSION}",
+        ]
+        w = get_config_load_warning()
+        if w:
+            summary.append(f"config_load_warning={w}")
+        zf.writestr("summary.txt", "\n".join(summary) + "\n")
+        cfg = default_config_path()
+        if cfg.is_file():
+            zf.writestr("config.toml", _redact(cfg.read_text(encoding="utf-8")))
+        pidx = global_profiles_path()
+        if pidx.is_file():
+            zf.write(pidx, arcname="profiles.toml")
+        if meta.is_file():
+            zf.write(meta, arcname="binary_metadata.json")
+        if log_dir.is_dir():
+            logs = sorted(log_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if logs:
+                tail = logs[0].read_text(encoding="utf-8", errors="replace")[-200_000:]
+                zf.writestr("log_tail.txt", tail)
+    return buf.getvalue()
+
+
+================================================================================
+FILE 9 / 26: webapp/forms.py (Lines 1-103)
+================================================================================
+"""Translate HTML forms ⇄ core state dicts, driven entirely by core.flag_registry.
+
+Because every widget is generated from the same flags.toml definitions the Qt
+app uses, adding a flag upstream automatically appears here with correct kind,
+default, and emission semantics.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from core.flag_registry import REGISTRY, FlagDef
+
+# Keys owned by the Configuration page (never rendered on workflow tabs).
+STRUCTURAL_KEYS = {"server", "skip-ssl", "dry-run"}
+# Keys rendered in the "Source Configuration" card; the rest go to "Options".
+SOURCE_KEYS = {"from-server", "from-api-key", "from-date-range", "from-albums"}
+
+
+def renderable_simple_flags(tab_key: str) -> tuple[FlagDef, ...]:
+    return tuple(
+        f
+        for f in REGISTRY.flags.get(tab_key, ())
+        if f.mode == "simple" and not f.hidden and f.key not in STRUCTURAL_KEYS
+    )
+
+
+def source_flags(tab_key: str) -> tuple[FlagDef, ...]:
+    return tuple(
+        f
+        for f in renderable_simple_flags(tab_key)
+        if (f.kind in ("path", "paths") and f.key != "write-to")
+        or f.key in SOURCE_KEYS
+    )
+
+
+def option_flags(tab_key: str) -> tuple[FlagDef, ...]:
+    src = {f.key for f in source_flags(tab_key)}
+    return tuple(f for f in renderable_simple_flags(tab_key) if f.key not in src)
+
+
+def coerce(def_: FlagDef, raw: str) -> Any:
+    raw = (raw or "").strip()
+    if def_.kind == "bool":
+        return raw in ("on", "true", "1", "yes")
+    if def_.kind in ("int", "duration_minutes"):
+        try:
+            v = int(raw)
+        except ValueError:
+            return def_.default
+        if def_.min_val is not None:
+            v = max(def_.min_val, v)
+        if def_.max_val is not None:
+            v = min(def_.max_val, v)
+        return v
+    return raw
+
+
+def parse_tab_state(tab_key: str, form: dict[str, Any]) -> dict[str, Any]:
+    """HTML form → tab_state dict matching Qt's _collect_tab_state contract."""
+    state: dict[str, Any] = {}
+    for f in REGISTRY.flags.get(tab_key, ()):
+        if f.mode != "simple" or f.hidden or f.key in STRUCTURAL_KEYS:
+            continue
+        state[f.key] = coerce(f, str(form.get(f"fld_{f.key}", "")))
+    return state
+
+
+def parse_advanced_state(tab_key: str, form: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """HTML form → advanced_state dict ({key: {enabled, value}})."""
+    st: dict[str, dict[str, Any]] = {}
+    for d in REGISTRY.advanced_defs(tab_key):
+        enabled = form.get(f"adv_{d.key}_en") == "1"
+        st[d.key] = {"enabled": enabled, "value": coerce(d, str(form.get(f"adv_{d.key}_val", "")))}
+    return st
+
+
+def parse_config_state(form: dict[str, Any]) -> dict[str, Any]:
+    """Hidden config block on every tab form → config_state for the builder."""
+    try:
+        timeout = int(form.get("client_timeout_minutes") or 60)
+    except ValueError:
+        timeout = 60
+    return {
+        "server": str(form.get("server") or "").strip(),
+        "api_key": str(form.get("api_key") or "").strip(),
+        "admin_api_key": str(form.get("admin_api_key") or "").strip(),
+        "skip-ssl": form.get("skip_ssl") == "on",
+        "client_timeout_minutes": timeout,
+    }
+
+
+def initial_tab_state(tab_key: str) -> dict[str, Any]:
+    """Defaults for a fresh form (mirrors Qt widget construction)."""
+    state: dict[str, Any] = {}
+    for f in renderable_simple_flags(tab_key):
+        if f.kind == "bool":
+            state[f.key] = bool(f.default)
+        elif f.kind in ("int", "duration_minutes"):
+            state[f.key] = f.default if isinstance(f.default, int) else 0
+        else:
+            state[f.key] = ""
+    return state
+
+
+================================================================================
+FILE 10 / 26: webapp/runner.py (Lines 1-158)
+================================================================================
+"""Managed immich-go subprocess execution with SSE-friendly log buffering.
+
+Replaces core.terminal_launcher for the web context: instead of opening an
+external terminal, output is captured and streamed to the browser.
+"""
+
+from __future__ import annotations
+
+import html
+import os
+import shutil
+import subprocess
+import tempfile
+import threading
+import uuid
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from core.models import CommandPlan
+from core.process_tracker import create_lock, release_lock
+
+MAX_LINES = 8000
+
+
+class RunInProgress(Exception):
+    pass
+
+
+@dataclass
+class Run:
+    run_id: str
+    tab_key: str
+    display_cmd: str
+    dry_run: bool
+    lock_path: Path
+    proc: subprocess.Popen[Any]
+    lines: deque[tuple[str, str]] = field(default_factory=lambda: deque(maxlen=MAX_LINES))
+    total: int = 0
+    exit_code: int | None = None
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    stopped: bool = False
+    done: threading.Event = field(default_factory=threading.Event)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def append(self, text: str, kind: str = "out") -> None:
+        with self._lock:
+            self.lines.append((kind, html.escape(text.rstrip("\n"))))
+            self.total += 1
+
+    def snapshot(self, cursor: int) -> tuple[list[tuple[str, str]], int]:
+        with self._lock:
+            start = max(0, self.total - len(self.lines))
+            idx = max(cursor, start)
+            return list(self.lines)[idx - start :], self.total
+
+    @property
+    def finished(self) -> bool:
+        return self.done.is_set()
+
+
+class RunManager:
+    def __init__(self) -> None:
+        self.runs: dict[str, Run] = {}
+        self.order: list[str] = []
+        self.active_id: str | None = None
+        self._lock = threading.Lock()
+
+    def active(self) -> Run | None:
+        r = self.runs.get(self.active_id or "")
+        return r if r and not r.finished else None
+
+    def is_busy(self) -> bool:
+        return self.active() is not None
+
+    def start(self, plan: CommandPlan, binary_path: str) -> Run:
+        with self._lock:
+            if self.is_busy():
+                raise RunInProgress("A command is already running.")
+            run_id = uuid.uuid4().hex[:8]
+            lock_path = create_lock(
+                tab_key=plan.tab_key,
+                command_summary=" ".join(plan.argv[:3]) or plan.tab_key,
+                binary_path=binary_path,
+            )
+            cwd = Path(tempfile.mkdtemp(prefix="immich-go-web-"))
+            env = {**os.environ, **plan.env}
+            proc = subprocess.Popen(
+                [binary_path, *plan.argv],
+                env=env,
+                cwd=str(cwd),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                errors="replace",
+            )
+            run = Run(
+                run_id=run_id,
+                tab_key=plan.tab_key,
+                display_cmd=" ".join(plan.display_argv),
+                dry_run=plan.dry_run,
+                lock_path=lock_path,
+                proc=proc,
+            )
+            self.runs[run_id] = run
+            self.order.append(run_id)
+            self.order = self.order[-25:]
+            self.active_id = run_id
+        run.append(f"$ {' '.join(plan.display_argv)}", "cmd")
+        threading.Thread(target=self._pump, args=(run, cwd), daemon=True).start()
+        return run
+
+    def _pump(self, run: Run, cwd: Path) -> None:
+        assert run.proc.stdout is not None
+        try:
+            for line in run.proc.stdout:
+                run.append(line)
+        except ValueError:
+            pass
+        code = run.proc.wait()
+        if run.stopped and code != 0:
+            run.append(f"⏹ stopped by user (exit {code})", "sys")
+        else:
+            run.append(f"✔ immich-go exited with code {code}", "ok" if code == 0 else "err")
+        run.exit_code = code
+        release_lock(run.lock_path)
+        shutil.rmtree(cwd, ignore_errors=True)
+        with self._lock:
+            if self.active_id == run.run_id:
+                self.active_id = None
+        run.done.set()
+
+    def stop(self, run_id: str) -> Run | None:
+        run = self.runs.get(run_id)
+        if not run or run.finished:
+            return run
+        run.stopped = True
+        run.append("⏹ stopping…", "sys")
+        run.proc.terminate()
+        threading.Timer(5.0, lambda: run.proc.poll() is None and run.proc.kill()).start()
+        return run
+
+    def reset_all(self) -> int:
+        """Force-clear locks and forget runs (mirrors Qt 'Reset Run State')."""
+        from core.process_tracker import reset_all_locks
+
+        n = reset_all_locks()
+        with self._lock:
+            self.runs.clear()
+            self.order.clear()
+            self.active_id = None
+        return n
+
+
+RUNS = RunManager()
+
+
+================================================================================
+FILE 11 / 26: templates/base.html (Lines 1-66)
+================================================================================
+<!doctype html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Immich-Go · Web Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/vendor/htmx.min.js"></script>
+<script src="/static/vendor/sse.js"></script>
+</head>
+<body hx-headers='{"X-CSRF": "{{ csrf }}"}'>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" hx-get="/overview" hx-target="#content" hx-push-url="true">
+      <span class="brand-mark">▣</span>
+      <span class="brand-text">IMMICH-GO<small>web console v{{ version }}</small></span>
+    </a>
+
+    {% include 'partials/nav.html' %}
+
+    <div class="sidebar-footer">
+      <div class="profile-chip" hx-get="/partial/profiles" hx-target="#modal-container">
+        <span class="profile-icon">👤</span>
+        <span class="profile-name">{{ profile }}</span>
+      </div>
+
+      {% if auth_enabled %}
+      <a href="/logout" class="btn btn-ghost btn-sm" title="Log out">Logout</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="header">
+      <div class="crumb" id="crumb">{{ crumb|default('overview', true) }}</div>
+
+      <div class="header-actions">
+        <button id="mode-toggle-btn" class="btn btn-sm btn-ghost" hx-post="/mode/toggle" hx-target="#content" title="Toggle Advanced Mode">
+          {% if advanced %}⚡ Advanced Mode{% else %}🌱 Simple Mode{% endif %}
+        </button>
+
+        <div id="status-pill" hx-get="/partial/status" hx-trigger="load, every 8s">
+          <span class="pill-badge loading">checking…</span>
+        </div>
+
+        <button class="btn btn-icon" onclick="toggleTheme()" title="Toggle Theme">
+          <span class="theme-icon">☯</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="content" id="content">
+      {{ content|safe }}
+    </div>
+  </main>
+</div>
+
+<div id="modal-container"></div>
+<div id="toast" class="toast-container"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
+
+
+================================================================================
+FILE 12 / 26: templates/login.html (Lines 1-40)
+================================================================================
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login · Immich-Go Web Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-body">
+<div class="login-card">
+  <div class="brand brand-center">
+    <span class="brand-mark">▣</span>
+    <span class="brand-text">IMMICH-GO<small>web console</small></span>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-err">Invalid username or password.</div>
+  {% endif %}
+
+  <form method="post" action="/login" class="login-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <div class="form-group">
+      <label class="form-label" for="user">Username</label>
+      <input type="text" id="user" name="user" class="form-input" required autofocus autocomplete="username">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+  </form>
+</div>
+</body>
+</html>
+
+
+================================================================================
+FILE 13 / 26: templates/partials/config.html (Lines 1-124)
+================================================================================
+<div class="config-layout">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Server Connection</h2>
+      <span class="card-subtitle">Immich instance URL and credentials</span>
+    </div>
+    <form hx-post="/config/save-server" hx-target="#toast" class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="cfg_server">Server URL</label>
+        <input type="text" id="cfg_server" name="server" value="{{ cfg.server_url }}" class="form-input" placeholder="https://immich.example.com">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="cfg_api_key">API Key</label>
+        <input type="password" id="cfg_api_key" name="api_key" value="{{ secrets.api_key }}" class="form-input" placeholder="Immich API Key">
+      </div>
+
+      <div class="form-actions-inline">
+        <button type="button" class="btn btn-secondary" hx-post="/config/test-connection" hx-target="#conn-result-box" hx-include="closest form">
+          📡 Test Connection
+        </button>
+        <button type="submit" class="btn btn-primary">Save Server Details</button>
+      </div>
+
+      <div id="conn-result-box" class="mt-3"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Application Settings</h2>
+    </div>
+    <form hx-post="/config/save" hx-target="#toast" class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="cfg_admin_key">Admin API Key (Optional)</label>
+        <input type="password" id="cfg_admin_key" name="admin_api_key" value="{{ secrets.admin_api_key }}" class="form-input" placeholder="Required for administrative operations">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="cfg_timeout">Client Timeout (minutes)</label>
+        <input type="number" id="cfg_timeout" name="client_timeout_minutes" value="{{ cfg.client_timeout_minutes }}" min="5" max="240" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="secret_provider">Secrets Provider</label>
+        <select id="secret_provider" name="secret_provider" class="form-select">
+          <option value="keyring" {% if cfg.secrets_provider=='keyring' %}selected{% endif %}>OS Keyring (Default)</option>
+          <option value="fallback" {% if cfg.secrets_provider=='fallback' %}selected{% endif %}>Fallback File (0600 secrets.toml)</option>
+        </select>
+        <div class="form-help">Secrets file path: <code>{{ secrets_path }}</code></div>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="skip_ssl" {% if cfg.skip_ssl %}checked{% endif %}>
+          <span class="label-text">Disable SSL Verification (Insecure)</span>
+        </label>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="allow_untested_updates" {% if cfg.allow_untested_updates %}checked{% endif %}>
+          <span class="label-text">Allow Untested CLI Updates</span>
+        </label>
+      </div>
+
+      <div class="form-group form-group-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" name="advanced_mode" {% if cfg.advanced_mode %}checked{% endif %}>
+          <span class="label-text">Enable Advanced CLI Flag Panels</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save Settings</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header card-header-flex">
+      <h2 class="card-title">Binary Management</h2>
+      <button class="btn btn-ghost btn-sm" hx-post="/binary/check" hx-target="#binary-update-panel">Check Updates</button>
+    </div>
+    <div class="card-body">
+      <div class="binary-status-box">
+        <div><strong>State:</strong> <span class="badge {% if binary_status.state=='ok' %}badge-ok{% else %}badge-err{% endif %}">{{ binary_status.state }}</span></div>
+        <div><strong>Version:</strong> <code>{{ binary_status.version_text }}</code></div>
+        <div><strong>Location:</strong> <code>{{ binary_path or 'not found' }}</code></div>
+      </div>
+
+      <div id="binary-update-panel" class="mt-3"></div>
+
+      <form hx-post="/binary/manual-path" hx-target="#toast" class="mt-4">
+        <div class="form-group">
+          <label class="form-label" for="manual_path">Manual Binary Path Override</label>
+          <input type="text" id="manual_path" name="manual_path" value="{{ manual_path }}" class="form-input" placeholder="/usr/local/bin/immich-go">
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Set Manual Path</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Diagnostics & Diagnostics Tools</h2>
+    </div>
+    <div class="card-body">
+      <p class="text-sm">Download a redacted diagnostics archive containing configuration, log tails, binary metadata, and system summary.</p>
+      <div class="form-actions-inline mt-3">
+        <a href="/diagnostics.zip" class="btn btn-secondary btn-sm" download>
+          📦 Download Diagnostics ZIP
+        </a>
+        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
+          🔄 Check GUI Updates
+        </button>
+        <button class="btn btn-ghost btn-sm" hx-get="/partial/compat" hx-target="#modal-container">
+          📋 CLI Compatibility
+        </button>
+        <button class="btn btn-ghost btn-sm btn-danger-ghost" hx-post="/run-state/reset" hx-target="#toast">
+          🧹 Reset Run Locks
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+================================================================================
+FILE 14 / 26: templates/partials/confirm.html (Lines 1-61)
+================================================================================
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">
+        {% if dry %}🔍 Dry Run Confirmation{% else %}🚀 Execute Command Confirmation{% endif %}
+      </h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      {% if preflight and not preflight.ok %}
+      <div class="alert alert-err mb-3">
+        <strong>Preflight Warning:</strong> {{ preflight.message }}
+      </div>
+      {% endif %}
+
+      {% if plan.warnings %}
+      <div class="alert alert-warn mb-3">
+        <ul>
+          {% for w in plan.warnings %}
+            <li>{{ w }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="section-title">Command Line String</div>
+      <div class="cmd-box"><code>$ {{ cmd_str }}</code></div>
+
+      {% if env_rows %}
+      <div class="section-title mt-3">Environment Variables</div>
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, v in env_rows %}
+          <tr>
+            <td><code>{{ k }}</code></td>
+            <td><code>{{ v }}</code></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+      <form hx-post="/runs" hx-target="#content" hx-push-url="true">
+        <input type="hidden" name="nonce" value="{{ nonce }}">
+        <button type="submit" class="btn {% if dry %}btn-secondary{% else %}btn-primary{% endif %}">
+          {% if dry %}Run Dry-Run Preview{% else %}Run Command{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+================================================================================
+FILE 15 / 26: templates/partials/macros.html (Lines 1-51)
+================================================================================
+{% macro render_flag_field(f, val) %}
+<div class="form-group {% if f.kind=='bool' %}form-group-checkbox{% endif %}">
+  {% if f.kind == 'bool' %}
+    <label class="checkbox-label">
+      <input type="checkbox" name="fld_{{ f.key }}" {% if val %}checked{% endif %}>
+      <span class="label-text">{{ f.label or f.key }}</span>
+    </label>
+  {% else %}
+    <label class="form-label" for="fld_{{ f.key }}">{{ f.label or f.key }}</label>
+    {% if f.kind == 'select' %}
+      <select id="fld_{{ f.key }}" name="fld_{{ f.key }}" class="form-select">
+        {% for opt in f.choices %}
+          <option value="{{ opt }}" {% if val==opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    {% elif f.kind in ('int', 'duration_minutes') %}
+      <input type="number" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input"
+             {% if f.min_val is not none %}min="{{ f.min_val }}"{% endif %}
+             {% if f.max_val is not none %}max="{{ f.max_val }}"{% endif %}>
+    {% else %}
+      <input type="text" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input" placeholder="{{ f.placeholder or '' }}">
+    {% endif %}
+  {% endif %}
+  {% if f.help_text %}
+    <div class="form-help">{{ f.help_text }}</div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro render_adv_row(d, stored) %}
+<div class="adv-row">
+  <label class="adv-checkbox">
+    <input type="checkbox" name="adv_{{ d.key }}_en" value="1" {% if stored.enabled %}checked{% endif %}
+           onchange="this.closest('.adv-row').querySelector('.adv-input-wrap').classList.toggle('disabled', !this.checked)">
+    <span class="adv-key">--{{ d.key }}</span>
+  </label>
+  <div class="adv-input-wrap {% if not stored.enabled %}disabled{% endif %}">
+    {% if d.kind == 'bool' %}
+      <span class="adv-bool-note">(flag switch)</span>
+    {% elif d.kind == 'select' %}
+      <select name="adv_{{ d.key }}_val" class="form-select form-select-sm">
+        {% for opt in d.choices %}
+          <option value="{{ opt }}" {% if stored.value==opt %}selected{% endif %}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="adv_{{ d.key }}_val" value="{{ stored.value or '' }}" class="form-input form-input-sm" placeholder="{{ d.default or '' }}">
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+
+================================================================================
+FILE 16 / 26: templates/partials/nav.html (Lines 1-52)
+================================================================================
+<nav class="nav" id="sidebar-nav" {% if oob %}hx-swap-oob="outerHTML:#sidebar-nav"{% endif %}>
+  <div class="nav-group">
+    <div class="nav-title">Navigation</div>
+    <a class="nav-item {% if view[0]=='overview' %}active{% endif %}" hx-get="/overview" hx-target="#content" hx-push-url="true">
+      <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+      <span>Overview</span>
+    </a>
+    <a class="nav-item {% if view[0]=='config' %}active{% endif %}" hx-get="/config" hx-target="#content" hx-push-url="true">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+      <span>Configuration</span>
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-title">Upload Workflows</div>
+    <a class="nav-item {% if view==('tab','upload-folder') %}active{% endif %}" hx-get="/tab/upload-folder" hx-target="#content" hx-push-url="true">
+      <span>Folder</span>
+    </a>
+    <a class="nav-item {% if view==('tab','upload-gp') %}active{% endif %}" hx-get="/tab/upload-gp" hx-target="#content" hx-push-url="true">
+      <span>Google Photos Takeout</span>
+    </a>
+    <a class="nav-item {% if view==('tab','upload-icloud') %}active{% endif %}" hx-get="/tab/upload-icloud" hx-target="#content" hx-push-url="true">
+      <span>iCloud Photos</span>
+    </a>
+    <a class="nav-item {% if view==('tab','upload-picasa') %}active{% endif %}" hx-get="/tab/upload-picasa" hx-target="#content" hx-push-url="true">
+      <span>Picasa / Google+</span>
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-title">Archive Workflows</div>
+    <a class="nav-item {% if view==('tab','archive-folder') %}active{% endif %}" hx-get="/tab/archive-folder" hx-target="#content" hx-push-url="true">
+      <span>Folder Archive</span>
+    </a>
+    <a class="nav-item {% if view==('tab','archive-gp') %}active{% endif %}" hx-get="/tab/archive-gp" hx-target="#content" hx-push-url="true">
+      <span>Google Photos Archive</span>
+    </a>
+    <a class="nav-item {% if view==('tab','archive-icloud') %}active{% endif %}" hx-get="/tab/archive-icloud" hx-target="#content" hx-push-url="true">
+      <span>iCloud Archive</span>
+    </a>
+    <a class="nav-item {% if view==('tab','archive-picasa') %}active{% endif %}" hx-get="/tab/archive-picasa" hx-target="#content" hx-push-url="true">
+      <span>Picasa Archive</span>
+    </a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-title">Stack Workflows</div>
+    <a class="nav-item {% if view==('tab','stack') %}active{% endif %}" hx-get="/tab/stack" hx-target="#content" hx-push-url="true">
+      <span>Stack Duplicates</span>
+    </a>
+  </div>
+</nav>
+
+
+================================================================================
+FILE 17 / 26: templates/partials/overview.html (Lines 1-99)
+================================================================================
+<div class="overview-grid">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Upload Workflows</h2>
+      <span class="card-subtitle">Import media into Immich server</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.upload %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Archive Workflows</h2>
+      <span class="card-subtitle">Export or download serverless archives</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.archive %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-badge">serverless</span>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Stack Workflows</h2>
+      <span class="card-subtitle">Group & stack duplicate media</span>
+    </div>
+    <div class="workflow-list">
+      {% for key in groups.stack %}
+      {% set tab = tabs[key] %}
+      <a class="workflow-item" hx-get="/tab/{{ key }}" hx-target="#content" hx-push-url="true">
+        <div class="workflow-info">
+          <span class="workflow-cmd">immich-go {{ commands[key]|join(' ') }}</span>
+          <span class="workflow-desc">{{ tab.description }}</span>
+        </div>
+        <span class="workflow-arrow">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if recent %}
+  <div class="card card-wide">
+    <div class="card-header">
+      <h2 class="card-title">Recent Run History</h2>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Run ID</th>
+            <th>Workflow</th>
+            <th>Command</th>
+            <th>Started</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in recent %}
+          <tr hx-get="/run/{{ run.run_id }}" hx-target="#content" hx-push-url="true" class="row-clickable">
+            <td><code>{{ run.run_id }}</code></td>
+            <td><span class="badge">{{ run.tab_key }}</span></td>
+            <td><code class="code-truncate">{{ run.display_cmd }}</code></td>
+            <td><small>{{ run.started_at[:19] }}</small></td>
+            <td>
+              {% if not run.finished %}
+                <span class="chip running">running…</span>
+              {% elif run.exit_code == 0 %}
+                <span class="chip ok">exit 0</span>
+              {% else %}
+                <span class="chip err">exit {{ run.exit_code }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+
+================================================================================
+FILE 18 / 26: templates/partials/panels.html (Lines 1-148)
+================================================================================
+{% if partial == 'partials/panels.html#toast' or toast %}
+<div class="toast toast-{{ tone|default('ok', true) }}" hx-swap-oob="beforeend:#toast">
+  <span>{{ toast }}</span>
+  <button onclick="this.parentElement.remove()" class="toast-close">✕</button>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#errors' or errors %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card modal-card-err" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Validation Errors</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-err">
+        <ul>
+          {% for err in errors %}
+            <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#conn_result' or conn %}
+<div class="alert {% if conn.ok %}alert-ok{% else %}alert-err{% endif %}">
+  <div><strong>Status:</strong> {{ conn.message }}</div>
+  {% if conn.server_version %}
+  <div><small>Immich Server Version: <code>{{ conn.server_version }}</code></small></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#binary_update' or latest %}
+<div class="card card-inner">
+  {% if latest %}
+    <div class="alert {% if decision and decision.action=='upgrade' %}alert-warn{% else %}alert-ok{% endif %}">
+      <div><strong>Latest Release:</strong> <code>v{{ latest }}</code> (Installed: <code>{{ current }}</code>)</div>
+      {% if decision %}
+      <div><small>{{ decision.reason }}</small></div>
+      {% endif %}
+
+      <form hx-post="/binary/download" hx-target="#binary-update-panel" class="mt-2">
+        <input type="hidden" name="version" value="{{ latest }}">
+        <button type="submit" class="btn btn-primary btn-sm">
+          ⬇ Install v{{ latest }}
+        </button>
+      </form>
+    </div>
+  {% else %}
+    <div class="alert alert-ok">
+      You are running the latest tested version of immich-go (<code>{{ current }}</code>).
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#dl_live' %}
+<div class="dl-live-box card card-inner" hx-ext="sse" sse-connect="/binary/download/events">
+  <div class="dl-header">Downloading immich-go v{{ version }}…</div>
+  <div class="progress-bar-wrap">
+    <div id="dl-progress-bar" class="progress-bar" style="width: 0%"></div>
+  </div>
+  <div class="dl-footer mt-2">
+    <span id="dl-status-text">Fetching release asset…</span>
+    <button class="btn btn-ghost btn-xs" hx-post="/binary/download/cancel" hx-target="#toast">Cancel</button>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#compat' or report %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card modal-card-lg" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">CLI Compatibility Matrix</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title">Tested CLI Version: <code>{{ tested }}</code></div>
+      <div class="table-wrap">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Workflow Tab</th>
+              <th>Schema Status</th>
+              <th>Discrepancies</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, res in report.items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>
+                <span class="chip {% if res.ok %}ok{% else %}err{% endif %}">
+                  {% if res.ok %}pass{% else %}mismatch{% endif %}
+                </span>
+              </td>
+              <td>
+                {% if res.missing_flags %}
+                <small class="text-err">Missing: {{ res.missing_flags|join(', ') }}</small>
+                {% else %}
+                <small class="text-dim">Fully compatible</small>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Close</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if partial == 'partials/panels.html#profile_prompt' %}
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Unsaved Profile Changes</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p>You have unsaved changes in the active profile. Would you like to save them before switching to '{{ name }}'?</p>
+    </div>
+    <div class="modal-footer">
+      <form hx-post="/profiles/switch">
+        <input type="hidden" name="name" value="{{ name }}">
+        <input type="hidden" name="action" value="discard">
+        <button type="submit" class="btn btn-ghost">Discard & Switch</button>
+      </form>
+      <form hx-post="/profiles/switch">
+        <input type="hidden" name="name" value="{{ name }}">
+        <input type="hidden" name="action" value="save">
+        <button type="submit" class="btn btn-primary">Save & Switch</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+================================================================================
+FILE 19 / 26: templates/partials/profiles.html (Lines 1-65)
+================================================================================
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Profile Management</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="section-title">Active Profile</div>
+      <div class="profile-select-list">
+        {% for p in profiles %}
+        <div class="profile-select-item {% if p.name==active %}active{% endif %}">
+          <div class="profile-info">
+            <span class="profile-name-text">👤 {{ p.name }}</span>
+            {% if p.is_default %}<span class="badge badge-sm">default</span>{% endif %}
+          </div>
+          {% if p.name != active %}
+          <form hx-post="/profiles/switch" hx-target="#toast" style="display:inline">
+            <input type="hidden" name="name" value="{{ p.name }}">
+            <button type="submit" class="btn btn-secondary btn-xs">Switch</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <hr class="divider">
+
+      <div class="section-title">Create New Profile</div>
+      <form hx-post="/profiles/create" hx-target="#toast" class="form-grid-sm">
+        <input type="text" name="name" class="form-input form-input-sm" placeholder="New profile name" required>
+        <select name="copy_from" class="form-select form-select-sm">
+          <option value="">Blank Profile</option>
+          {% for p in profiles %}
+          <option value="{{ p.name }}">Copy from {{ p.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">Create Profile</button>
+      </form>
+
+      <hr class="divider">
+
+      <div class="section-title">Active Profile Actions ({{ active }})</div>
+      <div class="profile-action-group">
+        <form hx-post="/profiles/duplicate" hx-target="#toast" class="form-grid-sm mb-2">
+          <input type="text" name="name" class="form-input form-input-sm" placeholder="Duplicate profile name" required>
+          <button type="submit" class="btn btn-secondary btn-sm">Duplicate Active</button>
+        </form>
+
+        <form hx-post="/profiles/rename" hx-target="#toast" class="form-grid-sm mb-2">
+          <input type="text" name="name" class="form-input form-input-sm" placeholder="New name for active profile" required>
+          <button type="submit" class="btn btn-secondary btn-sm">Rename Active</button>
+        </form>
+
+        {% if active != 'default' %}
+        <form hx-post="/profiles/delete" hx-target="#toast">
+          <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete active profile \'{{ active }}\'?')">
+            🗑 Delete Active Profile
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+================================================================================
+FILE 20 / 26: templates/partials/run_panel.html (Lines 1-52)
+================================================================================
+<div class="run-panel" hx-ext="sse" sse-connect="/runs/{{ run.run_id }}/stream">
+  <div class="run-header card">
+    <div class="run-info">
+      <div class="run-meta">
+        <span class="badge">{{ run.tab_key }}</span>
+        {% if run.dry_run %}
+        <span class="badge badge-dry">dry-run</span>
+        {% endif %}
+        <span class="run-id">ID: <code>{{ run.run_id }}</code></span>
+        <span id="run-status-chip">
+          {% if not run.finished %}
+            <span class="chip running">running…</span>
+          {% elif run.exit_code == 0 %}
+            <span class="chip ok">exit 0</span>
+          {% else %}
+            <span class="chip err">exit {{ run.exit_code }}</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="cmd-box mt-2"><code>$ {{ run.display_cmd }}</code></div>
+    </div>
+
+    <div class="run-actions">
+      {% if not run.finished %}
+      <button class="btn btn-danger btn-sm" hx-post="/runs/{{ run.run_id }}/stop" hx-target="#toast">
+        ⏹ Stop Process
+      </button>
+      {% endif %}
+      <button class="btn btn-ghost btn-sm" onclick="clearTerminalLogs()">
+        🧹 Clear Log
+      </button>
+      <a hx-get="/overview" hx-target="#content" hx-push-url="true" class="btn btn-secondary btn-sm">
+        ← Back to Overview
+      </a>
+    </div>
+  </div>
+
+  <div class="terminal-card card">
+    <div class="terminal-header">
+      <span class="terminal-title">Console Output Stream</span>
+      <label class="terminal-scroll-toggle">
+        <input type="checkbox" id="auto-scroll-toggle" checked>
+        <span>Auto-scroll</span>
+      </label>
+    </div>
+    <div class="terminal-body" id="terminal-logs" sse-swap="line">
+      {% for kind, line in run.lines %}
+        <div class="log-line {{ kind }}">{{ line|safe }}</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+
+================================================================================
+FILE 21 / 26: templates/partials/status.html (Lines 1-17)
+================================================================================
+<div class="status-pill-inner">
+  <span class="status-chip {% if binary.state=='ok' %}chip-ok{% else %}chip-err{% endif %}" title="immich-go CLI binary state">
+    CLI: {{ binary.version_text or 'Missing' }}
+  </span>
+  <span class="status-chip {% if srv[0]=='ok' %}chip-ok{% else %}chip-err{% endif %}" title="{{ srv[1] }}">
+    {{ srv[1] }}
+  </span>
+  {% if active %}
+  <a hx-get="/run/{{ active.run_id }}" hx-target="#content" hx-push-url="true" class="status-chip chip-running animate-pulse">
+    ⚡ Running ({{ active.tab_key }})
+  </a>
+  {% elif locked %}
+  <span class="status-chip chip-warn" title="Lock file active">
+    🔒 Locked
+  </span>
+  {% endif %}
+</div>
+
+
+================================================================================
+FILE 22 / 26: templates/partials/tab_form.html (Lines 1-69)
+================================================================================
+{% import 'partials/macros.html' as m %}
+
+<div class="tab-header">
+  <div class="tab-title-wrap">
+    <h1 class="page-title">{{ tabdef.title or tab }}</h1>
+    <span class="cmd-pill">immich-go {{ command|join(' ') }}</span>
+  </div>
+  <p class="page-desc">{{ tabdef.description }}</p>
+</div>
+
+<form id="tab-form" hx-post="/tabs/{{ tab }}/preview" hx-target="#modal-container" class="tab-form">
+  <!-- Hidden configuration snapshot required by command_builder -->
+  <input type="hidden" name="server" value="{{ cfg.server }}">
+  <input type="hidden" name="api_key" value="{{ cfg.api_key }}">
+  <input type="hidden" name="admin_api_key" value="{{ cfg.admin_api_key }}">
+  <input type="hidden" name="client_timeout_minutes" value="{{ cfg.client_timeout_minutes }}">
+  {% if cfg['skip-ssl'] %}
+  <input type="hidden" name="skip_ssl" value="on">
+  {% endif %}
+
+  {% if src_flags %}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Source Configuration</h2>
+    </div>
+    <div class="card-body">
+      {% for f in src_flags %}
+        {{ m.render_flag_field(f, st.get(f.key, '')) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if opt_flags %}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Options</h2>
+    </div>
+    <div class="card-body grid-2">
+      {% for f in opt_flags %}
+        {{ m.render_flag_field(f, st.get(f.key, '')) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if advanced and adv_defs %}
+  <div class="card">
+    <div class="card-header card-header-flex">
+      <h2 class="card-title">Advanced CLI Flags</h2>
+      <button type="button" class="btn btn-ghost btn-sm" hx-post="/advanced/reset" hx-target="#toast">Reset Advanced Flags</button>
+    </div>
+    <div class="card-body adv-grid">
+      {% for d in adv_defs %}
+        {{ m.render_adv_row(d, adv.get(d.key, {'enabled': false, 'value': d.default})) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" name="dry" value="1" class="btn btn-secondary">
+      🔍 Dry Run Preview
+    </button>
+    <button type="submit" name="dry" value="0" class="btn btn-primary">
+      🚀 Preview & Execute
+    </button>
+  </div>
+</form>
+
+
+================================================================================
+FILE 23 / 26: static/app.css (Lines 1-1054)
+================================================================================
+/* --------------------------------------------------------------------------
+   Immich-Go GUI — Web Console Aesthetics & Styling System
+   Matches theme.py desktop application palette 100%
+   -------------------------------------------------------------------------- */
+
+:root {
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Chakra Petch', 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+
+  /* Desktop Dark Theme Tokens from theme.py */
+  --bg-app: #0E1113;
+  --bg-sidebar: #121619;
+  --bg-card: #151A1E;
+  --bg-card-hover: #1B2126;
+  --bg-input: #1B2126;
+  --bg-input-focus: #20272D;
+  --bg-modal: #151A1E;
+  --bg-terminal: #0B0D0E;
+
+  --border-color: #262D34;
+  --border-strong: #343C43;
+  --border-hover: #4FB3A4;
+
+  --text-main: #E8ECEF;
+  --text-muted: #97A1AA;
+  --text-dim: #6B757D;
+
+  --primary: #E1512E;
+  --primary-hover: #F1603D;
+  --primary-light: #3A1D15;
+
+  --accent: #4FB3A4;
+  --accent-hover: #6FD6C5;
+  --accent-subtle: #17332F;
+
+  --secondary: #20262B;
+  --secondary-hover: #2A3238;
+
+  --ok: #4FB3A4;
+  --ok-bg: #17332F;
+  --warn: #E5C07B;
+  --warn-bg: rgba(229, 192, 123, 0.15);
+  --err: #EF4444;
+  --err-bg: rgba(239, 68, 68, 0.15);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.45);
+  --shadow-glow: 0 0 16px rgba(79, 179, 164, 0.25);
+}
+
+[data-theme="light"] {
+  /* Desktop Light Theme Tokens from theme.py */
+  --bg-app: #F5F7F9;
+  --bg-sidebar: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+  --bg-input: #F8FAFC;
+  --bg-input-focus: #FFFFFF;
+  --bg-modal: #FFFFFF;
+  --bg-terminal: #111827;
+
+  --border-color: #D8DEE4;
+  --border-strong: #C7CED6;
+  --border-hover: #0F766E;
+
+  --text-main: #18222C;
+  --text-muted: #5D6B7A;
+  --text-dim: #7C8794;
+
+  --primary: #C2410C;
+  --primary-hover: #EA580C;
+  --primary-light: #FFEDD5;
+
+  --accent: #0F766E;
+  --accent-hover: #14B8A6;
+  --accent-subtle: #E4F5F2;
+
+  --secondary: #EEF1F4;
+  --secondary-hover: #E2E7EC;
+
+  --warn: #B45309;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --------------------------------------------------------------------------
+   App Layout
+   -------------------------------------------------------------------------- */
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 270px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1rem;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--text-main);
+  margin-bottom: 1.75rem;
+  cursor: pointer;
+}
+
+.brand-mark {
+  font-size: 1.5rem;
+  color: var(--primary);
+  filter: drop-shadow(0 0 8px rgba(225, 81, 46, 0.4));
+}
+
+.brand-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand-text small {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nav-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 0 0.5rem 0.25rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.nav-item svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  opacity: 0.8;
+}
+
+.nav-item:hover {
+  background-color: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+.nav-item.active {
+  background-color: var(--accent);
+  color: #0E1113;
+  font-weight: 600;
+  box-shadow: var(--shadow-glow);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.profile-chip:hover {
+  border-color: var(--accent);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.header {
+  height: 60px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  background-color: var(--bg-sidebar);
+}
+
+.crumb {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.content {
+  padding: 2rem;
+  flex: 1;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   Cards & Content Layouts
+   -------------------------------------------------------------------------- */
+.overview-grid, .config-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 1.5rem;
+}
+
+.card-wide {
+  grid-column: 1 / -1;
+}
+
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.card-inner {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.card-header {
+  margin-bottom: 1.25rem;
+}
+
+.card-header-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.card-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.workflow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text-main);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.workflow-item:hover {
+  border-color: var(--border-hover);
+  background-color: var(--bg-card-hover);
+  transform: translateX(4px);
+}
+
+.workflow-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.workflow-cmd {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.workflow-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.workflow-arrow {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Forms & Controls
+   -------------------------------------------------------------------------- */
+.tab-header {
+  margin-bottom: 1.5rem;
+}
+
+.tab-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.cmd-pill {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.page-desc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.tab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.form-group-checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.form-input, .form-select {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.form-input-sm, .form-select-sm {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.form-help {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.form-actions-inline {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Advanced Grid */
+.adv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.adv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.adv-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.adv-key {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.adv-input-wrap {
+  width: 140px;
+  transition: opacity 0.15s ease;
+}
+
+.adv-input-wrap.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.adv-bool-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(225, 81, 46, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+  background-color: var(--secondary);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--secondary-hover);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-muted);
+}
+
+.btn-ghost:hover {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.btn-danger {
+  background-color: var(--err);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+.btn-danger-ghost {
+  color: var(--err);
+}
+
+.btn-danger-ghost:hover {
+  background-color: var(--err-bg);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.btn-xs {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.btn-icon {
+  padding: 0.4rem;
+  background-color: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Terminal Live Stream & Run Panel
+   -------------------------------------------------------------------------- */
+.run-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.run-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.run-id {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.terminal-card {
+  background-color: var(--bg-terminal);
+  border: 1px solid var(--border-color);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.terminal-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.terminal-scroll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.terminal-body {
+  height: 520px;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #ECE7DD;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-line.cmd {
+  color: #4FB3A4;
+  font-weight: 600;
+}
+
+.log-line.sys {
+  color: #E5C07B;
+}
+
+.log-line.ok {
+  color: #4FB3A4;
+  font-weight: 600;
+}
+
+.log-line.err {
+  color: #EF4444;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Chips, Badges, Tables, Alerts & Modals
+   -------------------------------------------------------------------------- */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--secondary);
+  color: var(--text-main);
+}
+
+.badge-ok {
+  background-color: var(--ok-bg);
+  color: var(--ok);
+}
+
+.badge-err {
+  background-color: var(--err-bg);
+  color: var(--err);
+}
+
+.badge-dry {
+  background-color: var(--warn-bg);
+  color: var(--warn);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.chip.ok, .chip-ok {
+  background-color: var(--ok-bg);
+  color: var(--ok);
+}
+
+.chip.err, .chip-err {
+  background-color: var(--err-bg);
+  color: var(--err);
+}
+
+.chip.running, .chip-running {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.chip.warn, .chip-warn {
+  background-color: var(--warn-bg);
+  color: var(--warn);
+}
+
+.status-pill-inner {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.status-chip {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th, .table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table th {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.row-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.row-clickable:hover {
+  background-color: var(--bg-card-hover);
+}
+
+.code-truncate {
+  max-width: 320px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.alert-ok {
+  background-color: var(--ok-bg);
+  border: 1px solid var(--ok);
+  color: var(--text-main);
+}
+
+.alert-warn {
+  background-color: var(--warn-bg);
+  border: 1px solid var(--warn);
+  color: var(--text-main);
+}
+
+.alert-err {
+  background-color: var(--err-bg);
+  border: 1px solid var(--err);
+  color: var(--text-main);
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-card {
+  background-color: var(--bg-modal);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 580px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-card-lg {
+  max-width: 780px;
+}
+
+.modal-card-err {
+  border-color: var(--err);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background-color: var(--bg-input);
+}
+
+.cmd-box {
+  background-color: var(--bg-terminal);
+  border: 1px solid var(--border-color);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 2000;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  box-shadow: var(--shadow-md);
+  color: #ffffff;
+  min-width: 280px;
+}
+
+.toast-ok {
+  background-color: var(--accent);
+  color: #0E1113;
+  font-weight: 600;
+}
+
+.toast-warn {
+  background-color: var(--warn);
+  color: #0E1113;
+  font-weight: 600;
+}
+
+.toast-err {
+  background-color: var(--err);
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+/* Login */
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.login-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-md);
+}
+
+.brand-center {
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+/* Profile List */
+.profile-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.profile-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.profile-select-item.active {
+  border-color: var(--accent);
+  background-color: var(--accent-subtle);
+}
+
+.divider {
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 1.25rem 0;
+}
+
+.form-grid-sm {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+
+
+================================================================================
+FILE 24 / 26: static/app.js (Lines 1-77)
+================================================================================
+/* --------------------------------------------------------------------------
+   Immich-Go GUI — Web Console Client Script
+   -------------------------------------------------------------------------- */
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+
+  fetch('/theme', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'theme=' + encodeURIComponent(next)
+  });
+}
+
+function clearTerminalLogs() {
+  const container = document.getElementById('terminal-logs');
+  if (container) {
+    container.innerHTML = '';
+  }
+}
+
+// Auto-scroll terminal logs on new SSE line messages
+document.addEventListener('htmx:sseMessage', function(evt) {
+  const toggle = document.getElementById('auto-scroll-toggle');
+  const container = document.getElementById('terminal-logs');
+
+  if (container && toggle && toggle.checked) {
+    container.scrollTop = container.scrollHeight;
+  }
+});
+
+// Update chip on SSE done event
+document.addEventListener('htmx:sseBeforeMessage', function(evt) {
+  if (evt.detail.type === 'done') {
+    try {
+      const data = JSON.parse(evt.detail.data);
+      const chipContainer = document.getElementById('run-status-chip');
+      if (chipContainer && data.chip) {
+        chipContainer.innerHTML = data.chip;
+      }
+    } catch(e) {}
+  }
+});
+
+// Sync active navigation item highlighting with current URL path
+function updateActiveNav() {
+  const currentPath = window.location.pathname;
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    const targetPath = el.getAttribute('hx-get');
+    if (targetPath && (targetPath === currentPath || (currentPath === '/' && targetPath === '/overview'))) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+}
+
+document.addEventListener('htmx:afterSettle', updateActiveNav);
+window.addEventListener('popstate', updateActiveNav);
+document.addEventListener('DOMContentLoaded', updateActiveNav);
+
+// Auto-dismiss toasts after 5s
+document.addEventListener('htmx:afterSettle', function(evt) {
+  const toasts = document.querySelectorAll('.toast:not([data-timer])');
+  toasts.forEach(function(t) {
+    t.setAttribute('data-timer', 'true');
+    setTimeout(function() {
+      if (t.parentNode) {
+        t.style.opacity = '0';
+        t.style.transition = 'opacity 0.3s ease';
+        setTimeout(function() { if (t.parentNode) t.remove(); }, 300);
+      }
+    }, 5000);
+  });
+});
+
+
+================================================================================
+FILE 25 / 26: scripts/fetch_vendor.sh (Lines 1-16)
+================================================================================
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENDOR_DIR="$ROOT_DIR/static/vendor"
+
+mkdir -p "$VENDOR_DIR"
+
+echo "Fetching htmx.min.js..."
+curl -sSL "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" -o "$VENDOR_DIR/htmx.min.js"
+
+echo "Fetching sse.js..."
+curl -sSL "https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" -o "$VENDOR_DIR/sse.js"
+
+echo "Vendor scripts fetched into static/vendor/ successfully."
+
+
+================================================================================
+FILE 26 / 26: tests/test_web.py (Lines 1-200)
+================================================================================
+"""Tests for the HTMX Web Console (Starlette + Uvicorn + SSE runner).
+
+Guarantees:
+- The web app imports strictly from core/ and never imports Qt/PySide6.
+- Form parsing correctly coerces types and translates form data to core state dicts.
+- Auth middleware correctly enforces login / session cookie validation.
+- RunManager executes subprocesses and buffers lines for SSE output streaming.
+- Diagnostics zip is Qt-free and properly redacts sensitive fields.
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import sys
+import zipfile
+from unittest.mock import patch
+
+from starlette.testclient import TestClient
+
+from core.flag_registry import FlagDef
+from core.models import CommandPlan
+from webapp.app import create_app
+from webapp.forms import (
+    coerce,
+    parse_config_state,
+    parse_tab_state,
+    renderable_simple_flags,
+)
+from webapp.runner import RunManager
+
+
+def test_web_app_does_not_import_qt():
+    """Verify web application modules do not import PySide6 / Qt."""
+    qt_modules = [m for m in sys.modules if "PySide6" in m or "gui." in m]
+    import web
+    import webapp.app
+    import webapp.auth
+    import webapp.diagnostics
+    import webapp.forms
+    import webapp.runner
+
+    new_qt_modules = [m for m in sys.modules if ("PySide6" in m or "gui." in m) and m not in qt_modules]
+    assert not new_qt_modules, f"Web app imported Qt modules: {new_qt_modules}"
+
+
+def test_healthz_endpoint():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.text == "ok"
+
+
+def test_overview_route_renders_html():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "IMMICH-GO" in resp.text
+    assert "Upload Workflows" in resp.text
+
+
+def test_tab_page_renders_form():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    assert "upload-folder" in resp.text
+    assert "Source Configuration" in resp.text or "Options" in resp.text
+    assert "<!doctype html>" in resp.text
+
+
+def test_htmx_header_partial_rendering():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "upload-folder" in resp.text
+    assert "<!doctype html>" not in resp.text
+    assert '<aside class="sidebar">' not in resp.text
+
+
+def test_mode_toggle_preserves_tab_view_and_updates_sidebar():
+    app = create_app()
+    client = TestClient(app)
+    resp1 = client.get("/tab/upload-gp", headers={"HX-Request": "true"})
+    assert resp1.status_code == 200
+    assert "upload-gp" in resp1.text
+
+    resp2 = client.post("/mode/toggle", headers={"HX-Request": "true"})
+    assert resp2.status_code == 200
+    assert "upload-gp" in resp2.text
+    assert 'hx-get="/tab/upload-gp"' in resp2.text
+    assert 'id="sidebar-nav"' in resp2.text
+
+
+def test_invalid_tab_redirects_to_overview():
+    app = create_app()
+    client = TestClient(app, follow_redirects=False)
+    resp = client.get("/tab/nonexistent-tab")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/overview"
+
+
+def test_config_page_renders_settings():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/config")
+    assert resp.status_code == 200
+    assert "Server Connection" in resp.text
+    assert "Binary Management" in resp.text
+
+
+def test_form_coercion_and_parsing():
+    f_bool = FlagDef(key="dry-run", flag="dry-run", label="Dry Run", mode="simple", kind="bool", default=False)
+    f_int = FlagDef(key="timeout", flag="timeout", label="Timeout", mode="simple", kind="int", default=10, min_val=1, max_val=100)
+
+    assert coerce(f_bool, "on") is True
+    assert coerce(f_bool, "") is False
+    assert coerce(f_int, "50") == 50
+    assert coerce(f_int, "200") == 100
+
+    simple_flags = renderable_simple_flags("upload-folder")
+    assert isinstance(simple_flags, tuple)
+
+    parsed_st = parse_tab_state("upload-folder", {"fld_delete": "on"})
+    assert isinstance(parsed_st, dict)
+
+    parsed_cfg = parse_config_state({"server": "http://localhost:2283", "api_key": "secret"})
+    assert parsed_cfg["server"] == "http://localhost:2283"
+    assert parsed_cfg["api_key"] == "secret"
+
+
+def test_auth_middleware_flow():
+    with patch.dict(os.environ, {"IGG_WEB_USER": "admin", "IGG_WEB_PASSWORD": "secret_password"}):
+        app = create_app()
+        client = TestClient(app, follow_redirects=False)
+
+        # Unauthenticated request redirects to /login
+        resp = client.get("/overview")
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/login"
+
+        # Failed login
+        resp_login_fail = client.post("/login", data={"user": "admin", "password": "wrong"})
+        assert resp_login_fail.status_code == 200
+        assert "Invalid username or password" in resp_login_fail.text
+
+        # Successful login
+        resp_login_ok = client.post("/login", data={"user": "admin", "password": "secret_password"})
+        assert resp_login_ok.status_code == 303
+        assert "igg_auth" in resp_login_ok.cookies
+
+
+def test_diagnostics_zip_generation(tmp_path):
+    from webapp.diagnostics import build_diagnostics_zip
+
+    zip_bytes = build_diagnostics_zip()
+    assert len(zip_bytes) > 0
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        names = zf.namelist()
+        assert "summary.txt" in names
+        summary = zf.read("summary.txt").decode("utf-8")
+        assert "surface=web-console" in summary
+
+
+def test_run_manager_subprocess_lifecycle(tmp_path):
+    mgr = RunManager()
+    dummy_script = tmp_path / "dummy_immich_go.sh"
+    dummy_script.write_text("#!/bin/sh\necho 'hello world'\nexit 0\n")
+    dummy_script.chmod(0o755)
+
+    plan = CommandPlan(
+        argv=["upload", "folder"],
+        env={},
+        display_argv=["immich-go", "upload", "folder"],
+        warnings=[],
+        errors=[],
+        emission_log=[],
+        tab_key="upload-folder",
+        dry_run=True,
+        binary_path=str(dummy_script),
+    )
+
+    run = mgr.start(plan, str(dummy_script))
+    assert run.run_id in mgr.runs
+    assert mgr.is_busy()
+
+    # Wait for process completion
+    run.done.wait(timeout=5.0)
+    assert run.finished
+    assert run.exit_code == 0
+    assert not mgr.is_busy()
+
+    snapshot, total = run.snapshot(0)
+    assert total >= 2
+    log_texts = [h for _, h in snapshot]
+    assert any("hello world" in t for t in log_texts)

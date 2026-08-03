@@ -1,0 +1,52 @@
+<div class="run-panel" hx-ext="sse" sse-connect="/runs/{{ run.run_id }}/stream">
+  <div class="run-header card">
+    <div class="run-info">
+      <div class="run-meta">
+        <span class="badge">{{ run.tab_key }}</span>
+        {% if run.dry_run %}
+        <span class="badge badge-dry">dry-run</span>
+        {% endif %}
+        <span class="run-id">ID: <code>{{ run.run_id }}</code></span>
+        <span id="run-status-chip">
+          {% if not run.finished %}
+            <span class="chip running">running…</span>
+          {% elif run.exit_code == 0 %}
+            <span class="chip ok">exit 0</span>
+          {% else %}
+            <span class="chip err">exit {{ run.exit_code }}</span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="cmd-box mt-2"><code>$ {{ run.display_cmd }}</code></div>
+    </div>
+
+    <div class="run-actions">
+      {% if not run.finished %}
+      <button class="btn btn-danger btn-sm" hx-post="/runs/{{ run.run_id }}/stop" hx-target="#toast">
+        ⏹ Stop Process
+      </button>
+      {% endif %}
+      <button class="btn btn-ghost btn-sm" onclick="clearTerminalLogs()">
+        🧹 Clear Log
+      </button>
+      <a hx-get="/overview" hx-target="#content" hx-push-url="true" class="btn btn-secondary btn-sm">
+        ← Back to Overview
+      </a>
+    </div>
+  </div>
+
+  <div class="terminal-card card">
+    <div class="terminal-header">
+      <span class="terminal-title">Console Output Stream</span>
+      <label class="terminal-scroll-toggle">
+        <input type="checkbox" id="auto-scroll-toggle" checked>
+        <span>Auto-scroll</span>
+      </label>
+    </div>
+    <div class="terminal-body" id="terminal-logs" sse-swap="line">
+      {% for kind, line in run.lines %}
+        <div class="log-line {{ kind }}">{{ line|safe }}</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>

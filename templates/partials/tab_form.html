@@ -67,7 +67,7 @@
         {% for p in presets %}
         <button type="button" class="preset-chip btn btn-ghost btn-xs"
                 data-tooltip="{{ p.desc }}"
-                onclick="applyPreset({{ p.flags|tojson }})">⚡ {{ p.name }}</button>
+                data-preset='{{ p.flags|tojson }}'>⚡ {{ p.name }}</button>
         {% endfor %}
       </div>
       {% endif %}

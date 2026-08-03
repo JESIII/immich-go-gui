@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login · Immich-Go Web Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login-body">
+<div class="login-card">
+  <div class="brand brand-center">
+    <span class="brand-mark">▣</span>
+    <span class="brand-text">IMMICH-GO<small>web console</small></span>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-err">Invalid username or password.</div>
+  {% endif %}
+
+  <form method="post" action="/login" class="login-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <div class="form-group">
+      <label class="form-label" for="user">Username</label>
+      <input type="text" id="user" name="user" class="form-input" required autofocus autocomplete="username">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input type="password" id="password" name="password" class="form-input" required autocomplete="current-password">
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+  </form>
+</div>
+</body>
+</html>

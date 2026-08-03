@@ -1,0 +1,15 @@
+# Keep the Docker build context lean (mirrors .gitignore).
+.git/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+site/
+.cache/
+config_data/
+
+# Generated LLM review bundles
+immichgo_*_bundle.txt

@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  immich-go-web:
+    build: .
+    container_name: immich-go-web
+    ports:
+      - "8235:8080"
+    environment:
+      - IGG_WEB_USER=admin
+      - IGG_WEB_PASSWORD=admin
+    volumes:
+      - ./config_data:/config
+    restart: unless-stopped
