@@ -555,3 +555,53 @@ def test_status_surfaces_connection_result():
         assert resp.status_code == 200
         assert "Connected" in resp.text
         assert "v1.118.0" in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 3 - config tab parity (W-14 conn chip, W-15 sections, W-16 checklist)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_connection_chip_endpoint_returns_json():
+    """W-14: the ambient connection-check endpoint returns JSON for the chip."""
+    import json as _json
+    from types import SimpleNamespace
+
+    from webapp import app as appmod
+
+    fake = SimpleNamespace(ok=True, message="Connected", server_version="v1.118.0")
+    with patch.object(appmod, "test_immich_connection", return_value=fake):
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/config/test-connection-async",
+            data={"server": "https://x:2283", "api_key": "k"},
+        )
+        assert resp.status_code == 200
+        data = _json.loads(resp.text)
+        assert data["ok"] is True
+        assert data["message"] == "Connected"
+        assert data["server_version"] == "v1.118.0"
+
+
+def test_config_page_shows_new_sections_and_checklist():
+    """W-15/W-16: config exposes Application, Appearance, and first-run checklist."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/config")
+    assert resp.status_code == 200
+    assert "Getting Started Checklist" in resp.text
+    assert "Application" in resp.text
+    assert "Appearance" in resp.text
+    assert "Theme" in resp.text
+    assert "conn-chip" in resp.text
+
+
+def test_checklist_dismiss_hides_card():
+    """W-16: dismissing the checklist persists and hides it."""
+    app = create_app()
+    client = TestClient(app)
+    assert "Getting Started Checklist" in client.get("/config").text
+    client.post("/checklist/dismiss")
+    resp = client.get("/config")
+    assert "Getting Started Checklist" not in resp.text

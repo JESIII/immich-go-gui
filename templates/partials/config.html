@@ -7,7 +7,10 @@
     <form hx-post="/config/save-server" hx-target="#toast" class="card-body">
       <div class="form-group">
         <label class="form-label" for="cfg_server">Server URL</label>
-        <input type="text" id="cfg_server" name="server" value="{{ cfg.server_url }}" class="form-input" placeholder="https://immich.example.com">
+        <div class="field-with-chip">
+          <input type="text" id="cfg_server" name="server" value="{{ cfg.server_url }}" class="form-input" placeholder="https://immich.example.com">
+          <span id="conn-chip" class="conn-chip conn-chip-idle" title="Connection status"></span>
+        </div>
       </div>
 
       <div class="form-group">
@@ -48,6 +51,11 @@
           <option value="config" {% if cfg.secrets_provider in ('config','fallback') %}selected{% endif %}>Local secrets file (0600 secrets.toml)</option>
         </select>
         <div class="form-help">Secrets file path: <code>{{ secrets_path }}</code></div>
+        <div class="form-help">
+          Secret status: provider <strong>{{ cfg.secrets_provider }}</strong> ·
+          API key {{ 'stored' if secrets.api_key else 'not set' }} ·
+          Admin key {{ 'stored' if secrets.admin_api_key else 'not set' }}
+        </div>
         {% if keyring_available is defined and not keyring_available %}
         <div class="alert alert-warn mt-2">
           ⚠️ OS keyring is not available in this environment. Secrets are stored in the
@@ -105,6 +113,55 @@
       </form>
     </div>
   </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Application</h2>
+    </div>
+    <div class="card-body">
+      <div><strong>GUI Version:</strong> <code>v{{ version }}</code></div>
+      <div class="form-actions-inline mt-3">
+        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
+          🔄 Check for Updates
+        </button>
+        <a class="btn btn-ghost btn-sm" href="https://github.com/shitan198u/immich-go-gui/releases" target="_blank" rel="noopener">
+          📦 View Releases
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Appearance</h2>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="theme_select">Theme</label>
+        <select id="theme_select" class="form-select" onchange="setTheme(this.value)">
+          <option value="system" {% if theme=='system' %}selected{% endif %}>System (follow OS)</option>
+          <option value="light" {% if theme=='light' %}selected{% endif %}>Light</option>
+          <option value="dark" {% if theme=='dark' %}selected{% endif %}>Dark</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {% if checklist and not checklist.dismissed %}
+  <div class="card" id="first-run-checklist">
+    <div class="card-header card-header-flex">
+      <h2 class="card-title">Getting Started Checklist</h2>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="dismissChecklist()">Dismiss</button>
+    </div>
+    <div class="card-body checklist-list">
+      <div class="checklist-item {% if checklist.server %}done{% endif %}">{% if checklist.server %}✅{% else %}⬜{% endif %} Set your Immich server URL</div>
+      <div class="checklist-item {% if checklist.api_key %}done{% endif %}">{% if checklist.api_key %}✅{% else %}⬜{% endif %} Store your API key</div>
+      <div class="checklist-item {% if checklist.conn %}done{% endif %}">{% if checklist.conn %}✅{% else %}⬜{% endif %} Pass a connection test</div>
+      <div class="checklist-item {% if checklist.binary %}done{% endif %}">{% if checklist.binary %}✅{% else %}⬜{% endif %} Have the immich-go binary (v0.32.0) available</div>
+      <div class="checklist-item {% if checklist.dry_run %}done{% endif %}">{% if checklist.dry_run %}✅{% else %}⬜{% endif %} Run your first dry-run</div>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card">
     <div class="card-header">

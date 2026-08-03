@@ -290,6 +290,17 @@ async def config_page(request: Request) -> HTMLResponse:
     cfg = s["config"]
     from core.config_manager import default_secrets_path
 
+    last_conn = s.get("conn") or {}
+    binary = BINMGR.check_binary()
+    checklist = {
+        "dismissed": bool(s.get("checklist_dismissed")),
+        "server": bool(cfg.server_url),
+        "api_key": bool(s["secrets"].get("api_key")),
+        "conn": bool(last_conn.get("ok")),
+        "binary": binary.state == "ok",
+        "dry_run": bool(RUNS.order),
+    }
+
     return page(
         request,
         "partials/config.html",
@@ -297,7 +308,8 @@ async def config_page(request: Request) -> HTMLResponse:
         secrets=s["secrets"],
         secrets_path=default_secrets_path(),
         keyring_available=_keyring_available(),
-        binary_status=BINMGR.check_binary(),
+        checklist=checklist,
+        binary_status=binary,
         binary_path=BINMGR.resolve_binary_path(),
         manual_path=load_binary_metadata().get("manual_path", ""),
         crumb="configuration",
@@ -372,6 +384,44 @@ async def config_test_connection(request: Request) -> HTMLResponse:
         conn=res,
         toast=res.message,
         tone="ok" if res.ok else "err",
+    )
+
+
+async def test_connection_chip(request: Request) -> Response:
+    """Ambient (debounced) connection check returning JSON for the inline chip."""
+    s = ensure_loaded(request)
+    form = dict(await request.form())
+    res = test_immich_connection(
+        str(form.get("server") or "").strip(),
+        str(form.get("api_key") or "").strip(),
+        skip_ssl=form.get("skip_ssl") == "on",
+    )
+    server_version = getattr(res, "server_version", "") or ""
+    s["conn"] = {
+        "ok": bool(res.ok),
+        "message": res.message,
+        "server_version": server_version,
+    }
+    return Response(
+        content=json.dumps(
+            {
+                "ok": bool(res.ok),
+                "message": res.message,
+                "server_version": server_version,
+            }
+        ),
+        media_type="application/json",
+    )
+
+
+async def checklist_dismiss(request: Request) -> HTMLResponse:
+    s = ensure_loaded(request)
+    s["checklist_dismissed"] = True
+    return partial(
+        request,
+        "partials/panels.html#toast",
+        toast="First-run checklist dismissed.",
+        tone="ok",
     )
 
 
@@ -967,6 +1017,8 @@ def create_app() -> Starlette:
         Route("/config/save-server", config_save_server, methods=["POST"]),
         Route("/config/save", config_save_app, methods=["POST"]),
         Route("/config/test-connection", config_test_connection, methods=["POST"]),
+        Route("/config/test-connection-async", test_connection_chip, methods=["POST"]),
+        Route("/checklist/dismiss", checklist_dismiss, methods=["POST"]),
         Route("/mode/toggle", mode_toggle, methods=["POST"]),
         Route("/theme", theme_set, methods=["POST"]),
         # ops

@@ -34,6 +34,89 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', fu
   if (currentThemePreference() === 'system') applyTheme('system');
 });
 
+// Programmatic theme selection from the Appearance card (System/Light/Dark).
+function setTheme(value) {
+  applyTheme(value);
+  fetch('/theme', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'theme=' + encodeURIComponent(value)
+  });
+}
+
+// Dismiss the first-run checklist (removes the card and persists in session).
+function dismissChecklist() {
+  var card = document.getElementById('first-run-checklist');
+  if (card) card.remove();
+  fetch('/checklist/dismiss', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: ''
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Ambient connection chip (W-14): after debounced edits to the server URL or
+   API key, silently test the connection and update the inline chip. Delegated
+   input listener survives HTMX content swaps of the config page.
+   -------------------------------------------------------------------------- */
+function getConnEls() {
+  return {
+    server: document.getElementById('cfg_server'),
+    key: document.getElementById('cfg_api_key'),
+    chip: document.getElementById('conn-chip')
+  };
+}
+
+function runConnectionTest() {
+  var els = getConnEls();
+  if (!els.server || !els.chip) return;
+  var body = 'server=' + encodeURIComponent(els.server.value) +
+             '&api_key=' + encodeURIComponent(els.key ? els.key.value : '');
+  els.chip.className = 'conn-chip conn-chip-checking';
+  els.chip.textContent = 'checking…';
+  fetch('/config/test-connection-async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) { return r.json(); }).then(function (data) {
+    if (data.ok) {
+      els.chip.className = 'conn-chip conn-chip-ok';
+      els.chip.textContent = 'Connected' + (data.server_version ? ' · v' + data.server_version : '');
+      els.chip.title = data.message || 'Connected';
+    } else {
+      els.chip.className = 'conn-chip conn-chip-err';
+      els.chip.textContent = 'Unreachable';
+      els.chip.title = data.message || 'Connection failed';
+    }
+  }).catch(function () {
+    var e = getConnEls();
+    if (e.chip) {
+      e.chip.className = 'conn-chip conn-chip-err';
+      e.chip.textContent = 'Error';
+    }
+  });
+}
+
+var connTimer = null;
+document.addEventListener('input', function (evt) {
+  var t = evt.target;
+  if (t && (t.id === 'cfg_server' || t.id === 'cfg_api_key')) {
+    clearTimeout(connTimer);
+    connTimer = setTimeout(runConnectionTest, 1200);
+  }
+});
+
+function maybeInitConnChip() {
+  var els = getConnEls();
+  if (els.server && els.server.value && els.chip && !els.chip.dataset.inited) {
+    els.chip.dataset.inited = '1';
+    runConnectionTest();
+  }
+}
+document.addEventListener('DOMContentLoaded', maybeInitConnChip);
+document.addEventListener('htmx:afterSettle', maybeInitConnChip);
+
 function clearTerminalLogs() {
   const container = document.getElementById('terminal-logs');
   if (container) {
