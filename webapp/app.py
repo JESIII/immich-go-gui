@@ -192,7 +192,7 @@ def page(request: Request, partial_name: str, **ctx: Any) -> HTMLResponse:
     return HTMLResponse(full_html)
 
 
-def partial(request: Request, name: str, **ctx: Any) -> HTMLResponse:
+def partial(request: Request, frag_name: str, **ctx: Any) -> HTMLResponse:
     """Render a fragment partial (e.g. 'panels.html#toast').
 
     The ``#fragment`` suffix selects which block inside ``partials/panels.html``
@@ -200,9 +200,9 @@ def partial(request: Request, name: str, **ctx: Any) -> HTMLResponse:
     before calling get_template and pass the full name back as the ``partial``
     context variable the template conditions compare against.
     """
-    template_path, _, fragment = name.partition("#")
+    template_path, _, fragment = frag_name.partition("#")
     if fragment:
-        ctx.setdefault("partial", name)
+        ctx.setdefault("partial", frag_name)
     return HTMLResponse(
         TEMPLATES.get_template(template_path).render(base_ctx(request, **ctx))
     )
@@ -451,6 +451,49 @@ async def theme_set(request: Request) -> Response:
     return resp
 
 
+def _tokenize_plan(plan: Any) -> list[dict]:
+    """Map a plan's masked display argv to color-coded {arg, source} tokens."""
+    source_map = {
+        str(e.get("key", "")): e.get("source", "static") for e in plan.emission_log
+    }
+    tokens = []
+    for arg in plan.display_argv:
+        flag = arg.lstrip("-").split("=", 1)[0]
+        tokens.append({"arg": arg, "source": source_map.get(flag, "static")})
+    return tokens
+
+
+async def tab_live_preview(request: Request) -> HTMLResponse:
+    """Debounced live command ribbon (proposal P1). Builds a plan server-side
+    and returns masked argv tokens color-coded by emission source, plus the
+    active safety warnings shelf."""
+    key = request.path_params["tab"]
+    s = ensure_loaded(request)
+    if key not in REGISTRY.tabs:
+        return Response(status_code=404)
+    form = dict(await request.form())
+    config_state = current_config_state(request)
+    tab_state = parse_tab_state(key, form)
+    advanced_state = (
+        parse_advanced_state(key, form) if s["config"].advanced_mode else None
+    )
+    binary_path = get_binary_path(load_binary_metadata()) or "./immich-go"
+    plan = build_plan_from_state(
+        tab_key=key,
+        config_state=config_state,
+        tab_state=tab_state,
+        binary_path=binary_path,
+        dry_run=False,
+        advanced_state=advanced_state,
+    )
+    return partial(
+        request,
+        "partials/panels.html#live_ribbon",
+        tokens=_tokenize_plan(plan),
+        warnings=plan.warnings,
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Tab form endpoints: preview → confirm → run
 # ──────────────────────────────────────────────────────────────────────
@@ -476,7 +519,7 @@ async def tab_preview(request: Request) -> HTMLResponse:
     res.warnings.extend(adv_res.warnings)
 
     if res.errors:
-        return partial(
+        modal = partial(
             request,
             "partials/panels.html#errors",
             tab=key,
@@ -484,6 +527,15 @@ async def tab_preview(request: Request) -> HTMLResponse:
             field_errors=res.field_errors,
             dry=dry,
         )
+        # Inline per-field errors: out-of-band swap each field's error span so it
+        # renders red text directly under the offending control (in addition to
+        # the modal summary). See macros.html render_flag_field.
+        oob = "".join(
+            f'<span id="field-err-{k}" class="field-error" '
+            f'hx-swap-oob="outerHTML:#field-err-{k}">{v}</span>'
+            for k, v in res.field_errors.items()
+        )
+        return HTMLResponse(modal.body.decode("utf-8") + oob)
 
     binary_path = get_binary_path(load_binary_metadata()) or "./immich-go"
     plan = build_plan_from_state(
@@ -534,6 +586,7 @@ async def tab_preview(request: Request) -> HTMLResponse:
         cmd_str=" ".join(shlex.quote(p) for p in plan.display_argv),
         env_rows=masked_env,
         preflight=preflight,
+        emission_log=plan.emission_log,
     )
 
 
@@ -1007,6 +1060,7 @@ def create_app() -> Starlette:
         Route("/logout", logout),
         # tab workflow
         Route("/tabs/{tab}/preview", tab_preview, methods=["POST"]),
+        Route("/tabs/{tab}/live-preview", tab_live_preview, methods=["POST"]),
         Route("/runs", run_start, methods=["POST"]),
         Route("/run/{rid}", run_panel_page),
         Route("/runs/{rid}/stream", run_stream),

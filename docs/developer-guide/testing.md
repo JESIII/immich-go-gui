@@ -1,6 +1,6 @@
 # Testing
 
-The test suite lives in `tests/` (456 tests across 28 modules) using `pytest` and `pytest-qt`.
+The test suite lives in `tests/` (460 tests across 28 modules) using `pytest` and `pytest-qt`.
 
 ## Running Tests
 

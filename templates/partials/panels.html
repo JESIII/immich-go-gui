@@ -133,6 +133,27 @@
 </div>
 {% endif %}
 
+{% if partial == 'partials/panels.html#live_ribbon' %}
+<div class="live-ribbon">
+  {% if warnings %}
+  <div class="warnings-shelf">
+    {% for w in warnings %}
+    <span class="warning-chip">⚠ {{ w }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="ribbon-argv">
+    {% if tokens %}
+      {% for t in tokens %}
+      <span class="ribbon-tok ribbon-{{ t.source }}" title="source: {{ t.source }}">{{ t.arg }}</span>
+      {% endfor %}
+    {% else %}
+      <span class="ribbon-empty">Complete the required fields to build a command…</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if partial == 'partials/panels.html#profile_prompt' %}
 <div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
   <div class="modal-card" onclick="event.stopPropagation()">

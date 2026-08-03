@@ -1,0 +1,69 @@
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">Profile Management</h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="section-title">Active Profile</div>
+      <div class="profile-select-list">
+        {% for p in profiles %}
+        <div class="profile-select-item {% if p.name==active %}active{% endif %}">
+          <div class="profile-info">
+            <span class="profile-name-text">👤 {{ p.name }}</span>
+            {% if p.is_default %}<span class="badge badge-sm">default</span>{% endif %}
+          </div>
+          {% if p.name != active %}
+          <form hx-post="/profiles/switch" hx-target="#modal-container" style="display:inline">
+            <input type="hidden" name="name" value="{{ p.name }}">
+            <input type="hidden" name="dirty" value="0">
+            <button type="submit" class="btn btn-secondary btn-xs"
+                    onclick="this.form.dirty.value = (window._iggDirty ? '1' : '0'); window._iggDirty = false;">
+              Switch
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <hr class="divider">
+
+      <div class="section-title">Create New Profile</div>
+      <form hx-post="/profiles/create" hx-target="#toast" class="form-grid-sm">
+        <input type="text" name="name" class="form-input form-input-sm" placeholder="New profile name" required>
+        <select name="copy_from" class="form-select form-select-sm">
+          <option value="">Blank Profile</option>
+          {% for p in profiles %}
+          <option value="{{ p.name }}">Copy from {{ p.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">Create Profile</button>
+      </form>
+
+      <hr class="divider">
+
+      <div class="section-title">Active Profile Actions ({{ active }})</div>
+      <div class="profile-action-group">
+        <form hx-post="/profiles/duplicate" hx-target="#toast" class="form-grid-sm mb-2">
+          <input type="text" name="name" class="form-input form-input-sm" placeholder="Duplicate profile name" required>
+          <button type="submit" class="btn btn-secondary btn-sm">Duplicate Active</button>
+        </form>
+
+        <form hx-post="/profiles/rename" hx-target="#toast" class="form-grid-sm mb-2">
+          <input type="text" name="name" class="form-input form-input-sm" placeholder="New name for active profile" required>
+          <button type="submit" class="btn btn-secondary btn-sm">Rename Active</button>
+        </form>
+
+        {% if active != 'default' %}
+        <form hx-post="/profiles/delete" hx-target="#toast">
+          <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete active profile \'{{ active }}\'?')">
+            🗑 Delete Active Profile
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>

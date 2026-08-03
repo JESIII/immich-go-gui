@@ -18,12 +18,16 @@
              {% if f.min_val is not none %}min="{{ f.min_val }}"{% endif %}
              {% if f.max_val is not none %}max="{{ f.max_val }}"{% endif %}>
     {% else %}
-      <input type="{% if f.secret_env %}password{% else %}text{% endif %}" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input" placeholder="{{ f.placeholder or '' }}">
+      <div class="dnd-wrap {% if f.kind in ('path','paths') %}is-droppable{% endif %}">
+        <input type="{% if f.secret_env %}password{% else %}text{% endif %}" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input {% if f.kind in ('path','paths') %}droppable-field{% endif %}" placeholder="{{ f.placeholder or '' }}">
+        {% if f.kind in ('path','paths') %}<small class="dnd-hint">📎 Drop files/folders here to add their names</small>{% endif %}
+      </div>
     {% endif %}
   {% endif %}
   {% if f.help_text %}
     <div class="form-help">{{ f.help_text }}</div>
   {% endif %}
+  <span id="field-err-{{ f.key }}" class="field-error"></span>
 </div>
 {% endmacro %}
 

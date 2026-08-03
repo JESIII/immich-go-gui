@@ -605,3 +605,74 @@ def test_checklist_dismiss_hides_card():
     client.post("/checklist/dismiss")
     resp = client.get("/config")
     assert "Getting Started Checklist" not in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 4 - workflow tab & execution parity (W-17..W-22)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_inline_field_error_rendered():
+    """W-17: validation errors render inline under the offending field via OOB."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "k"},
+    )
+    # upload-folder requires a source path; send none to force a field error.
+    resp = client.post("/tabs/upload-folder/preview", data={"dry": "1"})
+    assert resp.status_code == 200
+    assert "Validation Errors" in resp.text
+    assert 'class="field-error"' in resp.text
+    assert "field-err-" in resp.text
+
+
+def test_live_preview_ribbon_endpoint():
+    """W-19: the live-preview endpoint returns color-coded masked argv tokens."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "k"},
+    )
+    resp = client.post(
+        "/tabs/upload-folder/live-preview",
+        data={"fld_path": "/photos"},
+    )
+    assert resp.status_code == 200
+    assert "ribbon-argv" in resp.text
+    assert "ribbon-tok" in resp.text
+    assert "upload" in resp.text
+
+
+def test_confirm_includes_flag_sources_and_copy():
+    """W-21: confirm modal shows flag provenance + a Copy Command button."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "k"},
+    )
+    resp = client.post(
+        "/tabs/upload-folder/preview",
+        data={"fld_path": "/photos", "dry": "1"},
+    )
+    assert resp.status_code == 200
+    assert "Flag Sources" in resp.text
+    assert "Copy Command" in resp.text
+    assert "ribbon-" in resp.text
+
+
+def test_profile_switch_with_dirty_prompts():
+    """W-22: switching profiles with unsaved changes returns the prompt modal."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.post(
+        "/profiles/switch",
+        data={"name": "work", "dirty": "1"},
+    )
+    assert resp.status_code == 200
+    assert "Unsaved Profile Changes" in resp.text
+    assert "Discard & Switch" in resp.text
+    assert "Save & Switch" in resp.text

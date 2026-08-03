@@ -1,0 +1,75 @@
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">
+        {% if dry %}🔍 Dry Run Confirmation{% else %}🚀 Execute Command Confirmation{% endif %}
+      </h3>
+      <button type="button" class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      {% if preflight and not preflight.ok %}
+      <div class="alert alert-err mb-3">
+        <strong>Preflight Warning:</strong> {{ preflight.message }}
+      </div>
+      {% endif %}
+
+      {% if plan.warnings %}
+      <div class="alert alert-warn mb-3">
+        <ul>
+          {% for w in plan.warnings %}
+            <li>{{ w }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <div class="section-title">Command Line String</div>
+      <div class="cmd-box"><code>$ {{ cmd_str }}</code></div>
+      <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="navigator.clipboard.writeText('{{ cmd_str }}').then(function(){this.textContent='Copied ✓';}.bind(this))">
+        📋 Copy Command
+      </button>
+
+      {% if emission_log %}
+      <div class="section-title mt-3">Flag Sources</div>
+      <div class="flag-sources">
+        {% for e in emission_log %}
+        <span class="ribbon-tok ribbon-{{ e.source }}" title="source: {{ e.source }}">
+          {{ e.flag }}<em class="src-label">·{{ e.source }}</em>
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if env_rows %}
+      <div class="section-title mt-3">Environment Variables</div>
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, v in env_rows %}
+          <tr>
+            <td><code>{{ k }}</code></td>
+            <td><code>{{ v }}</code></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+      <form hx-post="/runs" hx-target="#content" hx-push-url="true">
+        <input type="hidden" name="nonce" value="{{ nonce }}">
+        <button type="submit" class="btn {% if dry %}btn-secondary{% else %}btn-primary{% endif %}">
+          {% if dry %}Run Dry-Run Preview{% else %}Run Command{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>

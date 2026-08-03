@@ -117,6 +117,73 @@ function maybeInitConnChip() {
 document.addEventListener('DOMContentLoaded', maybeInitConnChip);
 document.addEventListener('htmx:afterSettle', maybeInitConnChip);
 
+/* --------------------------------------------------------------------------
+   W-18: HTML5 drag & drop for path/paths fields. Browsers only expose file
+   *names*, not server-side paths, so this is a path-string convenience --
+   real server paths are typed/pasted. Visual feedback via .dnd-over.
+   -------------------------------------------------------------------------- */
+document.addEventListener('dragover', function (e) {
+  var wrap = e.target && e.target.closest ? e.target.closest('.dnd-wrap.is-droppable') : null;
+  if (wrap) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; wrap.classList.add('dnd-over'); }
+});
+document.addEventListener('dragleave', function (e) {
+  var wrap = e.target && e.target.closest ? e.target.closest('.dnd-wrap') : null;
+  if (wrap) wrap.classList.remove('dnd-over');
+});
+document.addEventListener('drop', function (e) {
+  var wrap = e.target && e.target.closest ? e.target.closest('.dnd-wrap.is-droppable') : null;
+  if (!wrap) return;
+  e.preventDefault();
+  wrap.classList.remove('dnd-over');
+  var input = wrap.querySelector('input.droppable-field');
+  if (input && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+    var names = Array.prototype.map.call(e.dataTransfer.files, function (f) { return f.name; });
+    input.value = names.length === 1 ? names[0] : names.join(', ');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+});
+
+/* --------------------------------------------------------------------------
+   W-19: live command ribbon. Debounced form edits rebuild the plan server-side
+   and render masked, color-coded argv tokens + the warnings shelf.
+   -------------------------------------------------------------------------- */
+var ribbonTimer = null;
+function updateLiveRibbon() {
+  var ribbon = document.getElementById('live-ribbon');
+  var form = document.getElementById('tab-form');
+  if (!ribbon || !form || !ribbon.dataset.tab) return;
+  var body = new URLSearchParams(new FormData(form));
+  fetch('/tabs/' + ribbon.dataset.tab + '/live-preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  }).then(function (r) { return r.text(); }).then(function (html) {
+    ribbon.innerHTML = html;
+  }).catch(function () {});
+}
+document.addEventListener('input', function (evt) {
+  var t = evt.target;
+  if (t && t.closest && t.closest('#tab-form')) {
+    markDirty(true);
+    clearTimeout(ribbonTimer);
+    ribbonTimer = setTimeout(updateLiveRibbon, 350);
+  }
+});
+document.addEventListener('htmx:afterSettle', updateLiveRibbon);
+
+/* --------------------------------------------------------------------------
+   W-22: unsaved-changes (dirty) tracking for the profile-switch prompt.
+   -------------------------------------------------------------------------- */
+window._iggDirty = false;
+function markDirty(d) { window._iggDirty = d; }
+document.addEventListener('input', function (evt) {
+  if (evt.target && evt.target.closest && !evt.target.closest('#modal-container')) markDirty(true);
+});
+document.addEventListener('change', function (evt) {
+  if (evt.target && evt.target.closest && !evt.target.closest('#modal-container')) markDirty(true);
+});
+
+
 function clearTerminalLogs() {
   const container = document.getElementById('terminal-logs');
   if (container) {
