@@ -1,0 +1,6 @@
+<div class="profile-chip" id="profile-chip"
+     hx-get="/partial/profiles" hx-target="#modal-container"
+     {% if oob %}hx-swap-oob="outerHTML:#profile-chip"{% endif %}>
+  <span class="profile-icon">👤</span>
+  <span class="profile-name">{{ profile }}</span>
+</div>

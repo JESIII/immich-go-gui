@@ -88,6 +88,21 @@ BINMGR = BinaryManager()
 
 SECRET_ENV_MARKERS = ("API_KEY", "ADMIN_API_KEY")
 
+# Short labels for horizontal sub-tabs, mirroring the desktop QTabWidget titles.
+_SUB_TAB_LABELS: dict[str, str] = {
+    "upload-folder": "From Folder",
+    "upload-gp": "Google Takeout",
+    "upload-icloud": "iCloud",
+    "upload-picasa": "Picasa",
+    "upload-immich": "From Immich",
+    "archive-folder": "From Folder",
+    "archive-gp": "Google Takeout",
+    "archive-icloud": "iCloud",
+    "archive-picasa": "Picasa",
+    "archive-immich": "From Immich",
+    "stack": "Stack Duplicates",
+}
+
 
 def _keyring_available() -> bool:
     """True if the OS keyring backend is usable (containers usually lack one)."""
@@ -156,6 +171,10 @@ def current_config_state(request: Request) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────
 def base_ctx(request: Request, **extra: Any) -> dict[str, Any]:
     s = ensure_loaded(request)
+    view = s.get("view", ("overview", ""))
+    active_section = ""
+    if view[0] == "tab" and view[1] in REGISTRY.tabs:
+        active_section = REGISTRY.tabs[view[1]].section
     ctx = {
         "request": request,
         "version": gui_version(),
@@ -165,7 +184,8 @@ def base_ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "auth_enabled": auth_enabled(),
         "csrf": request.cookies.get(authmod.CSRF_COOKIE, ""),
         "busy": RUNS.is_busy(),
-        "view": s.get("view", ("overview", "")),
+        "view": view,
+        "active_section": active_section,
     }
     ctx.update(extra)
     return ctx
@@ -177,15 +197,24 @@ def page(request: Request, partial_name: str, **ctx: Any) -> HTMLResponse:
     if request.headers.get("HX-Request"):
         crumb = ctx_dict.get("crumb") or "overview"
         adv = ctx_dict.get("advanced")
-        btn_label = "⚡ Advanced Mode" if adv else "🌱 Simple Mode"
+        state_label = "⚡ Advanced" if adv else "🌱 Simple"
+        action_label = "→ Simple" if adv else "→ Advanced"
         oob_crumb = f'<div id="crumb" hx-swap-oob="innerHTML:#crumb">{crumb}</div>'
         oob_mode = (
             f'<button id="mode-toggle-btn" class="btn btn-sm btn-ghost" '
             f'hx-post="/mode/toggle" hx-target="#content" hx-swap-oob="outerHTML:#mode-toggle-btn" '
-            f'title="Toggle Advanced Mode">{btn_label}</button>'
+            f'title="Toggle Advanced Mode">'
+            f'<span class="mode-state">{state_label}</span>'
+            f'<span class="mode-action">{action_label}</span>'
+            f"</button>"
         )
         oob_nav = TEMPLATES.get_template("partials/nav.html").render(ctx_dict, oob=True)
-        return HTMLResponse(f"{inner}\n{oob_crumb}\n{oob_mode}\n{oob_nav}")
+        oob_profile = TEMPLATES.get_template("partials/profile_chip.html").render(
+            ctx_dict, oob=True
+        )
+        return HTMLResponse(
+            f"{inner}\n{oob_crumb}\n{oob_mode}\n{oob_nav}\n{oob_profile}"
+        )
     full_html = TEMPLATES.get_template("base.html").render(
         ctx_dict,
         content=inner,
@@ -283,11 +312,14 @@ async def tab_page(request: Request, tab_key: str | None = None) -> Response:
     s = ensure_loaded(request)
     s["view"] = ("tab", key)
     s["tab_state"].setdefault(key, initial_tab_state(key))
+    tabdef = REGISTRY.tabs[key]
+    sibling_keys = [k for k, t in REGISTRY.tabs.items() if t.section == tabdef.section]
+    sub_tabs = [{"key": k, "label": _SUB_TAB_LABELS.get(k, k)} for k in sibling_keys]
     return page(
         request,
         "partials/tab_form.html",
         tab=key,
-        tabdef=REGISTRY.tabs[key],
+        tabdef=tabdef,
         command=REGISTRY.tab_commands[key],
         src_flags=source_flags(key),
         opt_flags=option_flags(key),
@@ -297,8 +329,27 @@ async def tab_page(request: Request, tab_key: str | None = None) -> Response:
         presets=presets_for(key),
         cfg=current_config_state(request),
         serverless=key in SERVERLESS_TABS,
+        sub_tabs=sub_tabs,
         crumb=crumb_for(("tab", key)),
     )
+
+
+async def section_page(request: Request) -> Response:
+    """Render the first (or last-active) tab within a workflow section.
+
+    Mirrors the desktop app's sidebar: clicking "Upload" lands on the upload
+    page with horizontal sub-tabs.  If the session already holds a tab in the
+    requested section, re-use it so the user returns to where they left off.
+    """
+    section = request.path_params["section"]
+    tabs_in_section = [k for k, t in REGISTRY.tabs.items() if t.section == section]
+    if not tabs_in_section:
+        return RedirectResponse("/overview", status_code=303)
+    s = ensure_loaded(request)
+    kind, key = s.get("view", ("overview", ""))
+    if kind == "tab" and key in tabs_in_section:
+        return await tab_page(request, tab_key=key)
+    return await tab_page(request, tab_key=tabs_in_section[0])
 
 
 def adv_state_for(request: Request, key: str) -> dict[str, Any]:
@@ -1187,6 +1238,7 @@ def create_app() -> Starlette:
         Route("/", home),
         Route("/overview", overview_page),
         Route("/tab/{tab}", tab_page),
+        Route("/section/{section}", section_page),
         Route("/config", config_page),
         Route("/healthz", healthz),
         Route("/login", login_page, methods=["GET"]),

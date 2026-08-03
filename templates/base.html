@@ -35,10 +35,7 @@
     {% include 'partials/nav.html' %}
 
     <div class="sidebar-footer">
-      <div class="profile-chip" hx-get="/partial/profiles" hx-target="#modal-container">
-        <span class="profile-icon">👤</span>
-        <span class="profile-name">{{ profile }}</span>
-      </div>
+      {% include 'partials/profile_chip.html' %}
 
       {% if auth_enabled %}
       <a href="/logout" class="btn btn-ghost btn-sm" title="Log out">Logout</a>
@@ -52,7 +49,8 @@
 
       <div class="header-actions">
         <button id="mode-toggle-btn" class="btn btn-sm btn-ghost" hx-post="/mode/toggle" hx-target="#content" title="Toggle Advanced Mode">
-          {% if advanced %}⚡ Advanced Mode{% else %}🌱 Simple Mode{% endif %}
+          <span class="mode-state">{{ '⚡ Advanced' if advanced else '🌱 Simple' }}</span>
+          <span class="mode-action">{{ '→ Simple' if advanced else '→ Advanced' }}</span>
         </button>
 
         <div id="status-pill" hx-get="/partial/status" hx-trigger="load, every 8s">

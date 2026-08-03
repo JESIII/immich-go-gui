@@ -268,7 +268,7 @@ def test_enum_default_is_preselected():
 
 
 def test_nav_reaches_all_eleven_tabs():
-    """B2: every one of the 11 workflow tabs is reachable from the sidebar."""
+    """B2: every one of the 11 workflow tabs is reachable from the overview page."""
     app = create_app()
     client = TestClient(app)
     resp = client.get("/overview", headers={"HX-Request": "true"})
@@ -287,7 +287,7 @@ def test_nav_reaches_all_eleven_tabs():
         "stack",
     ]
     for key in expected:
-        assert f'hx-get="/tab/{key}"' in resp.text, f"Missing nav entry for {key}"
+        assert f'hx-get="/tab/{key}"' in resp.text, f"Missing overview entry for {key}"
 
 
 def test_bool_advanced_row_has_true_false_value_control():
@@ -906,3 +906,128 @@ def test_theme_preference_attribute_on_shell():
     client.post("/theme", data={"theme": "system"})
     resp = client.get("/")
     assert 'data-theme-preference="system"' in resp.text
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Sidebar restructure: 5 tabs + horizontal sub-tabs + profile OOB
+# ──────────────────────────────────────────────────────────────────────
+def test_sidebar_has_five_nav_items():
+    """The sidebar shows exactly 5 main entries: Overview, Configuration,
+    Upload, Archive, Stack — not individual per-workflow links."""
+    app = create_app()
+    client = TestClient(app)
+    # Use htmx request to get content + OOB nav (without overview cards).
+    resp = client.get("/section/upload", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert 'hx-get="/overview"' in resp.text
+    assert 'hx-get="/config"' in resp.text
+    assert 'hx-get="/section/upload"' in resp.text
+    assert 'hx-get="/section/archive"' in resp.text
+    assert 'hx-get="/section/stack"' in resp.text
+    # Old per-workflow sidebar group titles must be gone from the sidebar.
+    assert 'nav-title">Upload Workflows' not in resp.text
+    assert 'nav-title">Archive Workflows' not in resp.text
+    assert 'nav-title">Stack Workflows' not in resp.text
+
+
+def test_section_upload_route_renders_first_tab():
+    """Clicking Upload in the sidebar lands on the upload page with sub-tabs."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/section/upload")
+    assert resp.status_code == 200
+    assert "upload-folder" in resp.text
+    # Sub-tab bar should be present with all upload sub-tabs.
+    assert "sub-tab" in resp.text
+    assert "From Folder" in resp.text
+    assert "Google Takeout" in resp.text
+    assert "iCloud" in resp.text
+    assert "Picasa" in resp.text
+    assert "From Immich" in resp.text
+
+
+def test_section_archive_route_renders_first_tab():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/section/archive")
+    assert resp.status_code == 200
+    assert "archive-folder" in resp.text
+    assert "sub-tab" in resp.text
+    assert "From Folder" in resp.text
+
+
+def test_section_stack_route_renders_stack_tab():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/section/stack")
+    assert resp.status_code == 200
+    assert "stack" in resp.text
+
+
+def test_invalid_section_redirects_to_overview():
+    app = create_app()
+    client = TestClient(app, follow_redirects=False)
+    resp = client.get("/section/nonexistent")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/overview"
+
+
+def test_sub_tabs_render_on_tab_page():
+    """Every tab page includes a horizontal sub-tab bar with the active tab
+    highlighted."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-gp")
+    assert resp.status_code == 200
+    assert "sub-tab" in resp.text
+    # The Google Takeout sub-tab should be marked active.
+    assert "Google Takeout" in resp.text
+    # All sibling upload sub-tabs are present.
+    for label in ("From Folder", "iCloud", "Picasa", "From Immich"):
+        assert label in resp.text
+
+
+def test_sidebar_upload_active_when_on_upload_tab():
+    """The sidebar Upload entry is highlighted when viewing any upload tab."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-icloud", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    # The Upload nav-item should have the active class (OOB nav is included).
+    assert "active" in resp.text
+    assert 'hx-get="/section/upload"' in resp.text
+
+
+def test_profile_chip_oob_swapped_on_htmx():
+    """The profile chip is OOB-swapped on every htmx navigation so its name
+    stays fresh without a full page reload."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-folder", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert 'id="profile-chip"' in resp.text
+    assert 'hx-swap-oob="outerHTML:#profile-chip"' in resp.text
+
+
+def test_mode_toggle_button_shows_current_state_and_action():
+    """The mode toggle shows the current state and what clicking will do."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    # In simple mode (default): shows "Simple" state + "→ Advanced" action.
+    assert "mode-state" in resp.text
+    assert "mode-action" in resp.text
+    assert "Simple" in resp.text
+    assert "Advanced" in resp.text
+
+
+def test_check_gui_update_has_loading_indicator():
+    """The Check GUI Update buttons have htmx loading indicators for feedback."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/config")
+    assert resp.status_code == 200
+    assert "spin-loader" in resp.text
+    assert "hx-disabled-elt" in resp.text
+    assert "hx-indicator" in resp.text

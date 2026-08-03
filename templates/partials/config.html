@@ -121,10 +121,13 @@
     <div class="card-body">
       <div><strong>GUI Version:</strong> <code>v{{ version }}</code></div>
       <div class="form-actions-inline mt-3">
-        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
+        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast"
+                hx-disabled-elt="this" hx-indicator="#app-update-spin">
           🔄 Check for Updates
+          <span id="app-update-spin" class="htmx-indicator spin-loader"></span>
         </button>
-        <button class="btn btn-ghost btn-sm" hx-post="/config/reload" hx-target="#toast">
+        <button class="btn btn-ghost btn-sm" hx-post="/config/reload" hx-target="#toast"
+                hx-disabled-elt="this">
           ♻️ Reload Config
         </button>
         <a class="btn btn-ghost btn-sm" href="/config/download" download>
@@ -182,8 +185,10 @@
         <a href="/diagnostics.zip" class="btn btn-secondary btn-sm" download>
           📦 Download Diagnostics ZIP
         </a>
-        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast">
+        <button class="btn btn-ghost btn-sm" hx-post="/app-update/check" hx-target="#toast"
+                hx-disabled-elt="this" hx-indicator="#gui-update-spin">
           🔄 Check GUI Updates
+          <span id="gui-update-spin" class="htmx-indicator spin-loader"></span>
         </button>
         <button class="btn btn-ghost btn-sm" hx-get="/partial/compat" hx-target="#modal-container">
           📋 CLI Compatibility

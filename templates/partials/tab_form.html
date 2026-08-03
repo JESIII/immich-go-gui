@@ -1,5 +1,16 @@
 {% import 'partials/macros.html' as m %}
 
+{% if sub_tabs and sub_tabs|length > 1 %}
+<div class="sub-tabs">
+  {% for st in sub_tabs %}
+  <a class="sub-tab {% if st.key == tab %}active{% endif %}"
+     hx-get="/tab/{{ st.key }}" hx-target="#content" hx-push-url="true">
+    {{ st.label }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="tab-header">
   <div class="tab-title-wrap">
     <h1 class="page-title">{{ tabdef.title or tab }}</h1>

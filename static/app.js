@@ -255,11 +255,15 @@ function openTabJumper() {
   var list = document.getElementById('tab-jumper-list');
   if (!jumper || !list) return;
   jumper.hidden = false;
-  // Build from the sidebar nav items so it stays in sync with REGISTRY.
+  // Build from both sidebar nav items and horizontal sub-tab links so it
+  // stays in sync with REGISTRY (sub-tabs appear on workflow group pages).
   list.innerHTML = '';
-  document.querySelectorAll('.nav-item').forEach(function (el) {
+  var seen = {};
+  document.querySelectorAll('.nav-item, .sub-tab').forEach(function (el) {
     var href = el.getAttribute('hx-get') || '';
     if (href.indexOf('/tab/') !== 0) return;
+    if (seen[href]) return;
+    seen[href] = true;
     var label = (el.textContent || '').trim();
     var item = document.createElement('a');
     item.href = href;
