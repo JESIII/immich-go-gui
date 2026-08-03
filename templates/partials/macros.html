@@ -18,7 +18,7 @@
              {% if f.min_val is not none %}min="{{ f.min_val }}"{% endif %}
              {% if f.max_val is not none %}max="{{ f.max_val }}"{% endif %}>
     {% else %}
-      <input type="text" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input" placeholder="{{ f.placeholder or '' }}">
+      <input type="{% if f.secret_env %}password{% else %}text{% endif %}" id="fld_{{ f.key }}" name="fld_{{ f.key }}" value="{{ val }}" class="form-input" placeholder="{{ f.placeholder or '' }}">
     {% endif %}
   {% endif %}
   {% if f.help_text %}
@@ -47,7 +47,7 @@
         {% endfor %}
       </select>
     {% else %}
-      <input type="text" name="adv_{{ d.key }}_val" value="{{ stored.value or '' }}" class="form-input form-input-sm" placeholder="{{ d.default or '' }}">
+      <input type="{% if d.secret_env %}password{% else %}text{% endif %}" name="adv_{{ d.key }}_val" value="{{ stored.value or '' }}" class="form-input form-input-sm" placeholder="{{ d.default or '' }}">
     {% endif %}
   </div>
 </div>

@@ -44,10 +44,17 @@
       <div class="form-group">
         <label class="form-label" for="secret_provider">Secrets Provider</label>
         <select id="secret_provider" name="secret_provider" class="form-select">
-          <option value="keyring" {% if cfg.secrets_provider=='keyring' %}selected{% endif %}>OS Keyring (Default)</option>
+          <option value="keyring" {% if cfg.secrets_provider=='keyring' %}selected{% endif %}>OS Keyring (Default){% if keyring_available is defined and not keyring_available %} (unavailable){% endif %}</option>
           <option value="config" {% if cfg.secrets_provider in ('config','fallback') %}selected{% endif %}>Local secrets file (0600 secrets.toml)</option>
         </select>
         <div class="form-help">Secrets file path: <code>{{ secrets_path }}</code></div>
+        {% if keyring_available is defined and not keyring_available %}
+        <div class="alert alert-warn mt-2">
+          ⚠️ OS keyring is not available in this environment. Secrets are stored in the
+          0600 <code>secrets.toml</code> file or provided via
+          <code>IMMICH_GO_GUI_API_KEY</code> / <code>IMMICH_GO_GUI_ADMIN_API_KEY</code>.
+        </div>
+        {% endif %}
       </div>
 
       <div class="form-group form-group-checkbox">

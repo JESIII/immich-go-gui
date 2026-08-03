@@ -74,7 +74,6 @@ from webapp.forms import (
     initial_tab_state,
     option_flags,
     parse_advanced_state,
-    parse_config_state,
     parse_tab_state,
     source_flags,
 )
@@ -85,6 +84,23 @@ TEMPLATES = Jinja2Templates(directory=str(BASE / "templates"))
 BINMGR = BinaryManager()
 
 SECRET_ENV_MARKERS = ("API_KEY", "ADMIN_API_KEY")
+
+
+def _keyring_available() -> bool:
+    """True if the OS keyring backend is usable (containers usually lack one)."""
+    if _keyring_available.cached is not None:
+        return _keyring_available.cached
+    try:
+        import keyring
+
+        keyring.get_password("immich-go-gui-probe", "probe")
+        _keyring_available.cached = True
+    except Exception:
+        _keyring_available.cached = False
+    return _keyring_available.cached
+
+
+_keyring_available.cached: bool | None = None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -99,6 +115,11 @@ def ensure_loaded(request: Request) -> dict[str, Any]:
     if "config" not in s:
         cfg = load_config()
         if cfg.secrets_provider == "fallback":
+            cfg.secrets_provider = "config"
+        # A running container usually has no OS keyring; default to the local
+        # secrets file (or IMMICH_GO_GUI_* env overrides) so a fresh container
+        # works without keyring.
+        if cfg.secrets_provider == "keyring" and not _keyring_available():
             cfg.secrets_provider = "config"
         prof = cfg.profile_name
         s["config"] = cfg
@@ -275,6 +296,7 @@ async def config_page(request: Request) -> HTMLResponse:
         cfg=cfg,
         secrets=s["secrets"],
         secrets_path=default_secrets_path(),
+        keyring_available=_keyring_available(),
         binary_status=BINMGR.check_binary(),
         binary_path=BINMGR.resolve_binary_path(),
         manual_path=load_binary_metadata().get("manual_path", ""),
@@ -382,7 +404,7 @@ async def tab_preview(request: Request) -> HTMLResponse:
     form = dict(await request.form())
     dry = form.get("dry") == "1"
 
-    config_state = parse_config_state(form)
+    config_state = current_config_state(request)
     tab_state = parse_tab_state(key, form)
     advanced_state = (
         parse_advanced_state(key, form) if s["config"].advanced_mode else None

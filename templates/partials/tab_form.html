@@ -1,0 +1,69 @@
+{% import 'partials/macros.html' as m %}
+
+<div class="tab-header">
+  <div class="tab-title-wrap">
+    <h1 class="page-title">{{ tabdef.title or tab }}</h1>
+    <span class="cmd-pill">immich-go {{ command|join(' ') }}</span>
+  </div>
+  <p class="page-desc">{{ tabdef.description }}</p>
+</div>
+
+<form id="tab-form" hx-post="/tabs/{{ tab }}/preview" hx-target="#modal-container" class="tab-form">
+  <!-- Hidden configuration snapshot required by command_builder.
+       Secrets (api_key / admin_api_key) are intentionally NOT round-tripped
+       through the DOM; the preview re-reads them from the server session. -->
+  <input type="hidden" name="server" value="{{ cfg.server }}">
+  <input type="hidden" name="client_timeout_minutes" value="{{ cfg.client_timeout_minutes }}">
+  {% if cfg['skip-ssl'] %}
+  <input type="hidden" name="skip_ssl" value="on">
+  {% endif %}
+
+  {% if src_flags %}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Source Configuration</h2>
+    </div>
+    <div class="card-body">
+      {% for f in src_flags %}
+        {{ m.render_flag_field(f, st.get(f.key, '')) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if opt_flags %}
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Options</h2>
+    </div>
+    <div class="card-body grid-2">
+      {% for f in opt_flags %}
+        {{ m.render_flag_field(f, st.get(f.key, '')) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if advanced and adv_defs %}
+  <div class="card">
+    <div class="card-header card-header-flex">
+      <h2 class="card-title">Advanced CLI Flags</h2>
+      <button type="button" class="btn btn-ghost btn-sm" hx-post="/advanced/reset" hx-target="#toast">Reset Advanced Flags</button>
+    </div>
+    <div class="card-body adv-grid">
+      {% for d in adv_defs %}
+        {{ m.render_adv_row(d, adv.get(d.key, {'enabled': false, 'value': d.default})) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" name="dry" value="1" class="btn btn-secondary">
+      🔍 Dry Run Preview
+    </button>
+    <button type="submit" name="dry" value="0" class="btn btn-primary">
+      🚀 Preview & Execute
+    </button>
+  </div>
+</form>

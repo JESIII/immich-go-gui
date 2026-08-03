@@ -409,3 +409,88 @@ def test_binary_update_panel_uses_decision_fields():
     )
     assert "alert-warn" in html_ok
     assert "disabled" not in html_ok
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 1 - security hardening (S1, S2, keyring-aware provider)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_tab_form_does_not_round_trip_secrets_to_dom():
+    """S1: api_key / admin_api_key are never rendered into page source."""
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "super-secret-key-xyz"},
+    )
+    resp = client.get("/tab/upload-folder")
+    assert resp.status_code == 200
+    assert "super-secret-key-xyz" not in resp.text
+
+
+def test_secret_source_fields_rendered_as_password():
+    """S2: source API key fields must be masked password inputs."""
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tab/upload-immich")
+    assert resp.status_code == 200
+    # Simple source API key (upload-immich).
+    assert 'type="password" id="fld_from-api-key"' in resp.text
+
+    # Enable advanced mode to expose the source admin API key row.
+    client.post("/mode/toggle", headers={"HX-Request": "true"})
+    resp_adv = client.get("/tab/upload-immich", headers={"HX-Request": "true"})
+    assert 'type="password" name="adv_from-admin-api-key_val"' in resp_adv.text
+
+
+def test_config_api_key_rendered_in_password_field():
+    """The config edit form shows the stored key in a masked password input.
+
+    The S1 fix removes secrets from the *workflow tab* forms and every HTMX
+    submission; the config page is the deliberate edit surface, so it still
+    shows the value, but only inside a type="password" input.
+    """
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "https://immich.example.com", "api_key": "leak-check-42"},
+    )
+    resp = client.get("/config")
+    assert resp.status_code == 200
+    assert 'type="password" id="cfg_api_key"' in resp.text
+
+
+def test_keyring_unavailable_shows_notice_and_defaults_to_config_provider():
+    """W-10: without a keyring, the config UI explains file/env storage."""
+    from webapp import app as appmod
+
+    with patch.object(appmod, "_keyring_available", return_value=False):
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/config")
+        assert resp.status_code == 200
+        assert "unavailable" in resp.text
+        assert "OS keyring is not available" in resp.text
+
+
+def test_preview_builds_plan_with_session_secrets():
+    """S1: removing the hidden secret inputs does not break preview/confirm.
+
+    The preview must still resolve the api_key from the server session and the
+    confirm modal must not leak it into the response body.
+    """
+    app = create_app()
+    client = TestClient(app)
+    client.post(
+        "/config/save-server",
+        data={"server": "http://immich:2283", "api_key": "plan-secret"},
+    )
+    resp = client.post(
+        "/tabs/upload-folder/preview",
+        data={"fld_path": "/photos", "dry": "1"},
+    )
+    assert resp.status_code == 200
+    assert "Dry Run Confirmation" in resp.text
+    assert "plan-secret" not in resp.text
