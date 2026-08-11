@@ -33,6 +33,16 @@ def test_monitor_config_round_trip_preserves_nested_values():
     assert restored.folders == config.folders
     assert restored.network_policy == NetworkPolicy.SSID_ONLY
     assert restored.activity.detection_methods == [ActivityPauseMethod.CPU_THRESHOLD]
+    assert restored.tray_icon_style == "colorful"
+
+
+def test_monitor_config_tray_icon_style_validation():
+    config = MonitorConfig(tray_icon_style="monochrome-dark")
+    restored = MonitorConfig.from_dict(config.to_dict())
+    assert restored.tray_icon_style == "monochrome-dark"
+
+    invalid = MonitorConfig.from_dict({"tray_icon_style": "invalid_mode"})
+    assert invalid.tray_icon_style == "colorful"
 
 
 def test_monitor_config_round_trip_preserves_valid_advanced_state():

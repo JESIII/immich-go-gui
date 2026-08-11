@@ -445,6 +445,16 @@ class PersistenceMixin:
                 if idx >= 0:
                     monitor_inputs["network_policy"].setCurrentIndex(idx)
 
+            if (
+                "tray_icon_style" in monitor_data
+                and "tray_icon_style" in monitor_inputs
+            ):
+                idx = monitor_inputs["tray_icon_style"].findData(
+                    monitor_data["tray_icon_style"]
+                )
+                if idx >= 0:
+                    monitor_inputs["tray_icon_style"].setCurrentIndex(idx)
+
             if "allowed_ssids" in monitor_data and "allowed_ssids" in monitor_inputs:
                 ssids = monitor_data["allowed_ssids"]
                 if isinstance(ssids, list):
@@ -521,6 +531,10 @@ class PersistenceMixin:
             monitor_data["launch_on_startup"] = monitor_inputs[
                 "launch_on_startup"
             ].isChecked()
+        if "tray_icon_style" in monitor_inputs:
+            style_val = monitor_inputs["tray_icon_style"].currentData()
+            if style_val:
+                monitor_data["tray_icon_style"] = style_val
 
         # Network: read the policy value from item data, never display text.
         if "network_policy" in monitor_inputs:

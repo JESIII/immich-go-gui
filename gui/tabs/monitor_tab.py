@@ -29,9 +29,17 @@ from gui.widgets.activity_feed import ActivityFeed, ProgressCard
 # (config value, display label) pairs for the network policy combo.
 # Defined once so load/save never match on display text.
 NETWORK_POLICY_OPTIONS = [
-    ("always", "Always (any network)"),
-    ("no_metered", "No metered connections"),
-    ("ssid_only", "Only specific Wi-Fi"),
+    ("Always (any network)", "always"),
+    ("Wi-Fi Only (exclude cellular)", "wifi_only"),
+    ("Allowed SSIDs Only", "ssids_only"),
+    ("No Metered Connections", "no_metered"),
+]
+
+TRAY_ICON_STYLE_OPTIONS = [
+    ("Colorful (Default)", "colorful"),
+    ("Monochrome - Auto (System)", "monochrome-system"),
+    ("Monochrome - Light Taskbar", "monochrome-light"),
+    ("Monochrome - Dark Taskbar", "monochrome-dark"),
 ]
 
 
@@ -461,6 +469,16 @@ def build_monitor_tab(host) -> QWidget:
     host.launch_on_startup_check = QCheckBox("Start monitor with Windows")
     host.inputs["monitor"]["launch_on_startup"] = host.launch_on_startup_check
     opts_layout.addWidget(host.launch_on_startup_check)
+
+    tray_row = QHBoxLayout()
+    tray_row.addWidget(QLabel("Tray icon style:"))
+    host.tray_icon_style_combo = QComboBox()
+    for label, data in TRAY_ICON_STYLE_OPTIONS:
+        host.tray_icon_style_combo.addItem(label, userData=data)
+    host.inputs["monitor"]["tray_icon_style"] = host.tray_icon_style_combo
+    tray_row.addWidget(host.tray_icon_style_combo)
+    tray_row.addStretch()
+    opts_layout.addLayout(tray_row)
 
     layout.addWidget(opts_group)
 

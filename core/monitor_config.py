@@ -143,6 +143,7 @@ class MonitorConfig:
     start_minimized: bool = False
     minimize_to_tray: bool = True
     launch_on_startup: bool = False
+    tray_icon_style: str = "colorful"
 
     # Logging
     log_dir: str = ""
@@ -199,6 +200,7 @@ class MonitorConfig:
             "start_minimized": self.start_minimized,
             "minimize_to_tray": self.minimize_to_tray,
             "launch_on_startup": self.launch_on_startup,
+            "tray_icon_style": self.tray_icon_style,
             "log_dir": self.log_dir,
             "advanced_state": self.advanced_state,
         }
@@ -283,6 +285,15 @@ class MonitorConfig:
         cfg.start_minimized = data.get("start_minimized", False)
         cfg.minimize_to_tray = data.get("minimize_to_tray", True)
         cfg.launch_on_startup = data.get("launch_on_startup", False)
+        style = data.get("tray_icon_style", "colorful")
+        if style not in (
+            "colorful",
+            "monochrome-system",
+            "monochrome-light",
+            "monochrome-dark",
+        ):
+            style = "colorful"
+        cfg.tray_icon_style = style
         cfg.log_dir = data.get("log_dir", "")
         advanced_state = data.get("advanced_state", {})
         if isinstance(advanced_state, dict):

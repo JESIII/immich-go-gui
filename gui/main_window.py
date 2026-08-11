@@ -213,8 +213,13 @@ class ImmichGoGUI(
         self.tray_manager.set_minimize_to_tray(
             self.monitor_config.monitor_enabled and self.monitor_config.minimize_to_tray
         )
+        self._sync_tray_icon_style()
         self.monitor_enabled_check.toggled.connect(self._on_monitor_enabled_toggled)
         self.minimize_to_tray_check.toggled.connect(self._on_minimize_to_tray_toggled)
+        if hasattr(self, "tray_icon_style_combo"):
+            self.tray_icon_style_combo.currentIndexChanged.connect(
+                self._on_tray_icon_style_changed
+            )
         self.launch_on_startup_check.toggled.connect(self._set_launch_on_startup)
         self._set_launch_on_startup(self.launch_on_startup_check.isChecked())
         if (
@@ -232,6 +237,22 @@ class ImmichGoGUI(
         self.monitor_config.minimize_to_tray = enabled
         self._sync_tray_minimize()
         self._save_monitor_state()
+
+    def _on_tray_icon_style_changed(self) -> None:
+        if hasattr(self, "tray_icon_style_combo"):
+            val = self.tray_icon_style_combo.currentData()
+            if val:
+                self.monitor_config.tray_icon_style = val
+        self._save_monitor_state()
+        self._sync_tray_icon_style()
+
+    def _sync_tray_icon_style(self) -> None:
+        """Update tray icon style to colorful or monochrome."""
+        if hasattr(self, "tray_manager") and hasattr(self, "monitor_config"):
+            self.tray_manager.update_icon_style(
+                getattr(self.monitor_config, "tray_icon_style", "colorful"),
+                getattr(self, "theme_mode", None),
+            )
 
     def _sync_tray_minimize(self) -> None:
         """Push the effective minimize-to-tray preference to the tray manager."""
