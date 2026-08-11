@@ -72,7 +72,7 @@ def clean_version(version: str) -> str:
     version = version.strip()
     if not version:
         return ""
-    if version.startswith("v") or version.startswith("V"):
+    if version.startswith(("v", "V")):
         version = version[1:]
     # Handle version string like "0.32.0, built with..."
     version = version.split(",")[0].strip().split()[0].strip()
@@ -126,7 +126,15 @@ def calculate_sha256(data: bytes) -> str:
 
 
 def load_binary_metadata(metadata_path: str = METADATA_PATH) -> dict:
-    """Loads binary metadata JSON from disk, migrating schema if needed."""
+    """
+    Load binary metadata from disk and migrate records from schema version 1.
+
+    Parameters:
+        metadata_path (str): Path to the metadata JSON file.
+
+    Returns:
+        dict: Metadata containing default top-level fields and migrated version records.
+    """
     meta = {
         "schema_version": 2,
         "selected_version": "",
@@ -144,16 +152,21 @@ def load_binary_metadata(metadata_path: str = METADATA_PATH) -> dict:
             pass
 
     # Schema version migration
-    if meta.get("schema_version", 1) < 2:
-        for version, record in meta.get("versions", {}).items():
-            if isinstance(record, dict):
-                record.setdefault("gui_tested", version in TESTED_IMMICH_GO_VERSIONS)
-                record.setdefault(
-                    "support_status",
-                    get_version_support(version).value,
-                )
-                record.setdefault("sha256", "")
-                record.setdefault("release_url", "")
+    schema_ver = meta.get("schema_version", 1)
+    if isinstance(schema_ver, int) and schema_ver < 2:
+        versions_dict = meta.get("versions", {})
+        if isinstance(versions_dict, dict):
+            for version, record in versions_dict.items():
+                if isinstance(record, dict):
+                    record.setdefault(
+                        "gui_tested", version in TESTED_IMMICH_GO_VERSIONS
+                    )
+                    record.setdefault(
+                        "support_status",
+                        get_version_support(version).value,
+                    )
+                    record.setdefault("sha256", "")
+                    record.setdefault("release_url", "")
         meta["schema_version"] = 2
 
     return meta
@@ -263,6 +276,7 @@ class BinaryManager:
                 capture_output=True,
                 text=True,
                 timeout=3,
+                check=False,
             )
             version_text = parse_version_output(res.stdout or res.stderr)
             if not version_text:
@@ -578,6 +592,7 @@ class BinaryManager:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
             v_text = parse_version_output(res.stdout or res.stderr)
             return bool(v_text)
@@ -660,7 +675,7 @@ class BinaryManager:
                             break
                     if not found:
                         return False, "Binary executable not found inside zip archive"
-            elif url.endswith(".tar.gz") or url.endswith(".tgz"):
+            elif url.endswith((".tar.gz", ".tgz")):
                 with tarfile.open(name=temp_archive, mode="r:gz") as tar:
                     found = False
                     for member in tar.getmembers():

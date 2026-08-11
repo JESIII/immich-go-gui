@@ -13,12 +13,13 @@ Pull requests go directly to `master`. Use **squash merge** when appropriate to 
 
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
-| CI Checks | `.github/workflows/ci.yml` | Push to `master` | Multi-OS pytest |
+| CI Checks | `.github/workflows/ci.yml` | Push to `master` | `ty` type check, pre-commit, multi-OS pytest |
 | PR Fast Feedback | `.github/workflows/pr-fast-feedback.yml` | PR to `master` | Tests, version sync, security audit, PR comments |
 | CodeQL | `.github/workflows/codeql.yml` | Push/PR/schedule | Python security scanning |
 | Release Please | `.github/workflows/release-please.yml` | Push to `master` | Automated version bump PR |
 | Release Build | `.github/workflows/release.yml` | Tag `v[0-9]*` or manual | Build and publish release artifacts |
 | Manual Prerelease | `.github/workflows/manual-prerelease.yml` | Manual dispatch | Pre-release builds |
+| Docs | `.github/workflows/docs.yml` | Tag `v[0-9]*` or manual | MkDocs build, link check, GitHub Pages deploy |
 
 ## Release Please
 
@@ -31,7 +32,7 @@ When merging to `master`, Release Please opens a version bump PR. On merge, it c
 
 **Important:** Update `.github/.release-please-manifest.json` when performing manual version bumps so Release Please tracks the correct baseline.
 
-Current version is defined in `pyproject.toml` (e.g. `1.2.0`).
+Current version is defined in `pyproject.toml` (e.g. `1.3.0`<!-- x-release-please-version -->).
 
 ## Release Artifacts
 
@@ -86,6 +87,7 @@ a full Nuitka smoke-build pass on all three platforms.
 - **Package manager:** Always use `uv` (`uv sync`, `uv run pytest`, `uv run app.py`)
 - **GitHub CLI:** Use standard user auth for `gh` commands locally; do not pass `GITHUB_TOKEN`/`GH_TOKEN` overrides
 - **Lint/format:** Ruff via pre-commit
+- **Type checking:** `ty` via pre-commit (`core/`)
 
 ## Dependabot
 

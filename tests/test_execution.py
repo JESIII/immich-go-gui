@@ -1,7 +1,6 @@
 import os
 from unittest.mock import patch
 
-
 from core.command_builder import build_environment, build_plan_from_state
 from core.flag_registry import REGISTRY
 from core.models import CommandPlan
@@ -299,6 +298,7 @@ def test_plan_errors_surfaced_in_gui(gui):
     gui.upload_tabs.setCurrentIndex(0)
     gui.inputs["config"]["server"].setText("http://local:2283")
     gui.inputs["config"]["api_key"].setText("key")
+    gui.inputs["upload-folder"]["path"].setText("/photos")
 
     mock_plan = CommandPlan(
         argv=["upload", "from-folder"],

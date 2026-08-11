@@ -4,7 +4,7 @@ from core.binary_manager import TESTED_IMMICH_GO_VERSION
 from gui import ImmichGoGUI
 
 
-def test_keyring_probe_warning(monkeypatch):
+def test_keyring_probe_warning(qapp, monkeypatch):
     """Probe failure during init should surface a warning when keyring is selected."""
 
     warn = MagicMock()
@@ -13,7 +13,10 @@ def test_keyring_probe_warning(monkeypatch):
     monkeypatch.setattr(ImmichGoGUI, "load_configuration", lambda self: None)
     monkeypatch.setattr(ImmichGoGUI, "_probe_keyring", lambda self: False)
 
-    ImmichGoGUI()
+    gui = ImmichGoGUI()
+    gui._conn_test_debounce.stop()
+    gui._force_close = True
+    gui.close()
     assert warn.called
     assert "keyring" in warn.call_args[0][2].lower()
 

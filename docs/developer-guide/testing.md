@@ -1,6 +1,6 @@
 # Testing
 
-The test suite lives in `tests/` (271 tests across 20 modules) using `pytest` and `pytest-qt`.
+The test suite lives in `tests/` (424 tests across 27 modules) using `pytest` and `pytest-qt`.
 
 ## Running Tests
 
@@ -120,7 +120,7 @@ Local lint/format checks via pre-commit:
 uv run pre-commit run --all-files
 ```
 
-Configured in `.pre-commit-config.yaml`: trailing whitespace, YAML check, Ruff lint/format.
+Configured in `.pre-commit-config.yaml`: trailing whitespace, YAML check, Ruff lint/format, and `ty` type checking of `core/`.
 
 ## CI Matrix
 
