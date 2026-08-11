@@ -5,9 +5,9 @@ from PySide6.QtGui import QDropEvent
 
 from core.flag_registry import REGISTRY
 from gui.widgets import DroppablePlainTextEdit
+from gui.widgets.activity_feed import ActivityFeed
 from gui.widgets.advanced_flag_row import AdvancedFlagRow
 from gui.widgets.eliding_label import ElidingLabel
-from gui.widgets.activity_feed import ActivityFeed
 
 
 class _FixedWidthLabel(ElidingLabel):

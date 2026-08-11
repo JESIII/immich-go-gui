@@ -243,7 +243,9 @@ class ActivityMonitor:
             try:
                 import ctypes
 
-                user32 = ctypes.windll.user32
+                user32 = getattr(ctypes, "windll", None)
+                if not user32:
+                    return False
 
                 # Get foreground window
                 hwnd = user32.GetForegroundWindow()

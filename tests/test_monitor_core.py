@@ -87,9 +87,9 @@ def test_monitor_state_store_round_trip(tmp_path, monkeypatch):
 def test_monitor_state_store_is_profile_scoped(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "core.config_manager.default_config_path",
-        lambda profile_name=None: tmp_path
-        / (profile_name or "default")
-        / "config.toml",
+        lambda profile_name=None: (
+            tmp_path / (profile_name or "default") / "config.toml"
+        ),
     )
     state = MonitorState()
     state.last_weekly_handled_utc = "2026-08-03T03:00:00+00:00"

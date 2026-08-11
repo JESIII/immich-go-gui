@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import ClassVar
 
@@ -82,6 +83,7 @@ class ImmichGoGUI(
         "stack",
         "monitor",
     ]
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Immich Go GUI")
@@ -231,9 +233,6 @@ class ImmichGoGUI(
         self._sync_tray_minimize()
         self._save_monitor_state()
 
-    def build_environment(self, tab_key: str | None = None) -> dict:
-        self._save_monitor_state()
-
     def _sync_tray_minimize(self) -> None:
         """Push the effective minimize-to-tray preference to the tray manager."""
         if not hasattr(self, "tray_manager"):
@@ -279,8 +278,7 @@ class ImmichGoGUI(
         except OSError as exc:
             self.log.warning("Unable to configure Windows startup: %s", exc)
 
-    def build_environment(self, tab_key: str = None) -> dict:
->>>>>>> 23b2ad8 (feat: add background folder monitoring)
+    def build_environment(self, tab_key: str | None = None) -> dict:
         if tab_key is None:
             tab_key = self._get_active_tab_key()
         server = (
