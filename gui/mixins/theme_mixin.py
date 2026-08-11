@@ -41,6 +41,7 @@ class ThemeMixin:
             self.btn_upload,
             self.btn_archive,
             self.btn_stack,
+            self.btn_monitor,
         ]
         for btn in nav_buttons:
             if hasattr(btn, "icon_name") and btn.icon_name:

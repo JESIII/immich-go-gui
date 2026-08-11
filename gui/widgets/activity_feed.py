@@ -4,7 +4,7 @@ Shows a scrolling list of recent upload events: file names, folder progress,
 errors, and summaries. Supports color-coded log levels.
 """
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -53,7 +53,7 @@ class ActivityFeed(QFrame):
         header.addStretch()
 
         btn_clear = QPushButton("Clear")
-        btn_clear.setFixedWidth(60)
+        btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_clear.clicked.connect(self.clear)
         header.addWidget(btn_clear)
         layout.addLayout(header)
