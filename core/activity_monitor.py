@@ -243,20 +243,25 @@ class ActivityMonitor:
             try:
                 import ctypes
 
-                user32 = getattr(ctypes, "windll", None)
+                windll = getattr(ctypes, "windll", None)
+                if not windll:
+                    return False
+                user32 = getattr(windll, "user32", None)
                 if not user32:
                     return False
 
-                # Get foreground window
+                from ctypes.wintypes import HWND
+
+                user32.GetForegroundWindow.restype = HWND
+                user32.GetForegroundWindow.argtypes = []
+
                 hwnd = user32.GetForegroundWindow()
                 if not hwnd:
                     return False
 
-                # Check if the window covers the full screen
                 screen_width = user32.GetSystemMetrics(0)  # SM_CXSCREEN
                 screen_height = user32.GetSystemMetrics(1)  # SM_CYSCREEN
 
-                # Get window rect
                 class RECT(ctypes.Structure):
                     _fields_ = [
                         ("left", ctypes.c_long),
@@ -265,13 +270,15 @@ class ActivityMonitor:
                         ("bottom", ctypes.c_long),
                     ]
 
-                rect = RECT()
-                user32.GetWindowRect(hwnd, ctypes.byref(rect))
-                width = rect.right - rect.left
-                height = rect.bottom - rect.top
+                user32.GetWindowRect.restype = ctypes.c_bool
+                user32.GetWindowRect.argtypes = [HWND, ctypes.POINTER(RECT)]
 
-                if width >= screen_width and height >= screen_height:
-                    return True
+                rect = RECT()
+                if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                    width = rect.right - rect.left
+                    height = rect.bottom - rect.top
+                    if width >= screen_width and height >= screen_height:
+                        return True
 
             except Exception:
                 pass

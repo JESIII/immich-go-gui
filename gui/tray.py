@@ -20,7 +20,11 @@ class TrayManager:
         self._icon_style = "colorful"
         self._app_icon = self._resolve_icon(app_icon_path, fallback_icon_path)
 
-        self.tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+        self.tray_available = bool(
+            QSystemTrayIcon.isSystemTrayAvailable()
+            and self._app_icon is not None
+            and not self._app_icon.isNull()
+        )
 
         self._tray = QSystemTrayIcon(window)
         if self._app_icon:
@@ -82,7 +86,7 @@ class TrayManager:
         # A QSystemTrayIcon without an icon is invisible on Windows, and on
         # platforms without a system tray show() is pointless.  Only show
         # when the tray is actually available and an icon was resolved.
-        if self.tray_available and self._app_icon:
+        if self.tray_available:
             self._tray.show()
 
     def _on_menu_style_triggered(self, style_key: str) -> None:
@@ -125,6 +129,12 @@ class TrayManager:
         if icon and not icon.isNull():
             self._app_icon = icon
             self._tray.setIcon(icon)
+
+        self.tray_available = bool(
+            QSystemTrayIcon.isSystemTrayAvailable()
+            and self._app_icon is not None
+            and not self._app_icon.isNull()
+        )
 
     @staticmethod
     def _resolve_icon(app_icon_path: str, fallback_icon_path: str) -> QIcon | None:

@@ -77,27 +77,28 @@ def count_pending_files(
     filter_rules: FolderFilter,
 ) -> int:
     """Count how many files in a folder are newer than since_utc and pass filters."""
+    import fnmatch
+
     count = 0
     if not os.path.isdir(folder):
         return 0
 
-    exclude_dirs = {
-        "@eadir",
-        "@__thumb",
-        ".spotlight-v100",
-        ".photostructure",
-        "thumbnails",
-        "lightroom catalog",
-        "recently deleted",
-        "$recycle.bin",
-        "system volume information",
-    }
-
     for root, dirs, files in os.walk(folder):
-        # Filter directories in-place
-        dirs[:] = [
-            d for d in dirs if d.lower() not in exclude_dirs and not d.startswith(".")
-        ]
+        # Filter directories in-place using FolderFilter semantics
+        pruned = []
+        for d in dirs:
+            if filter_rules.skip_hidden and d.startswith("."):
+                continue
+            dir_path = os.path.join(root, d).replace("\\", "/")
+            skip = False
+            for pattern in filter_rules.exclude_patterns:
+                if fnmatch.fnmatch(dir_path, pattern) or fnmatch.fnmatch(d, pattern):
+                    skip = True
+                    break
+            if not skip:
+                pruned.append(d)
+        dirs[:] = pruned
+
         for f in files:
             fpath = os.path.join(root, f)
             try:
@@ -155,6 +156,15 @@ def run_folder_upload(
     )
 
     result = UploadResult(folder=folder, success=False, log_file=log_file)
+    log_handle = None
+    try:
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        log_handle = open(log_file, "w", encoding="utf-8")  # noqa: SIM115
+        log_handle.write(f"Folder: {folder}\n")
+        log_handle.write(f"Since: {since_utc.isoformat()}\n\n")
+        log_handle.flush()
+    except OSError:
+        log_handle = None
 
     if on_log:
         on_log(folder_key, f"Starting upload: {folder}")
@@ -184,6 +194,14 @@ def run_folder_upload(
         # Use plan.env (includes server/API key via env vars, not CLI args)
         env = os.environ.copy()
         env.update(plan.env)
+
+        secrets = [s for s in ([api_key] + list(plan.env.values())) if s and len(s) > 3]
+
+        def _mask_text(text: str) -> str:
+            masked = text
+            for sec in secrets:
+                masked = masked.replace(sec, "********")
+            return masked
 
         with subprocess.Popen(
             [binary] + args,
@@ -266,13 +284,22 @@ def run_folder_upload(
                         closed_streams += 1
                         continue
                     if line.strip():
+                        masked_line = _mask_text(line)
+                        formatted_log = (
+                            masked_line
+                            if stream_name == "stdout"
+                            else f"[stderr] {masked_line}"
+                        )
                         if on_log:
-                            on_log(
-                                folder_key,
-                                line if stream_name == "stdout" else f"[stderr] {line}",
-                            )
+                            on_log(folder_key, formatted_log)
+                        if log_handle:
+                            try:
+                                log_handle.write(formatted_log + "\n")
+                                log_handle.flush()
+                            except OSError:
+                                pass
                         if "Uploaded" in line or "uploading" in line.lower():
-                            state.current_file = line.strip()
+                            state.current_file = masked_line.strip()
                         _tally_report_line(line, result)
 
                 for reader in readers:
@@ -308,19 +335,17 @@ def run_folder_upload(
         if on_log:
             on_log(folder_key, f"[error] {exc}")
 
-    # Write log file
-    try:
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        with open(log_file, "w", encoding="utf-8") as f:
-            f.write(f"Folder: {folder}\n")
-            f.write(f"Since: {since_utc.isoformat()}\n")
-            f.write(
-                f"Result: {'success' if result.success else 'failed'} "
+    if log_handle:
+        try:
+            log_handle.write(
+                f"\nResult: {'success' if result.success else 'failed'} "
                 f"(exit {result.exit_code})\n"
             )
-            f.write(f"Message: {result.message}\n\n")
-    except OSError:
-        pass
+            log_handle.write(f"Message: {result.message}\n")
+        except OSError:
+            pass
+        finally:
+            log_handle.close()
 
     result.duration_seconds = time.monotonic() - start_time
     return result

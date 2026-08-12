@@ -551,3 +551,54 @@ def test_run_folder_upload_cancel_writes_log_and_duration(tmp_path, monkeypatch)
     log_path = Path(result.log_file)
     assert log_path.exists()
     assert "Cancelled" in log_path.read_text(encoding="utf-8")
+
+
+def test_is_due_handles_naive_iso_marker():
+    mixin = MonitorMixin()
+    mixin.monitor_state = MonitorState(last_weekly_handled_utc="2026-08-12T12:00:00")
+    occurrence = datetime.now(UTC)
+    # Must not raise TypeError when comparing naive marker vs aware occurrence
+    assert mixin._is_due("weekly", occurrence) is True
+
+
+def test_network_policy_options_mapping():
+    from gui.tabs.monitor_tab import NETWORK_POLICY_OPTIONS
+
+    # First element of tuple must be the config identifier string
+    config_keys = [opt[0] for opt in NETWORK_POLICY_OPTIONS]
+    assert config_keys == ["always", "wifi_only", "ssids_only", "no_metered"]
+
+
+def test_run_folder_upload_masks_secrets_and_streams_logs(tmp_path, monkeypatch):
+    from core import folder_runner
+    from core.folder_runner import RunnerState, run_folder_upload
+    from core.models import CommandPlan
+
+    secret_key = "super_secret_api_key_12345"
+    plan = CommandPlan()
+    plan.argv = ["-c", f"print('Uploading file with secret {secret_key}')"]
+    plan.env = {"IMMICH_API_KEY": secret_key}
+
+    monkeypatch.setattr(folder_runner, "_resolve_binary_path", lambda: sys.executable)
+    monkeypatch.setattr(folder_runner, "_build_upload_plan", lambda *a, **k: plan)
+
+    state = RunnerState()
+    state.reset()
+    logs = []
+
+    result = run_folder_upload(
+        folder=str(tmp_path),
+        config=MonitorConfig(),
+        server_url="http://localhost:2283",
+        api_key=secret_key,
+        since_utc=datetime.now(UTC) - timedelta(days=1),
+        log_dir=str(tmp_path / "logs"),
+        state=state,
+        on_log=lambda f, msg: logs.append(msg),
+    )
+
+    assert result.success is True
+    log_content = Path(result.log_file).read_text(encoding="utf-8")
+    assert secret_key not in log_content
+    assert "********" in log_content
+    assert any("********" in line for line in logs)

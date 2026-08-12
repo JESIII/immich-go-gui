@@ -29,10 +29,10 @@ from gui.widgets.activity_feed import ActivityFeed, ProgressCard
 # (config value, display label) pairs for the network policy combo.
 # Defined once so load/save never match on display text.
 NETWORK_POLICY_OPTIONS = [
-    ("Always (any network)", "always"),
-    ("Wi-Fi Only (exclude cellular)", "wifi_only"),
-    ("Allowed SSIDs Only", "ssids_only"),
-    ("No Metered Connections", "no_metered"),
+    ("always", "Always (any network)"),
+    ("wifi_only", "Wi-Fi Only (exclude cellular)"),
+    ("ssids_only", "Allowed SSIDs Only"),
+    ("no_metered", "No Metered Connections"),
 ]
 
 TRAY_ICON_STYLE_OPTIONS = [

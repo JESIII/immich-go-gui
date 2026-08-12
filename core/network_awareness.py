@@ -5,6 +5,7 @@ Detects metered connections, Wi-Fi SSID, and enforces upload policies
 """
 
 import logging
+import os
 import subprocess
 import sys
 from enum import Enum
@@ -88,8 +89,49 @@ class NetworkMonitor:
         """Get the current Wi-Fi SSID name."""
         if sys.platform.startswith("win"):
             return _get_ssid_windows()
+        elif sys.platform == "darwin":
+            return _get_ssid_macos()
         else:
             return _get_ssid_linux()
+
+
+def _get_ssid_macos() -> str | None:
+    """Get Wi-Fi SSID on macOS via airport framework or networksetup."""
+    airport_bin = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport"
+    if os.path.exists(airport_bin):
+        try:
+            result = subprocess.run(
+                [airport_bin, "-I"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("SSID:") or line.startswith("SSID :"):
+                    ssid = line.split(":", 1)[1].strip()
+                    if ssid:
+                        return ssid
+        except Exception:
+            pass
+
+    try:
+        result = subprocess.run(
+            ["networksetup", "-getairportnetwork", "en0"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if "Current Wi-Fi Network:" in result.stdout:
+            ssid = result.stdout.split("Current Wi-Fi Network:", 1)[1].strip()
+            if ssid:
+                return ssid
+    except Exception:
+        pass
+
+    return None
 
 
 def _get_ssid_windows() -> str | None:

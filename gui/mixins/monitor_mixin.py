@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from core.activity_monitor import ActivityMonitor
 from core.config_manager import get_secret_with_fallback
 from core.folder_filters import is_within_folder
 from core.folder_runner import (
@@ -34,6 +35,8 @@ class MonitorSignals(QObject):
     state_changed = Signal(str)  # idle, running, paused, error, complete
     paused_reason = Signal(str)  # reason for pause
     run_requested = Signal(bool, str)  # full_rescan, trigger
+    activity_changed = Signal(bool, str)  # active, reason
+    network_status_checked = Signal(object)  # status
 
 
 class MonitorMixin:
@@ -80,11 +83,14 @@ class MonitorMixin:
         self._network_timer.setInterval(60_000)  # 60 seconds
         self._network_timer.timeout.connect(self._on_network_tick)
 
-        # Wire signals
         self._monitor_signals.log_entry.connect(self._on_monitor_log)
         self._monitor_signals.progress_update.connect(self._on_progress_update)
         self._monitor_signals.state_changed.connect(self._on_monitor_state_changed)
         self._monitor_signals.paused_reason.connect(self._on_paused_reason)
+        self._monitor_signals.activity_changed.connect(self._on_activity_changed)
+        self._monitor_signals.network_status_checked.connect(
+            self._on_network_status_checked
+        )
         # Watchdog invokes its debounce callback on a worker thread.  Route
         # run orchestration back to the GUI thread before it touches Qt
         # widgets or runner state.
@@ -170,10 +176,24 @@ class MonitorMixin:
         """Apply the master monitor switch to background services."""
         if hasattr(self, "_watcher") and self._watcher.running:
             self._watcher.stop()
+        if hasattr(self, "_activity_monitor") and self._activity_monitor:
+            self._activity_monitor.stop()
+            self._activity_monitor = None
+
         if self.monitor_config.monitor_enabled:
             self._start_watcher()
             self._start_scheduler()
             self._start_network_monitor()
+            self._activity_monitor = ActivityMonitor(
+                self.monitor_config.activity,
+                on_activity_start=lambda reason: (
+                    self._monitor_signals.activity_changed.emit(True, reason)
+                ),
+                on_activity_end=lambda: self._monitor_signals.activity_changed.emit(
+                    False, ""
+                ),
+            )
+            self._activity_monitor.start()
         else:
             self._scheduler_timer.stop()
             self._network_timer.stop()
@@ -284,9 +304,11 @@ class MonitorMixin:
             return True
         try:
             last_handled = datetime.fromisoformat(marker)
+            if last_handled.tzinfo is None:
+                last_handled = last_handled.replace(tzinfo=UTC)
+            return occurrence > last_handled
         except (TypeError, ValueError):
             return True
-        return occurrence > last_handled
 
     def _mark_triggered(self, kind: str, occurrence: datetime) -> None:
         """Persist that this occurrence has been handled."""
@@ -367,8 +389,19 @@ class MonitorMixin:
     # ── Network ────────────────────────────────────────────
 
     def _on_network_tick(self) -> None:
-        """Check network status and auto-pause/resume."""
-        status = self._network_monitor.check_status()
+        """Check network status off the GUI thread to avoid UI stalls."""
+        if not hasattr(self, "_network_monitor"):
+            return
+
+        def _check_task():
+            status = self._network_monitor.check_status()
+            self._monitor_signals.network_status_checked.emit(status)
+
+        t = threading.Thread(target=_check_task, daemon=True)
+        t.start()
+
+    def _on_network_status_checked(self, status: NetworkStatus) -> None:
+        """Process network status result on the main GUI thread."""
         if status == NetworkStatus.ALLOWED:
             if self._auto_pause_reason and "network" in self._auto_pause_reason.lower():
                 self._auto_pause_reason = None
@@ -386,6 +419,19 @@ class MonitorMixin:
             }.get(status, "Network paused")
             self._auto_pause_reason = reason
             self._pause_uploads(reason)
+
+    def _on_activity_changed(self, active: bool, reason: str) -> None:
+        """Handle activity monitor pause/resume events on the GUI thread."""
+        if active:
+            self._auto_pause_reason = f"Activity paused: {reason}"
+            self._pause_uploads(self._auto_pause_reason)
+        else:
+            if (
+                self._auto_pause_reason
+                and "activity" in self._auto_pause_reason.lower()
+            ):
+                self._auto_pause_reason = None
+                self._resume_uploads()
 
     # ── Run Controls ───────────────────────────────────────
 
@@ -646,6 +692,8 @@ class MonitorMixin:
 
                     # Check cancel
                     if rs.cancel_event.is_set():
+                        for pending in futures:
+                            pending.cancel()
                         break
 
             # Complete
@@ -692,7 +740,14 @@ class MonitorMixin:
         client_timeout_minutes: int = 60,
     ) -> UploadResult:
         """Run upload for a single folder."""
-        folder_state = state.get_folder_state(folder)
+        if rs.cancel_event.is_set():
+            result = UploadResult()
+            result.success = False
+            result.message = "Cancelled"
+            return result
+
+        with self._state_lock:
+            folder_state = state.get_folder_state(folder)
 
         if full_rescan:
             since = datetime.min.replace(tzinfo=UTC)
@@ -812,6 +867,9 @@ class MonitorMixin:
         self._network_timer.stop()
         if hasattr(self, "_watcher"):
             self._watcher.stop()
+        if hasattr(self, "_activity_monitor") and self._activity_monitor:
+            self._activity_monitor.stop()
+            self._activity_monitor = None
         if self._monitor_thread and self._monitor_thread.is_alive():
             self._monitor_thread.join(timeout=10)
         if hasattr(self, "tray_manager"):

@@ -154,64 +154,71 @@ class FolderWatcher:
 
     @property
     def running(self) -> bool:
-        return self._running
+        with self._lock:
+            return self._running
 
     def start(self) -> None:
         """Start watching all configured folders."""
-        if self._running:
-            return
+        with self._lock:
+            if self._running:
+                return
 
-        try:
-            from watchdog.events import FileSystemEventHandler
-            from watchdog.observers import Observer
-        except ImportError:
-            _log.warning("watchdog not installed; real-time file watching disabled")
-            return
+            try:
+                from watchdog.events import FileSystemEventHandler
+                from watchdog.observers import Observer
+            except ImportError:
+                _log.warning("watchdog not installed; real-time file watching disabled")
+                return
 
-        if not self.config.folders:
-            _log.info("No folders configured for watching")
-            return
+            if not self.config.folders:
+                _log.info("No folders configured for watching")
+                return
 
-        self._watched_folders.clear()
-        for folder_path in self.config.folders:
-            resolved = str(Path(folder_path).resolve())
-            if os.path.isdir(resolved):
-                filter_rules = self.config.get_folder_filter(resolved)
-                self._watched_folders[resolved] = WatchedFolder(resolved, filter_rules)
-            else:
-                _log.warning("Watch folder does not exist: %s", folder_path)
+            self._watched_folders.clear()
+            for folder_path in self.config.folders:
+                resolved = str(Path(folder_path).resolve())
+                if os.path.isdir(resolved):
+                    filter_rules = self.config.get_folder_filter(resolved)
+                    self._watched_folders[resolved] = WatchedFolder(
+                        resolved, filter_rules
+                    )
+                else:
+                    _log.warning("Watch folder does not exist: %s", folder_path)
 
-        if not self._watched_folders:
-            return
+            if not self._watched_folders:
+                return
 
-        class _Handler(FileSystemEventHandler):
-            def __init__(self, watcher: FolderWatcher):
-                super().__init__()
-                self._watcher = watcher
+            class _Handler(FileSystemEventHandler):
+                def __init__(self, watcher: FolderWatcher):
+                    super().__init__()
+                    self._watcher = watcher
 
-            def on_created(self, event):
-                self._watcher._handle_event(str(event.src_path))
+                def on_created(self, event):
+                    self._watcher._handle_event(str(event.src_path))
 
-            def on_modified(self, event):
-                self._watcher._handle_event(str(event.src_path))
+                def on_modified(self, event):
+                    self._watcher._handle_event(str(event.src_path))
 
-        self._observer = Observer()
-        handler = _Handler(self)
-        for folder in self._watched_folders.values():
-            self._observer.schedule(handler, folder.path, recursive=True)
-            _log.info("Watching folder: %s", folder.path)
+            self._observer = Observer()
+            handler = _Handler(self)
+            for folder in list(self._watched_folders.values()):
+                self._observer.schedule(handler, folder.path, recursive=True)
+                _log.info("Watching folder: %s", folder.path)
 
-        self._observer.start()
-        self._running = True
-        _log.info("File watcher started (%d folders)", len(self._watched_folders))
+            self._observer.start()
+            self._running = True
+            _log.info("File watcher started (%d folders)", len(self._watched_folders))
 
     def stop(self) -> None:
         """Stop the file watcher."""
-        self._running = False
-        if self._observer:
-            self._observer.stop()
-            self._observer.join(timeout=5)
+        with self._lock:
+            self._running = False
+            observer = self._observer
             self._observer = None
+
+        if observer:
+            observer.stop()
+            observer.join(timeout=5)
         self._queue.shutdown()
         _log.info("File watcher stopped")
 
@@ -221,11 +228,12 @@ class FolderWatcher:
 
     def _handle_event(self, src_path: str) -> None:
         """Process a watchdog event."""
-        if not self._running:
-            return
+        with self._lock:
+            if not self._running:
+                return
+            folders = list(self._watched_folders.values())
 
-        # Find which folder this belongs to
-        for folder in self._watched_folders.values():
+        for folder in folders:
             if folder.should_accept_event(src_path):
                 _log.debug("Watcher queued: %s", src_path)
                 self._queue.add_file(src_path)

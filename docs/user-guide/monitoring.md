@@ -77,7 +77,7 @@ Schedules are evaluated every 30 seconds while the monitor is on. Each occurrenc
 | **No metered connections** | Skip uploads while on a metered connection. |
 | **Only specific Wi-Fi** | Only upload when connected to one of the **Allowed SSIDs** (comma-separated). |
 
-The GUI checks network state every 60 seconds and auto-pauses/resumes uploads accordingly. If it cannot determine the network, it **pauses** rather than risk uploading unexpectedly.
+The GUI checks network state every 60 seconds and auto-pauses/resumes uploads accordingly. If an SSID-only policy cannot determine the current Wi-Fi SSID, it **pauses** uploads rather than risk uploading unexpectedly; unavailable metered detection does not block uploads under the **No metered connections** policy.
 
 !!! warning "Metered-connection detection is limited"
     Reliable metered-connection detection depends on platform APIs and is not fully implemented yet. On systems where it cannot be determined, the **No metered connections** policy may not block uploads. SSID matching and offline detection are functional.

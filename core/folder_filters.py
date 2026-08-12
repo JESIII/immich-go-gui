@@ -16,8 +16,18 @@ def should_skip_file(file_path: str, filter_rules: FolderFilter) -> bool:
     name = os.path.basename(file_path)
     ext = os.path.splitext(name)[1].lower()
 
-    if filter_rules.skip_hidden and name.startswith("."):
-        return True
+    if filter_rules.skip_hidden:
+        if name.startswith("."):
+            return True
+        if os.name == "nt":
+            try:
+                import ctypes
+
+                attrs = ctypes.windll.kernel32.GetFileAttributesW(str(file_path))
+                if attrs != -1 and (attrs & 2):  # FILE_ATTRIBUTE_HIDDEN = 0x2
+                    return True
+            except Exception:
+                pass
 
     if filter_rules.skip_system_files:
         if name.startswith("~$") or name.lower() in ("thumbs.db", "desktop.ini"):

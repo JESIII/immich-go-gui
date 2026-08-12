@@ -37,20 +37,23 @@ class MonitorState:
     # occurrence that has already been handled).
     last_weekly_handled_utc: str | None = None
     last_monthly_handled_utc: str | None = None
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def get_folder_state(self, folder: str) -> FolderUploadState:
         """Get or create state for a folder path."""
         key = str(Path(folder).resolve())
-        if key not in self.folders:
-            self.folders[key] = FolderUploadState()
-        return self.folders[key]
+        with getattr(self, "_lock", Lock()):
+            if key not in self.folders:
+                self.folders[key] = FolderUploadState()
+            return self.folders[key]
 
     def clean_stale_folders(self, active_folders: set[str]) -> None:
         """Remove folder state entries for paths no longer in use."""
         active_keys = {str(Path(f).resolve()) for f in active_folders}
-        stale = [k for k in self.folders if k not in active_keys]
-        for k in stale:
-            del self.folders[k]
+        with getattr(self, "_lock", Lock()):
+            stale = [k for k in self.folders if k not in active_keys]
+            for k in stale:
+                del self.folders[k]
 
 
 class MonitorStateStore:
