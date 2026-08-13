@@ -556,7 +556,7 @@ def test_run_folder_upload_cancel_writes_log_and_duration(tmp_path, monkeypatch)
 def test_is_due_handles_naive_iso_marker():
     mixin = MonitorMixin()
     mixin.monitor_state = MonitorState(last_weekly_handled_utc="2026-08-12T12:00:00")
-    occurrence = datetime.now(UTC)
+    occurrence = datetime(2026, 8, 12, 13, 0, tzinfo=UTC)
     # Must not raise TypeError when comparing naive marker vs aware occurrence
     assert mixin._is_due("weekly", occurrence) is True
 
