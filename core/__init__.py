@@ -4,6 +4,11 @@ This package contains data models, CLI schemas, configuration persistence,
 binary management, and command building routines.
 """
 
+from .activity_monitor import (
+    ActivityMonitor,
+    ActivityState,
+    check_processes_running,
+)
 from .binary_manager import (
     BINARY_BASE_DIR,
     METADATA_PATH,
@@ -75,6 +80,19 @@ from .flag_registry import (
     FlagDef,
     Registry,
 )
+from .folder_runner import (
+    RunnerState,
+    count_pending_files,
+    run_folder_upload,
+)
+from .folder_runner import (
+    UploadResult as MonitorUploadResult,
+)
+from .folder_watcher import (
+    DebounceFileQueue,
+    FolderWatcher,
+    WatchedFolder,
+)
 from .models import (
     AppConfig,
     BinaryStatus,
@@ -84,7 +102,24 @@ from .models import (
     ValidationResult,
     VersionSupport,
 )
+from .monitor_config import (
+    ActivityConfig,
+    ActivityPauseMethod,
+    FolderFilter,
+    MonitorConfig,
+    MonitorConfigStore,
+    NetworkPolicy,
+)
+from .monitor_state import (
+    FolderUploadState,
+    MonitorState,
+    MonitorStateStore,
+)
 from .network import normalize_server_url
+from .network_awareness import (
+    NetworkMonitor,
+    NetworkStatus,
+)
 from .process_tracker import (
     RunLock,
     cleanup_stale_locks,
@@ -130,6 +165,11 @@ __all__ = [
     "TESTED_IMMICH_GO_VERSION",
     "TESTED_IMMICH_GO_VERSIONS",
     "UPLOAD_TABS",
+    # Monitor subsystem
+    "ActivityConfig",
+    "ActivityMonitor",
+    "ActivityPauseMethod",
+    "ActivityState",
     # models
     "AppConfig",
     "BinaryManager",
@@ -137,14 +177,27 @@ __all__ = [
     "CommandPlan",
     # cli_contract
     "CompatibilityReport",
+    "DebounceFileQueue",
     "FlagDef",
+    "FolderFilter",
+    "FolderUploadState",
+    "FolderWatcher",
     # terminal_launcher
     "LaunchResult",
+    "MonitorConfig",
+    "MonitorConfigStore",
+    "MonitorState",
+    "MonitorStateStore",
+    "MonitorUploadResult",
+    "NetworkMonitor",
+    "NetworkPolicy",
+    "NetworkStatus",
     # profile_manager
     "ProfileInfo",
     "Registry",
     # process_tracker
     "RunLock",
+    "RunnerState",
     # config_manager
     "SecretSaveResult",
     "SecretStore",
@@ -152,6 +205,7 @@ __all__ = [
     "UpdateSeverity",
     "ValidationResult",
     "VersionSupport",
+    "WatchedFolder",
     "active_profile_name",
     "assert_flag_allowed",
     # command_builder
@@ -159,11 +213,13 @@ __all__ = [
     "build_plan_from_state",
     "check_binary_help",
     "check_fixtures",
+    "check_processes_running",
     "clean_version",
     "cleanup_stale_locks",
     "clear_api_key",
     "collect_paths",
     "collect_safety_warnings",
+    "count_pending_files",
     "create_lock",
     "create_profile",
     "default_config_dir",
@@ -196,6 +252,7 @@ __all__ = [
     "release_lock",
     "rename_profile",
     "reset_all_locks",
+    "run_folder_upload",
     "save_binary_metadata",
     "save_config",
     "save_secret_with_fallback",

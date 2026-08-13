@@ -219,8 +219,11 @@ def load_themed_icon(icon_name: str, theme: str) -> QIcon:
     if cached is not None:
         return cached
 
-    t = theme_tokens(theme)
-    color = t["text_muted"]
+    if icon_name == "app-monochrome":
+        color = "#FFFFFF" if theme == "dark" else "#121619"
+    else:
+        t = theme_tokens(theme)
+        color = t["text_muted"]
 
     svg_path = os.path.join(
         os.path.dirname(__file__), "assets", "icons", f"{icon_name}.svg"

@@ -1,3 +1,5 @@
+import sys
+from pathlib import Path
 from typing import ClassVar
 
 from PySide6.QtCore import QSettings, QTimer
@@ -37,12 +39,15 @@ from gui.mixins.form_helpers import FormHelpersMixin
 from gui.mixins.form_state import FormStateMixin
 from gui.mixins.layout import LayoutMixin
 from gui.mixins.menu import MenuMixin
+from gui.mixins.monitor_mixin import MonitorMixin
 from gui.mixins.persistence import PersistenceMixin
 from gui.mixins.profiles_ui import ProfilesUIMixin
 from gui.mixins.status import StatusMixin
 from gui.mixins.theme_mixin import ThemeMixin
 from gui.tabs.config_tab import build_config_tab
+from gui.tabs.monitor_tab import build_monitor_tab
 from gui.tabs.stack_tab import build_stack_tab
+from gui.tray import TrayManager
 from theme import (
     THEME_SYSTEM,
     apply_application_theme,
@@ -69,12 +74,14 @@ class ImmichGoGUI(
     ConnectionMixin,
     DiagnosticsMixin,
     BrowseDialogsMixin,
+    MonitorMixin,
 ):
     TAB_KEYS: ClassVar[list[str]] = [
         "config",
         "upload",
         "archive",
         "stack",
+        "monitor",
     ]
 
     def __init__(self):
@@ -132,11 +139,13 @@ class ImmichGoGUI(
         self.upload_page = self._build_upload_page()
         self.archive_page = self._build_archive_page()
         self.stack_tab = build_stack_tab(self)
+        self.monitor_tab = build_monitor_tab(self)
 
         self.stacked_widget.addWidget(self.config_tab)
         self.stacked_widget.addWidget(self.upload_page)
         self.stacked_widget.addWidget(self.archive_page)
         self.stacked_widget.addWidget(self.stack_tab)
+        self.stacked_widget.addWidget(self.monitor_tab)
 
         self.stacked_widget.setCurrentIndex(0)
         self.update_header_crumb("configuration")
@@ -193,6 +202,103 @@ class ImmichGoGUI(
 
         self.update_status()
 
+        # Initialize the monitor subsystem
+        self.init_monitor()
+        icon_root = Path(__file__).resolve().parent.parent
+        self.tray_manager = TrayManager(
+            self,
+            str(icon_root / "immich-go-gui.ico"),
+            str(icon_root / "immich-go-gui.png"),
+        )
+        self.tray_manager.set_minimize_to_tray(
+            self.monitor_config.monitor_enabled and self.monitor_config.minimize_to_tray
+        )
+        self._sync_tray_icon_style()
+        self.monitor_enabled_check.toggled.connect(self._on_monitor_enabled_toggled)
+        self.minimize_to_tray_check.toggled.connect(self._on_minimize_to_tray_toggled)
+        if hasattr(self, "tray_icon_style_combo"):
+            self.tray_icon_style_combo.currentIndexChanged.connect(
+                self._on_tray_icon_style_changed
+            )
+        self.launch_on_startup_check.toggled.connect(self._set_launch_on_startup)
+        self._set_launch_on_startup(self.launch_on_startup_check.isChecked())
+        if (
+            self.monitor_config.monitor_enabled
+            and self.monitor_config.start_minimized
+            and self.tray_manager.tray_available
+        ):
+            self.hide()
+
+    def _on_monitor_enabled_toggled(self, enabled: bool) -> None:
+        self.set_monitor_enabled(enabled)
+        self._sync_tray_minimize()
+
+    def _on_minimize_to_tray_toggled(self, enabled: bool) -> None:
+        self.monitor_config.minimize_to_tray = enabled
+        self._sync_tray_minimize()
+        self._save_monitor_state()
+
+    def _on_tray_icon_style_changed(self) -> None:
+        if hasattr(self, "tray_icon_style_combo"):
+            val = self.tray_icon_style_combo.currentData()
+            if val:
+                self.monitor_config.tray_icon_style = val
+        self._save_monitor_state()
+        self._sync_tray_icon_style()
+
+    def _sync_tray_icon_style(self) -> None:
+        """Update tray icon style to colorful or monochrome."""
+        if hasattr(self, "tray_manager") and hasattr(self, "monitor_config"):
+            self.tray_manager.update_icon_style(
+                getattr(self.monitor_config, "tray_icon_style", "colorful"),
+                getattr(self, "theme_mode", None),
+            )
+
+    def _sync_tray_minimize(self) -> None:
+        """Push the effective minimize-to-tray preference to the tray manager."""
+        if not hasattr(self, "tray_manager"):
+            return
+        self.tray_manager.set_minimize_to_tray(
+            self.monitor_config.monitor_enabled
+            and self.minimize_to_tray_check.isChecked()
+        )
+
+    def _shutdown_monitor_safely(self) -> None:
+        """Shut down the monitor subsystem, logging (not swallowing) failures."""
+        if not hasattr(self, "shutdown_monitor"):
+            return
+        try:
+            self.shutdown_monitor()
+        except Exception:
+            if hasattr(self, "log"):
+                self.log.exception("Monitor subsystem shutdown failed")
+
+    def _set_launch_on_startup(self, enabled: bool) -> None:
+        """Register or remove this application from Windows startup."""
+        if sys.platform != "win32":
+            return
+        try:
+            import winreg
+
+            run_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_path = Path(__file__).resolve().parent.parent / "app.py"
+            command = f'"{sys.executable}" "{app_path}"'
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                run_key_path,
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as run_key:
+                if enabled:
+                    winreg.SetValueEx(run_key, "ImmichGoGUI", 0, winreg.REG_SZ, command)
+                else:
+                    try:
+                        winreg.DeleteValue(run_key, "ImmichGoGUI")
+                    except FileNotFoundError:
+                        pass
+        except OSError as exc:
+            self.log.warning("Unable to configure Windows startup: %s", exc)
+
     def build_environment(self, tab_key: str | None = None) -> dict:
         if tab_key is None:
             tab_key = self._get_active_tab_key()
@@ -245,7 +351,12 @@ class ImmichGoGUI(
         self._check_lock_file()
 
     def closeEvent(self, event):
+        if not getattr(self, "_force_close", False) and hasattr(self, "tray_manager"):
+            if self.tray_manager.handle_close(event):
+                return
+
         if getattr(self, "_force_close", False):
+            self._shutdown_monitor_safely()
             if hasattr(self, "log"):
                 self.log.info("GUI closed")
             event.accept()
@@ -272,6 +383,7 @@ class ImmichGoGUI(
         if reply == QMessageBox.StandardButton.Save:
             self._save_pending_configuration(show_popup=False)
 
+        self._shutdown_monitor_safely()
         if hasattr(self, "log"):
             self.log.info("GUI closed")
         event.accept()

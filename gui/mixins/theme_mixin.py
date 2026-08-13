@@ -41,6 +41,7 @@ class ThemeMixin:
             self.btn_upload,
             self.btn_archive,
             self.btn_stack,
+            self.btn_monitor,
         ]
         for btn in nav_buttons:
             if hasattr(btn, "icon_name") and btn.icon_name:
@@ -49,6 +50,11 @@ class ThemeMixin:
         for action in self.findChildren(QAction):
             if hasattr(action, "icon_name") and action.icon_name:
                 action.setIcon(load_themed_icon(action.icon_name, theme))
+        if hasattr(self, "tray_manager") and hasattr(self, "monitor_config"):
+            self.tray_manager.update_icon_style(
+                getattr(self.monitor_config, "tray_icon_style", "colorful"),
+                theme,
+            )
 
     def on_system_theme_changed(self):
         if getattr(self, "theme_mode", THEME_SYSTEM) == THEME_SYSTEM:

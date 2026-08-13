@@ -5,6 +5,7 @@ from PySide6.QtGui import QDropEvent
 
 from core.flag_registry import REGISTRY
 from gui.widgets import DroppablePlainTextEdit
+from gui.widgets.activity_feed import ActivityFeed
 from gui.widgets.advanced_flag_row import AdvancedFlagRow
 from gui.widgets.eliding_label import ElidingLabel
 
@@ -61,6 +62,13 @@ def test_droppable_plain_text_edit_drop(qapp, qtbot):
     )
     edit.dropEvent(event)
     assert edit.toPlainText() == "/path/a.zip\n/path/b.zip"
+
+
+def test_activity_feed_sets_document_block_limit(qapp, qtbot):
+    feed = ActivityFeed()
+    qtbot.addWidget(feed)
+
+    assert feed._text.document().maximumBlockCount() == feed.max_entries
 
 
 def test_browse_takeout_zips(gui):
